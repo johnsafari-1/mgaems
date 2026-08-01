@@ -4,12 +4,25 @@
 /public/storage
 /public/build
 /storage/*.key
-/storage/framework/cache/*
+
+# Keep the directory structure (via .gitkeep) but ignore generated content
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitkeep
 /storage/framework/sessions/*
+!/storage/framework/sessions/.gitkeep
 /storage/framework/testing/*
+!/storage/framework/testing/.gitkeep
 /storage/framework/views/*
+!/storage/framework/views/.gitkeep
 /storage/logs/*
+!/storage/logs/.gitkeep
+/storage/app/public/*
+!/storage/app/public/.gitkeep
+/storage/app/private/*
+!/storage/app/private/.gitkeep
 /bootstrap/cache/*
+!/bootstrap/cache/.gitkeep
+
 .env
 .env.backup
 .env.production
