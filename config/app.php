@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\ServiceProvider;
+
 return [
     'name' => env('APP_NAME', 'MGAEMS'),
     'env' => env('APP_ENV', 'production'),
@@ -17,48 +20,21 @@ return [
         'driver' => 'file',
     ],
 
-    'providers' => [
-        Illuminate\Auth\AuthServiceProvider::class,
-        Illuminate\Broadcasting\BroadcastServiceProvider::class,
-        Illuminate\Bus\BusServiceProvider::class,
-        Illuminate\Cache\CacheServiceProvider::class,
-        Illuminate\Foundation\Providers\ConsoleSupportServiceProvider::class,
-        Illuminate\Cookie\CookieServiceProvider::class,
-        Illuminate\Database\DatabaseServiceProvider::class,
-        Illuminate\Encryption\EncryptionServiceProvider::class,
-        Illuminate\Filesystem\FilesystemServiceProvider::class,
-        Illuminate\Foundation\Providers\FoundationServiceProvider::class,
-        Illuminate\Hashing\HashServiceProvider::class,
-        Illuminate\Mail\MailServiceProvider::class,
-        Illuminate\Notifications\NotificationServiceProvider::class,
-        Illuminate\Pagination\PaginationServiceProvider::class,
-        Illuminate\Pipeline\PipelineServiceProvider::class,
-        Illuminate\Queue\QueueServiceProvider::class,
-        Illuminate\Redis\RedisServiceProvider::class,
-        Illuminate\Auth\Passwords\PasswordResetServiceProvider::class,
-        Illuminate\Session\SessionServiceProvider::class,
-        Illuminate\Translation\TranslationServiceProvider::class,
-        Illuminate\Validation\ValidationServiceProvider::class,
-        Illuminate\View\ViewServiceProvider::class,
+    // Uses Laravel's own defaultProviders() helper for every framework
+    // service provider, rather than hand-listing them — this is the same
+    // pattern the official Laravel skeleton uses, and avoids the risk of
+    // missing or mis-ordering a framework provider by hand.
+    'providers' => ServiceProvider::defaultProviders()->merge([
+        // Third-party package providers (Sanctum, DomPDF, Excel) are
+        // registered automatically via Composer package auto-discovery —
+        // no manual entry needed here.
 
-        Laravel\Sanctum\SanctumServiceProvider::class,
-
-        // Ours
+        // Our own application providers.
         App\Providers\AppServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
-    ],
+    ])->toArray(),
 
-    'aliases' => [
-        'App' => Illuminate\Support\Facades\App::class,
-        'Auth' => Illuminate\Support\Facades\Auth::class,
-        'Cache' => Illuminate\Support\Facades\Cache::class,
-        'Config' => Illuminate\Support\Facades\Config::class,
-        'DB' => Illuminate\Support\Facades\DB::class,
-        'Hash' => Illuminate\Support\Facades\Hash::class,
-        'Mail' => Illuminate\Support\Facades\Mail::class,
-        'Route' => Illuminate\Support\Facades\Route::class,
-        'Schema' => Illuminate\Support\Facades\Schema::class,
-        'Str' => Illuminate\Support\Str::class,
-        'Validator' => Illuminate\Support\Facades\Validator::class,
-    ],
+    'aliases' => Facade::defaultAliases()->merge([
+        //
+    ])->toArray(),
 ];
