@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,13 @@ Route::prefix('v1')->group(function () {
 
     // --- Authentication (SRS §3.1, API Design §2) ---
     Route::post('/auth/login', [AuthController::class, 'login']);
+
+    // --- Password Recovery (SRS FR-AUTH-03, UC-AUTH-02) ---
+    // Throttled to slow down enumeration/abuse of a public, unauthenticated endpoint.
+    Route::middleware('throttle:6,1')->group(function () {
+        Route::post('/auth/password/forgot', [PasswordResetController::class, 'forgot']);
+        Route::post('/auth/password/reset', [PasswordResetController::class, 'reset']);
+    });
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
