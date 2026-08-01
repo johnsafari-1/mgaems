@@ -1,0 +1,31 @@
+{
+    "name": "mgaems/mgaems",
+    "type": "project",
+    "description": "Manna Goodnews Academy Education Management System",
+    "keywords": ["laravel", "school-management", "cbc", "education"],
+    "license": "proprietary",
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^11.0",
+        "laravel/sanctum": "^4.0",
+        "barryvdh/laravel-dompdf": "^3.0",
+        "maatwebsite/excel": "^3.1"
+    },
+    "require-dev": {
+        "fakerphp/faker": "^1.23",
+        "laravel/pint": "^1.13",
+        "phpunit/phpunit": "^11.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
