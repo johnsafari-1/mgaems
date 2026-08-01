@@ -10,7 +10,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             RoleSeeder::class,
-            // AdminUserSeeder::class,   // added when the Administration module lands (Phase 1)
+            AdminUserSeeder::class,
         ]);
     }
 }

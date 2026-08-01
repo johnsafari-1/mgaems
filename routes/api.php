@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,9 +21,15 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
-        // Example of an RBAC-gated route, per SRS FR-AUTH-04:
-        // Route::get('/users', [UserController::class, 'index'])
-        //     ->middleware('role:system_admin');
+        // --- User Management (SRS FR-ADM-03, API Design §2) ---
+        // Gated server-side by role, per FR-AUTH-04 — not just hidden in the UI.
+        Route::middleware('role:system_admin')->group(function () {
+            Route::get('/users', [UserController::class, 'index']);
+            Route::post('/users', [UserController::class, 'store']);
+            Route::get('/users/{user}', [UserController::class, 'show']);
+            Route::patch('/users/{user}', [UserController::class, 'update']);
+            Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        });
 
         // Remaining modules (Student, Academic, Assessment, Attendance, HR,
         // Sponsorship, Communication, Visitor, Reporting, Administration)
