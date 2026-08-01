@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -29,6 +30,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/users/{user}', [UserController::class, 'show']);
             Route::patch('/users/{user}', [UserController::class, 'update']);
             Route::delete('/users/{user}', [UserController::class, 'destroy']);
+        });
+
+        // --- Audit Logs (SRS FR-AUTH-07, UC-AUTH-05) ---
+        // User Role Matrix: System Administrator (Full), Head Teacher (Read).
+        Route::middleware('role:system_admin,head_teacher')->group(function () {
+            Route::get('/audit-logs', [AuditLogController::class, 'index']);
         });
 
         // Remaining modules (Student, Academic, Assessment, Attendance, HR,

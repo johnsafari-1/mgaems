@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
@@ -15,7 +16,7 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthController extends Controller
 {
-    public function login(Request $request)
+    public function login(Request $request, AuditLogger $auditLogger)
     {
         $credentials = $request->validate([
             'username' => ['required', 'string'],
@@ -41,6 +42,7 @@ class AuthController extends Controller
 
         if (! $user || ! Hash::check($credentials['password'], $user->password_hash)) {
             RateLimiter::hit($throttleKey, 60);
+            $auditLogger->log('LOGIN_FAILED', 'User', $user?->id, ['attempted_username' => $credentials['username']]);
 
             throw ValidationException::withMessages([
                 'username' => ['The provided credentials are incorrect.'],
@@ -48,6 +50,8 @@ class AuthController extends Controller
         }
 
         if ($user->status !== 'active') {
+            $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
+
             return response()->json([
                 'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
             ], 403);
@@ -57,6 +61,7 @@ class AuthController extends Controller
 
         $token = $user->createToken('mgaems-web')->plainTextToken;
         $user->forceFill(['last_login_at' => now()])->save();
+        $auditLogger->log('LOGIN_SUCCESS', 'User', $user->id);
 
         return response()->json([
             'data' => [
@@ -71,8 +76,9 @@ class AuthController extends Controller
         ]);
     }
 
-    public function logout(Request $request)
+    public function logout(Request $request, AuditLogger $auditLogger)
     {
+        $auditLogger->log('LOGOUT', 'User', $request->user()->id);
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['data' => ['message' => 'Logged out.']]);

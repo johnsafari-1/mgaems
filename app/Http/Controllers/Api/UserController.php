@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -36,7 +37,7 @@ class UserController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
             'username' => ['required', 'string', 'max:100', 'unique:users,username'],
@@ -55,6 +56,8 @@ class UserController extends Controller
             'status' => 'active',
         ]);
 
+        $auditLogger->log('CREATE_USER', 'User', $user->id, ['role' => $role->name]);
+
         return response()->json(['data' => $this->transform($user)], 201);
     }
 
@@ -63,7 +66,7 @@ class UserController extends Controller
         return response()->json(['data' => $this->transform($user)]);
     }
 
-    public function update(Request $request, User $user)
+    public function update(Request $request, User $user, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
             'email' => ['sometimes', 'email', 'max:150', Rule::unique('users', 'email')->ignore($user->id)],
@@ -88,11 +91,12 @@ class UserController extends Controller
         }
 
         $user->update($validated);
+        $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
 
         return response()->json(['data' => $this->transform($user->fresh('role'))]);
     }
 
-    public function destroy(User $user)
+    public function destroy(User $user, AuditLogger $auditLogger)
     {
         if ($this->wouldRemoveLastAdmin($user, ['status' => 'inactive'])) {
             return response()->json([
@@ -106,6 +110,7 @@ class UserController extends Controller
         // Soft deactivation, not a hard delete — preserves audit/history integrity
         // per Database Schema §4 (Referential Integrity Notes).
         $user->update(['status' => 'inactive']);
+        $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
 
         return response()->json(['data' => ['message' => 'User deactivated.']]);
     }
