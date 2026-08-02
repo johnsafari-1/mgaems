@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AcademicStructureController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetController;
@@ -46,7 +47,27 @@ Route::prefix('v1')->group(function () {
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
         });
 
-        // Remaining modules (Student, Academic, Assessment, Attendance, HR,
+        // --- Academic Management: Classes, Streams, Subjects (SRS FR-ACAD-02/03) ---
+        // Read: broad (staff, teachers, parents, students per User Role Matrix §4).
+        Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
+        Route::get('/streams', [AcademicStructureController::class, 'indexStreams']);
+        Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
+
+        // Write: system_admin, head_teacher (Full); deputy_head_teacher (Manage).
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/classes', [AcademicStructureController::class, 'storeClass']);
+            Route::patch('/classes/{class}', [AcademicStructureController::class, 'updateClass']);
+            Route::delete('/classes/{class}', [AcademicStructureController::class, 'destroyClass']);
+
+            Route::post('/streams', [AcademicStructureController::class, 'storeStream']);
+            Route::delete('/streams/{stream}', [AcademicStructureController::class, 'destroyStream']);
+
+            Route::post('/subjects', [AcademicStructureController::class, 'storeSubject']);
+            Route::delete('/subjects/{subject}', [AcademicStructureController::class, 'destroySubject']);
+            Route::post('/class-subjects', [AcademicStructureController::class, 'attachSubjectToClass']);
+        });
+
+        // Remaining modules (Student, Assessment, Attendance, HR,
         // Sponsorship, Communication, Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
