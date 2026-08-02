@@ -123,6 +123,105 @@ class StudentController extends Controller
     }
 
     /**
+     * SRS FR-STU-07, UC-STU-03: promote a learner to a new class/stream at
+     * term/year end. Status stays 'active' — a promotion keeps the learner
+     * enrolled, it just moves them forward; only transfer_out sets a
+     * terminal status.
+     */
+    public function promote(Request $request, Student $student, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'to_class_id' => ['required', 'exists:classes,id'],
+            'to_stream_id' => ['nullable', 'exists:streams,id'],
+            'term_id' => ['required', 'exists:terms,id'],
+            'reason' => ['nullable', 'string', 'max:255'],
+            'effective_date' => ['required', 'date'],
+        ]);
+
+        $record = DB::transaction(function () use ($validated, $student) {
+            $fromClassId = $student->class_id;
+
+            $student->update([
+                'class_id' => $validated['to_class_id'],
+                'stream_id' => $validated['to_stream_id'] ?? null,
+            ]);
+
+            return $student->promotionsTransfers()->create([
+                'type' => 'promotion',
+                'from_class_id' => $fromClassId,
+                'to_class_id' => $validated['to_class_id'],
+                'term_id' => $validated['term_id'],
+                'reason' => $validated['reason'] ?? null,
+                'effective_date' => $validated['effective_date'],
+                'recorded_by' => auth()->id(),
+            ]);
+        });
+
+        $auditLogger->log('PROMOTE_STUDENT', 'Student', $student->id, $validated);
+
+        return response()->json(['data' => $record->load('fromClass', 'toClass')], 201);
+    }
+
+    /**
+     * SRS FR-STU-08, UC-STU-03: record a transfer in or out of the school.
+     */
+    public function transfer(Request $request, Student $student, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'type' => ['required', Rule::in(['transfer_in', 'transfer_out'])],
+            'to_class_id' => ['required_if:type,transfer_in', 'nullable', 'exists:classes,id'],
+            'term_id' => ['required', 'exists:terms,id'],
+            'reason' => ['nullable', 'string', 'max:255'],
+            'effective_date' => ['required', 'date'],
+        ]);
+
+        $record = DB::transaction(function () use ($validated, $student) {
+            $fromClassId = $student->class_id;
+
+            if ($validated['type'] === 'transfer_out') {
+                $student->update(['status' => 'transferred']);
+            } else {
+                $student->update([
+                    'class_id' => $validated['to_class_id'],
+                    'status' => 'active',
+                ]);
+            }
+
+            return $student->promotionsTransfers()->create([
+                'type' => $validated['type'],
+                'from_class_id' => $fromClassId,
+                'to_class_id' => $validated['to_class_id'] ?? null,
+                'term_id' => $validated['term_id'],
+                'reason' => $validated['reason'] ?? null,
+                'effective_date' => $validated['effective_date'],
+                'recorded_by' => auth()->id(),
+            ]);
+        });
+
+        $auditLogger->log('TRANSFER_STUDENT', 'Student', $student->id, $validated);
+
+        return response()->json(['data' => $record->load('fromClass', 'toClass')], 201);
+    }
+
+    /**
+     * SRS FR-STU-09, UC-STU-04: consolidated academic history. Assessment
+     * and attendance history will merge into this response once those
+     * modules land (see Development Roadmap Phase 3) — for now this
+     * covers profile and class/promotion/transfer history.
+     */
+    public function academicHistory(Student $student)
+    {
+        return response()->json([
+            'data' => [
+                'student' => $student->load('schoolClass', 'stream'),
+                'promotions_transfers' => $student->promotionsTransfers()
+                    ->with(['fromClass', 'toClass', 'term'])
+                    ->get(),
+            ],
+        ]);
+    }
+
+    /**
      * Admission numbers follow MGA-{year}-{4-digit sequence}, e.g. MGA-2026-0001.
      * Sequence resets each calendar year and is computed from the count of
      * students already admitted that year, guarded by the transaction in

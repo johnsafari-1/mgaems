@@ -76,11 +76,14 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
             Route::get('/students', [StudentController::class, 'index']);
             Route::get('/students/{student}', [StudentController::class, 'show']);
+            Route::get('/students/{student}/academic-history', [StudentController::class, 'academicHistory']);
         });
 
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
             Route::post('/students', [StudentController::class, 'store']);
             Route::patch('/students/{student}', [StudentController::class, 'update']);
+            Route::post('/students/{student}/promote', [StudentController::class, 'promote']);
+            Route::post('/students/{student}/transfer', [StudentController::class, 'transfer']);
         });
 
         // Remaining modules (Assessment, Attendance, HR,

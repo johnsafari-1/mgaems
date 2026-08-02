@@ -43,4 +43,9 @@ class Student extends Model
     {
         return $this->hasOne(StudentMedicalInfo::class);
     }
+
+    public function promotionsTransfers()
+    {
+        return $this->hasMany(PromotionTransfer::class)->orderByDesc('effective_date');
+    }
 }
