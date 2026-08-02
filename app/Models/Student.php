@@ -48,4 +48,14 @@ class Student extends Model
     {
         return $this->hasMany(PromotionTransfer::class)->orderByDesc('effective_date');
     }
+
+    public function assessments()
+    {
+        return $this->hasMany(Assessment::class);
+    }
+
+    public function reportCards()
+    {
+        return $this->hasMany(ReportCard::class);
+    }
 }

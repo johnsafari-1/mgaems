@@ -1,10 +1,12 @@
 <?php
 
 use App\Http\Controllers\Api\AcademicStructureController;
+use App\Http\Controllers\Api\AssessmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -97,7 +99,19 @@ Route::prefix('v1')->group(function () {
             Route::get('/attendance/students/summary', [AttendanceController::class, 'summary']);
         });
 
-        // Remaining modules (Assessment, HR,
+        // --- CBC Assessment (SRS FR-ASM-01..07) ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::post('/assessments', [AssessmentController::class, 'store']);
+            Route::get('/assessments', [AssessmentController::class, 'index']);
+            Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
+            Route::get('/report-cards/{reportCard}/download', [ReportCardController::class, 'download']);
+        });
+
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/students/{student}/report-cards/generate', [ReportCardController::class, 'generate']);
+        });
+
+        // Remaining modules (HR,
         // Sponsorship, Communication, Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
