@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class PromotionTransfer extends Model
 {
+    protected $table = 'promotions_transfers';
+
     public $timestamps = false;
 
     protected $fillable = [
