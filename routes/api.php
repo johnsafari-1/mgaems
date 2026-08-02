@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AcademicStructureController;
+use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetController;
@@ -86,7 +87,17 @@ Route::prefix('v1')->group(function () {
             Route::post('/students/{student}/transfer', [StudentController::class, 'transfer']);
         });
 
-        // Remaining modules (Assessment, Attendance, HR,
+        // --- Attendance (SRS FR-ATT-01/02/03) ---
+        // Write: system_admin, head_teacher, deputy_head_teacher, teacher (see
+        // AttendanceController note re: teacher-own-class scoping being a follow-up).
+        // Read: same roles — Parent/Sponsor own-child access added with those portals.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::post('/attendance/students', [AttendanceController::class, 'store']);
+            Route::get('/attendance/students', [AttendanceController::class, 'index']);
+            Route::get('/attendance/students/summary', [AttendanceController::class, 'summary']);
+        });
+
+        // Remaining modules (Assessment, HR,
         // Sponsorship, Communication, Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
