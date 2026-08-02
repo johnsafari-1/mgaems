@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
+use App\Http\Controllers\Api\SponsorController;
+use App\Http\Controllers\Api\SponsorshipController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -109,6 +111,22 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
             Route::post('/students/{student}/report-cards/generate', [ReportCardController::class, 'generate']);
+        });
+
+        // --- Sponsorship & Partnership (SRS FR-SPN-01..08) ---
+        // Deliberately the most restricted module outside System Administration,
+        // per FR-SPN-07 and the User Role Matrix — sponsor data is sensitive.
+        Route::middleware('role:system_admin,sponsor_coordinator,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/sponsors', [SponsorController::class, 'index']);
+            Route::get('/sponsors/{sponsor}', [SponsorController::class, 'show']);
+            Route::get('/sponsorships', [SponsorshipController::class, 'index']);
+        });
+
+        Route::middleware('role:system_admin,sponsor_coordinator')->group(function () {
+            Route::post('/sponsors', [SponsorController::class, 'store']);
+            Route::patch('/sponsors/{sponsor}', [SponsorController::class, 'update']);
+            Route::post('/sponsorships', [SponsorshipController::class, 'store']);
+            Route::patch('/sponsorships/{sponsorship}', [SponsorshipController::class, 'update']);
         });
 
         // Remaining modules (HR,
