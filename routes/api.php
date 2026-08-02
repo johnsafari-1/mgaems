@@ -5,12 +5,14 @@ use App\Http\Controllers\Api\AssessmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\SponsorController;
 use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
+use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -147,8 +149,20 @@ Route::prefix('v1')->group(function () {
             Route::get('/sponsorships/{sponsorship}/comments', [SponsorPortalController::class, 'sponsorshipComments']);
         });
 
-        // Remaining modules (HR,
-        // Sponsorship, Communication, Visitor, Reporting, Administration)
+        // --- Human Resources (SRS FR-HR-01..07, FR-ADM-02) ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/staff', [StaffController::class, 'index']);
+            Route::get('/staff/{staff}', [StaffController::class, 'show']);
+            Route::patch('/staff/{staff}', [StaffController::class, 'update']);
+            Route::get('/departments', [DepartmentController::class, 'index']);
+        });
+
+        Route::middleware('role:system_admin,head_teacher')->group(function () {
+            Route::post('/staff', [StaffController::class, 'store']);
+            Route::post('/departments', [DepartmentController::class, 'store']);
+        });
+
+        // Remaining modules (Communication, Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
 });

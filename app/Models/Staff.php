@@ -4,13 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * Placeholder — full implementation (qualifications, documents, emergency
- * contacts, department relation) lands in Phase 4 (HR module) per the
- * Development Roadmap. Table is not yet migrated.
- */
 class Staff extends Model
 {
+    // Explicit table name — Eloquent's pluralization of "Staff" is
+    // unreliable (English treats "staff" as collective), so don't rely
+    // on the convention here.
+    protected $table = 'staff';
+
     protected $fillable = [
         'user_id',
         'department_id',
@@ -24,8 +24,32 @@ class Staff extends Model
         'status',
     ];
 
+    protected $casts = [
+        'employment_date' => 'date',
+    ];
+
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class);
+    }
+
+    public function qualifications()
+    {
+        return $this->hasMany(StaffQualification::class);
+    }
+
+    public function documents()
+    {
+        return $this->hasMany(StaffDocument::class);
+    }
+
+    public function emergencyContacts()
+    {
+        return $this->hasMany(StaffEmergencyContact::class);
     }
 }
