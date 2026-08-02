@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AcademicStructureController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -67,7 +68,22 @@ Route::prefix('v1')->group(function () {
             Route::post('/class-subjects', [AcademicStructureController::class, 'attachSubjectToClass']);
         });
 
-        // Remaining modules (Student, Assessment, Attendance, HR,
+        // --- Student Management (SRS FR-STU-01..04) ---
+        // Read: system_admin, head_teacher, deputy_head_teacher, teacher, HR/admin (Full/Read per matrix).
+        // NOTE: Parent/Sponsor "own-child-only" access is added when the Parent/Sponsor
+        // Portal modules land — deliberately not opened here yet to avoid a
+        // half-built authorization check on sensitive student data.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/students', [StudentController::class, 'index']);
+            Route::get('/students/{student}', [StudentController::class, 'show']);
+        });
+
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/students', [StudentController::class, 'store']);
+            Route::patch('/students/{student}', [StudentController::class, 'update']);
+        });
+
+        // Remaining modules (Assessment, Attendance, HR,
         // Sponsorship, Communication, Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
