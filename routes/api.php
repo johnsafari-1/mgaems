@@ -5,9 +5,11 @@ use App\Http\Controllers\Api\AssessmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\SponsorController;
+use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
@@ -127,6 +129,22 @@ Route::prefix('v1')->group(function () {
             Route::patch('/sponsors/{sponsor}', [SponsorController::class, 'update']);
             Route::post('/sponsorships', [SponsorshipController::class, 'store']);
             Route::patch('/sponsorships/{sponsorship}', [SponsorshipController::class, 'update']);
+        });
+
+        // --- Parent Portal (SRS FR-PAR-01..06) ---
+        Route::middleware('role:parent_guardian')->prefix('portal/parent')->group(function () {
+            Route::get('/children', [ParentPortalController::class, 'myChildren']);
+            Route::get('/children/{student}/attendance', [ParentPortalController::class, 'childAttendance']);
+            Route::get('/children/{student}/report-cards', [ParentPortalController::class, 'childReportCards']);
+            Route::get('/children/{student}/progress', [ParentPortalController::class, 'childProgress']);
+        });
+
+        // --- Sponsor Portal (SRS FR-SPP-01..06) ---
+        Route::middleware('role:sponsor')->prefix('portal/sponsor')->group(function () {
+            Route::get('/sponsorships', [SponsorPortalController::class, 'mySponsorships']);
+            Route::get('/sponsorships/{sponsorship}/attendance', [SponsorPortalController::class, 'sponsorshipAttendance']);
+            Route::get('/sponsorships/{sponsorship}/report-cards', [SponsorPortalController::class, 'sponsorshipReportCards']);
+            Route::get('/sponsorships/{sponsorship}/comments', [SponsorPortalController::class, 'sponsorshipComments']);
         });
 
         // Remaining modules (HR,
