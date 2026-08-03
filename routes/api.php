@@ -1,11 +1,13 @@
 <?php
 
 use App\Http\Controllers\Api\AcademicStructureController;
+use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AssessmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
@@ -162,7 +164,23 @@ Route::prefix('v1')->group(function () {
             Route::post('/departments', [DepartmentController::class, 'store']);
         });
 
-        // Remaining modules (Communication, Visitor, Reporting, Administration)
+        // --- Communication (SRS FR-COM-01/02/03) ---
+        // Publish: staff-side roles (Teacher scoped to "own class" — same
+        // tracked simplification noted in AttendanceController/AssessmentController).
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher')->group(function () {
+            Route::post('/announcements', [AnnouncementController::class, 'store']);
+        });
+        // Receive: every authenticated role (per User Role Matrix — all "R").
+        Route::get('/announcements', [AnnouncementController::class, 'index']);
+
+        // Messaging: every role except Student per the User Role Matrix.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor')->group(function () {
+            Route::post('/messages', [MessageController::class, 'store']);
+            Route::get('/messages', [MessageController::class, 'index']);
+            Route::patch('/messages/{message}/read', [MessageController::class, 'markRead']);
+        });
+
+        // Remaining modules (Visitor, Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
 });
