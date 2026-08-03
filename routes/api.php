@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
+use App\Http\Controllers\Api\ReportingController;
 use App\Http\Controllers\Api\SponsorController;
 use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
@@ -189,7 +190,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/visitors', [VisitorController::class, 'store']);
         });
 
-        // Remaining modules (Reporting, Administration)
+        // --- Reporting (SRS FR-REP-01..07) ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/reports/school-statistics', [ReportingController::class, 'schoolStatistics']);
+            Route::get('/reports/students/export', [ReportingController::class, 'exportStudents']);
+        });
+
+        // Remaining modules (Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
 });
