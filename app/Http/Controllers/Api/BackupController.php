@@ -66,7 +66,18 @@ class BackupController extends Controller
         }
         $command[] = $db['database'];
 
-        $process = new Process($command);
+        // On Windows, mysqldump (like many console apps) needs SystemRoot
+        // in its environment to initialize Winsock for a TCP connection.
+        // PHP's subprocess spawning doesn't always pass this through
+        // reliably (this is what caused "Can't create TCP/IP socket
+        // (10106)" when running under `php artisan serve`), so we set it
+        // explicitly rather than relying on inheritance.
+        $env = array_merge($_SERVER, $_ENV);
+        if (! isset($env['SystemRoot']) && ! isset($env['SYSTEMROOT'])) {
+            $env['SystemRoot'] = 'C:\\Windows';
+        }
+
+        $process = new Process($command, null, $env);
         $process->setTimeout(300);
         $process->run();
 
@@ -97,7 +108,6 @@ class BackupController extends Controller
 
     public function download(string $filename)
     {
-        // basename() strips any path traversal attempt (../, absolute paths, etc.)
         $safeFilename = basename($filename);
         $fullPath = $this->backupDir().DIRECTORY_SEPARATOR.$safeFilename;
 
