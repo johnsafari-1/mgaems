@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\AssessmentController;
 use App\Http\Controllers\Api\AttendanceController;
 use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
@@ -196,7 +197,16 @@ Route::prefix('v1')->group(function () {
             Route::get('/reports/students/export', [ReportingController::class, 'exportStudents']);
         });
 
-        // Remaining modules (Administration)
+        // --- Administration: Backups (SRS FR-ADM-06, UC-ADM-02) ---
+        Route::middleware('role:system_admin,head_teacher')->group(function () {
+            Route::get('/backups', [BackupController::class, 'index']);
+        });
+        Route::middleware('role:system_admin')->group(function () {
+            Route::post('/backups', [BackupController::class, 'store']);
+            Route::get('/backups/{filename}/download', [BackupController::class, 'download']);
+        });
+
+        // Remaining: school settings, logo, full system config (Administration polish)
         // are added in subsequent phases per the Development Roadmap.
     });
 });
