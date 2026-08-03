@@ -35,3 +35,9 @@ yarn-error.log
 /.vscode
 .DS_Store
 *.log
+
+# Downloaded report artifacts — generated on demand, not part of the app
+*.pdf
+*.xlsx
+*.xls
+~$*
