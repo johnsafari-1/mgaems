@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\SponsorshipController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\VisitorController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -180,7 +181,15 @@ Route::prefix('v1')->group(function () {
             Route::patch('/messages/{message}/read', [MessageController::class, 'markRead']);
         });
 
-        // Remaining modules (Visitor, Reporting, Administration)
+        // --- Visitor & Volunteer Management (SRS FR-VIS-01..04) ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator')->group(function () {
+            Route::get('/visitors', [VisitorController::class, 'index']);
+        });
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/visitors', [VisitorController::class, 'store']);
+        });
+
+        // Remaining modules (Reporting, Administration)
         // are added in subsequent phases per the Development Roadmap.
     });
 });
