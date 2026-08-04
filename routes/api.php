@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\ReportingController;
+use App\Http\Controllers\Api\SchoolSettingController;
 use App\Http\Controllers\Api\SponsorController;
 use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
@@ -206,7 +207,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/backups/{filename}/download', [BackupController::class, 'download']);
         });
 
-        // Remaining: school settings, logo, full system config (Administration polish)
-        // are added in subsequent phases per the Development Roadmap.
+        // --- Administration: School Settings & Logo (SRS FR-ADM-05) ---
+        Route::get('/settings/school', [SchoolSettingController::class, 'show']);
+        Route::middleware('role:system_admin,head_teacher')->group(function () {
+            Route::patch('/settings/school', [SchoolSettingController::class, 'update']);
+            Route::post('/settings/school/logo', [SchoolSettingController::class, 'uploadLogo']);
+        });
     });
 });
