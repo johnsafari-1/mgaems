@@ -129,7 +129,7 @@ async function loadStudents() {
   const students = await apiGet('/api/v1/students');
   if (!students) return;
   document.getElementById('studentsSection').style.display = 'block';
-  document.getElementById('studentsBody').innerHTML = students.data.map(s => `
+  document.getElementById('studentsBody').innerHTML = students.map(s => `
     <tr>
       <td>${s.admission_no}</td>
       <td>${s.first_name} ${s.last_name}</td>
