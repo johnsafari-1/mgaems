@@ -3,36 +3,59 @@
 <head>
 <meta charset="UTF-8">
 <title>MGAEMS — Sign In</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
 <style>
-  * { box-sizing: border-box; }
-  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #F4F6FA; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
-  .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); width: 360px; text-align: center; }
-  .card img { width: 70px; height: 70px; object-fit: cover; border-radius: 50%; margin-bottom: 12px; }
-  h1 { font-size: 18px; color: #1F3864; margin: 0 0 4px; }
-  p.sub { color: #777; font-size: 13px; margin-bottom: 24px; }
-  input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #DDD; border-radius: 8px; font-size: 14px; }
-  button { width: 100%; padding: 12px; background: #1F3864; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  button:hover { background: #16294a; }
-  .error { color: #C0392B; font-size: 13px; margin-top: 10px; min-height: 16px; }
+  body { display: flex; align-items: center; justify-content: center; height: 100vh; }
+  .login-card { width: 380px; text-align: center; }
+  .login-card img { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; margin-bottom: var(--space-3); }
+  .login-card .sub { color: var(--gray-500); font-size: var(--text-sm); margin-bottom: var(--space-6); }
+  .login-card .btn-primary { width: 100%; margin-top: var(--space-2); }
+  .login-card .theme-toggle { margin-top: var(--space-5); font-size: var(--text-xs); color: var(--gray-500); }
 </style>
 </head>
 <body>
-  <div class="card">
+  <div class="card login-card">
     <img src="/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg" onerror="this.style.display='none'">
     <h1>Manna Goodnews Academy</h1>
-    <p class="sub">Education Management System</p>
-    <input type="text" id="username" placeholder="Username" autocomplete="username">
-    <input type="password" id="password" placeholder="Password" autocomplete="current-password">
-    <button onclick="login()">Sign In</button>
-    <div class="error" id="error"></div>
+    <div class="sub">Education Management System</div>
+
+    <div id="alertBox"></div>
+
+    <div class="field" style="text-align:left">
+      <label>Username</label>
+      <input type="text" id="username" autocomplete="username">
+    </div>
+    <div class="field" style="text-align:left">
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password">
+    </div>
+
+    <button class="btn btn-primary" id="loginBtn" onclick="login()">
+      <i data-lucide="log-in"></i> <span id="loginBtnLabel">Sign In</span>
+    </button>
   </div>
 
+<script src="/assets/app.js"></script>
 <script>
+lucide.createIcons();
+
 async function login() {
-  const username = document.getElementById('username').value;
+  const username = document.getElementById('username').value.trim();
   const password = document.getElementById('password').value;
-  const errorEl = document.getElementById('error');
-  errorEl.textContent = '';
+  const btn = document.getElementById('loginBtn');
+  const btnLabel = document.getElementById('loginBtnLabel');
+  const alertBox = document.getElementById('alertBox');
+  alertBox.innerHTML = '';
+
+  if (!username || !password) {
+    alertBox.innerHTML = MGAEMS.errorHTML('Please enter both your username and password.');
+    lucide.createIcons();
+    return;
+  }
+
+  btn.disabled = true;
+  btnLabel.textContent = 'Signing in…';
 
   try {
     const res = await fetch('/api/v1/auth/login', {
@@ -43,7 +66,11 @@ async function login() {
     const data = await res.json();
 
     if (!res.ok) {
-      errorEl.textContent = data.message || (data.error && data.error.message) || 'Login failed.';
+      const message = data.message || (data.error && data.error.message) || 'Login failed. Check your details and try again.';
+      alertBox.innerHTML = MGAEMS.errorHTML(message);
+      lucide.createIcons();
+      btn.disabled = false;
+      btnLabel.textContent = 'Sign In';
       return;
     }
 
@@ -51,7 +78,10 @@ async function login() {
     localStorage.setItem('mgaems_user', JSON.stringify(data.data.user));
     window.location.href = '/dashboard.html';
   } catch (e) {
-    errorEl.textContent = 'Could not reach the server.';
+    alertBox.innerHTML = MGAEMS.errorHTML('Could not reach the server. Is it running?');
+    lucide.createIcons();
+    btn.disabled = false;
+    btnLabel.textContent = 'Sign In';
   }
 }
 
