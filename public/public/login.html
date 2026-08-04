@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MGAEMS — Sign In</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background: #F4F6FA; margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; }
+  .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); width: 360px; text-align: center; }
+  .card img { width: 70px; height: 70px; object-fit: cover; border-radius: 50%; margin-bottom: 12px; }
+  h1 { font-size: 18px; color: #1F3864; margin: 0 0 4px; }
+  p.sub { color: #777; font-size: 13px; margin-bottom: 24px; }
+  input { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #DDD; border-radius: 8px; font-size: 14px; }
+  button { width: 100%; padding: 12px; background: #1F3864; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #16294a; }
+  .error { color: #C0392B; font-size: 13px; margin-top: 10px; min-height: 16px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <img src="/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg" onerror="this.style.display='none'">
+    <h1>Manna Goodnews Academy</h1>
+    <p class="sub">Education Management System</p>
+    <input type="text" id="username" placeholder="Username" autocomplete="username">
+    <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+    <button onclick="login()">Sign In</button>
+    <div class="error" id="error"></div>
+  </div>
+
+<script>
+async function login() {
+  const username = document.getElementById('username').value;
+  const password = document.getElementById('password').value;
+  const errorEl = document.getElementById('error');
+  errorEl.textContent = '';
+
+  try {
+    const res = await fetch('/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorEl.textContent = data.message || (data.error && data.error.message) || 'Login failed.';
+      return;
+    }
+
+    localStorage.setItem('mgaems_token', data.data.token);
+    localStorage.setItem('mgaems_user', JSON.stringify(data.data.user));
+    window.location.href = '/dashboard.html';
+  } catch (e) {
+    errorEl.textContent = 'Could not reach the server.';
+  }
+}
+
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+</script>
+</body>
+</html>
