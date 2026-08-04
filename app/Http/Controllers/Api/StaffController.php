@@ -33,6 +33,7 @@ class StaffController extends Controller
     public function store(Request $request, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
+            'user_id' => ['nullable', 'exists:users,id', 'unique:staff,user_id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'staff_type' => ['required', Rule::in(['teaching', 'non_teaching'])],
             'role_title' => ['required', 'string', 'max:60'],
