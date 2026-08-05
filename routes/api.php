@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AcademicCalendarController;
 use App\Http\Controllers\Api\AcademicStructureController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AssessmentController;
@@ -62,6 +63,10 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:system_admin,head_teacher')->group(function () {
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
         });
+
+        // --- Academic Calendar: Years & Terms, read-only for now (SRS FR-ACAD-01) ---
+        Route::get('/academic-years', [AcademicCalendarController::class, 'indexYears']);
+        Route::get('/terms', [AcademicCalendarController::class, 'indexTerms']);
 
         // --- Academic Management: Classes, Streams, Subjects (SRS FR-ACAD-02/03) ---
         // Read: broad (staff, teachers, parents, students per User Role Matrix §4).

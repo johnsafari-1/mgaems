@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MGAEMS — Students</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+<script src="/assets/app.js"></script>
+<script src="/assets/nav.js"></script>
+<script>
+MGAEMS.requireAuth();
+renderAppShell('/students.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+MGAEMS.initSidebar();
+
+const WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher'];
+const canWrite = WRITE_ROLES.includes(MGAEMS.currentUser().role);
+
+let currentPage = 1;
+let classesCache = [];
+let currentStudentDetail = null;
+
+document.getElementById('appMain').innerHTML = `
+  <div class="section-header">
+    <h1>Students</h1>
+    ${canWrite ? '<button class="btn btn-primary" id="addStudentBtn"><i data-lucide="user-plus"></i> Register Learner</button>' : ''}
+  </div>
+
+  <div class="card" style="padding:var(--space-4)">
+    <div class="toolbar">
+      <div class="search-input">
+        <i data-lucide="search"></i>
+        <input type="text" id="searchInput" placeholder="Search by name or admission no...">
+      </div>
+      <select id="classFilter"><option value="">All Classes</option></select>
+      <select id="statusFilter">
+        <option value="">All Statuses</option>
+        <option value="active">Active</option>
+        <option value="promoted">Promoted</option>
+        <option value="transferred">Transferred</option>
+        <option value="left">Left</option>
+      </select>
+    </div>
+    <div id="studentsTableWrap">${MGAEMS.loadingHTML()}</div>
+    <div class="pagination" id="paginationBar" style="display:none"></div>
+  </div>
+`;
+lucide.createIcons();
+
+const addBtn = document.getElementById('addStudentBtn');
+if (addBtn) addBtn.addEventListener('click', openAddStudentModal);
+document.getElementById('searchInput').addEventListener('input', debounce(() => { currentPage = 1; loadStudents(); }, 350));
+document.getElementById('classFilter').addEventListener('change', () => { currentPage = 1; loadStudents(); });
+document.getElementById('statusFilter').addEventListener('change', () => { currentPage = 1; loadStudents(); });
+
+function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+async function loadClassesIntoFilter() {
+  const res = await MGAEMS.get('/api/v1/classes');
+  if (!res.ok) return;
+  classesCache = res.data;
+  const filter = document.getElementById('classFilter');
+  filter.innerHTML = '<option value="">All Classes</option>' +
+    res.data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+async function loadStudents() {
+  const wrap = document.getElementById('studentsTableWrap');
+  const pagBar = document.getElementById('paginationBar');
+  wrap.innerHTML = MGAEMS.loadingHTML();
+  pagBar.style.display = 'none';
+
+  const search = document.getElementById('searchInput').value.trim();
+  const classId = document.getElementById('classFilter').value;
+  const status = document.getElementById('statusFilter').value;
+
+  const params = new URLSearchParams({ page: currentPage, per_page: 10 });
+  if (search) params.set('search', search);
+  if (classId) params.set('class_id', classId);
+  if (status) params.set('status', status);
+
+  const res = await MGAEMS.get('/api/v1/students?' + params.toString());
+
+  if (!res.ok) {
+    wrap.innerHTML = MGAEMS.errorHTML(res.error);
+    lucide.createIcons();
+    return;
+  }
+
+  if (res.data.length === 0) {
+    wrap.innerHTML = MGAEMS.emptyStateHTML(
+      search || classId || status ? 'No learners match your filters' : 'No learners registered yet',
+      search || classId || status ? 'Try adjusting your search or filters.' : 'Click "Register Learner" to add your first student.',
+      'users'
+    );
+    lucide.createIcons();
+    return;
+  }
+
+  const statusBadge = { active: 'badge-green', promoted: 'badge-navy', transferred: 'badge-amber', left: 'badge-gray' };
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Stream</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        ${res.data.map(s => `
+          <tr style="cursor:pointer" onclick="openStudentDetail(${s.id})">
+            <td>${s.admission_no}</td>
+            <td>${s.first_name} ${s.last_name}</td>
+            <td>${s.school_class ? s.school_class.name : '—'}</td>
+            <td>${s.stream ? s.stream.name : '—'}</td>
+            <td><span class="badge ${statusBadge[s.status] || 'badge-gray'}">${s.status}</span></td>
+            <td><i data-lucide="chevron-right" style="width:16px;color:var(--gray-500)"></i></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  lucide.createIcons();
+
+  if (res.meta) {
+    const totalPages = Math.max(1, Math.ceil(res.meta.total / res.meta.per_page));
+    pagBar.style.display = 'flex';
+    pagBar.innerHTML = `
+      <span>Page ${res.meta.page} of ${totalPages} — ${res.meta.total} learner${res.meta.total === 1 ? '' : 's'}</span>
+      <div class="flex gap-2">
+        <button class="btn btn-secondary btn-sm" ${currentPage <= 1 ? 'disabled' : ''} onclick="changePage(-1)"><i data-lucide="chevron-left"></i> Prev</button>
+        <button class="btn btn-secondary btn-sm" ${currentPage >= totalPages ? 'disabled' : ''} onclick="changePage(1)">Next <i data-lucide="chevron-right"></i></button>
+      </div>
+    `;
+    lucide.createIcons();
+  }
+}
+
+function changePage(delta) { currentPage += delta; loadStudents(); }
+
+/* ---------------- Add Student Modal ---------------- */
+
+let guardianRowCount = 0;
+
+function openAddStudentModal() {
+  const classOptions = classesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>Register New Learner</h2>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body">
+        <div id="addStudentAlert"></div>
+        <div class="form-grid">
+          <div class="field"><label>First Name *</label><input type="text" id="f_first_name"></div>
+          <div class="field"><label>Last Name *</label><input type="text" id="f_last_name"></div>
+          <div class="field"><label>Date of Birth *</label><input type="date" id="f_dob"></div>
+          <div class="field"><label>Gender *</label>
+            <select id="f_gender"><option value="">Select…</option><option value="male">Male</option><option value="female">Female</option></select>
+          </div>
+          <div class="field"><label>Class *</label><select id="f_class_id"><option value="">Select…</option>${classOptions}</select></div>
+          <div class="field"><label>Admission Date *</label><input type="date" id="f_admission_date"></div>
+        </div>
+
+        <h3 style="margin:var(--space-4) 0 var(--space-2)">Guardian</h3>
+        <div class="form-grid">
+          <div class="field"><label>Full Name</label><input type="text" id="g_name"></div>
+          <div class="field"><label>Relationship</label><input type="text" id="g_relationship" placeholder="e.g. Mother"></div>
+          <div class="field"><label>Phone</label><input type="text" id="g_phone"></div>
+          <div class="field"><label>Email</label><input type="email" id="g_email"></div>
+        </div>
+
+        <h3 style="margin:var(--space-4) 0 var(--space-2)">Medical Information (optional)</h3>
+        <div class="field"><label>Allergies</label><input type="text" id="m_allergies"></div>
+        <div class="field"><label>Conditions</label><input type="text" id="m_conditions"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" id="submitStudentBtn" onclick="submitNewStudent()"><i data-lucide="check"></i> Register Learner</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons();
+}
+
+async function submitNewStudent() {
+  const alertBox = document.getElementById('addStudentAlert');
+  const btn = document.getElementById('submitStudentBtn');
+  alertBox.innerHTML = '';
+
+  const payload = {
+    first_name: document.getElementById('f_first_name').value.trim(),
+    last_name: document.getElementById('f_last_name').value.trim(),
+    date_of_birth: document.getElementById('f_dob').value,
+    gender: document.getElementById('f_gender').value,
+    class_id: document.getElementById('f_class_id').value,
+    admission_date: document.getElementById('f_admission_date').value,
+  };
+
+  const guardianName = document.getElementById('g_name').value.trim();
+  if (guardianName) {
+    payload.guardians = [{
+      full_name: guardianName,
+      relationship: document.getElementById('g_relationship').value.trim() || 'Guardian',
+      phone: document.getElementById('g_phone').value.trim(),
+      email: document.getElementById('g_email').value.trim() || null,
+      is_primary_contact: true,
+    }];
+  }
+
+  const allergies = document.getElementById('m_allergies').value.trim();
+  const conditions = document.getElementById('m_conditions').value.trim();
+  if (allergies || conditions) {
+    payload.medical = { allergies: allergies || null, conditions: conditions || null };
+  }
+
+  btn.disabled = true;
+  const res = await MGAEMS.post('/api/v1/students', payload);
+  btn.disabled = false;
+
+  if (!res.ok) {
+    alertBox.innerHTML = MGAEMS.errorHTML(res.error);
+    lucide.createIcons();
+    return;
+  }
+
+  document.querySelector('.modal-overlay').remove();
+  MGAEMS.toast(`${payload.first_name} ${payload.last_name} registered — admission no ${res.data.admission_no}`, 'success');
+  loadStudents();
+}
+
+/* ---------------- Student Detail Modal ---------------- */
+
+async function openStudentDetail(id) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal modal-lg">
+      <div class="modal-header"><h2>Learner Profile</h2>
+        <button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i data-lucide="x"></i></button>
+      </div>
+      <div class="modal-body" id="detailBody">${MGAEMS.loadingHTML()}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  lucide.createIcons();
+
+  const [studentRes, historyRes, sponsorshipRes] = await Promise.all([
+    MGAEMS.get(`/api/v1/students/${id}`),
+    MGAEMS.get(`/api/v1/students/${id}/academic-history`),
+    MGAEMS.get(`/api/v1/sponsorships?student_id=${id}`),
+  ]);
+
+  const body = document.getElementById('detailBody');
+  if (!studentRes.ok) {
+    body.innerHTML = MGAEMS.errorHTML(studentRes.error);
+    lucide.createIcons();
+    return;
+  }
+  const s = studentRes.data;
+  currentStudentDetail = s;
+
+  body.innerHTML = `
+    <div class="tabs">
+      <div class="tab active" data-tab="profile">Profile</div>
+      <div class="tab" data-tab="guardians">Guardians</div>
+      <div class="tab" data-tab="history">Academic History</div>
+      <div class="tab" data-tab="sponsorship">Sponsorship</div>
+    </div>
+
+    <div class="tab-panel active" data-panel="profile">
+      <div id="profileViewMode">
+        <div class="form-grid">
+          <div class="field"><label>Admission No</label><div>${s.admission_no}</div></div>
+          <div class="field"><label>Name</label><div>${s.first_name} ${s.last_name}</div></div>
+          <div class="field"><label>Class</label><div>${s.school_class ? s.school_class.name : '—'}</div></div>
+          <div class="field"><label>Status</label><div><span class="badge badge-green">${s.status}</span></div></div>
+          <div class="field"><label>Date of Birth</label><div>${s.date_of_birth.slice(0,10)}</div></div>
+          <div class="field"><label>Admission Date</label><div>${s.admission_date.slice(0,10)}</div></div>
+        </div>
+        ${s.medical_info ? `
+          <h3 style="margin:var(--space-4) 0 var(--space-2)">Medical Information</h3>
+          <div class="form-grid">
+            <div class="field"><label>Allergies</label><div>${s.medical_info.allergies || '—'}</div></div>
+            <div class="field"><label>Conditions</label><div>${s.medical_info.conditions || '—'}</div></div>
+          </div>` : ''}
+        <div class="modal-footer" style="padding-left:0;padding-right:0;border-top:none">
+          ${canWrite ? `
+            <button class="btn btn-secondary btn-sm" onclick="openEditForm(${id})"><i data-lucide="pencil"></i> Edit</button>
+            <button class="btn btn-secondary btn-sm" onclick="openPromoteForm(${id})"><i data-lucide="arrow-up-circle"></i> Promote</button>
+            <button class="btn btn-secondary btn-sm" onclick="openTransferForm(${id})"><i data-lucide="log-out"></i> Transfer</button>
+          ` : ''}
+        </div>
+      </div>
+      <div id="profileEditMode" style="display:none"></div>
+      <div id="profileActionForms"></div>
+    </div>
+
+    <div class="tab-panel" data-panel="guardians">
+      ${s.guardians.length === 0 ? MGAEMS.emptyStateHTML('No guardians recorded', '', 'user') : `
+        <table>
+          <thead><tr><th>Name</th><th>Relationship</th><th>Phone</th><th>Email</th></tr></thead>
+          <tbody>${s.guardians.map(g => `<tr><td>${g.full_name}</td><td>${g.relationship}</td><td>${g.phone || '—'}</td><td>${g.email || '—'}</td></tr>`).join('')}</tbody>
+        </table>`}
+    </div>
+
+    <div class="tab-panel" data-panel="history">
+      ${(!historyRes.ok || historyRes.data.promotions_transfers.length === 0)
+        ? MGAEMS.emptyStateHTML('No promotion or transfer history yet', '', 'history')
+        : `<table>
+            <thead><tr><th>Date</th><th>Type</th><th>From</th><th>To</th><th>Reason</th></tr></thead>
+            <tbody>${historyRes.data.promotions_transfers.map(p => `
+              <tr>
+                <td>${p.effective_date.slice(0,10)}</td>
+                <td><span class="badge badge-navy">${p.type.replace('_',' ')}</span></td>
+                <td>${p.from_class ? p.from_class.name : '—'}</td>
+                <td>${p.to_class ? p.to_class.name : '—'}</td>
+                <td>${p.reason || '—'}</td>
+              </tr>`).join('')}</tbody>
+          </table>`}
+    </div>
+
+    <div class="tab-panel" data-panel="sponsorship">
+      ${(!sponsorshipRes.ok || sponsorshipRes.data.length === 0)
+        ? MGAEMS.emptyStateHTML('No sponsorship on record', 'This learner is not currently linked to a sponsor.', 'heart-handshake')
+        : sponsorshipRes.data.map(sp => `
+            <div class="card" style="margin-bottom:var(--space-3)">
+              <div class="flex-between">
+                <strong>${sp.sponsor.name}</strong>
+                <span class="badge ${sp.status === 'active' ? 'badge-green' : 'badge-gray'}">${sp.status}</span>
+              </div>
+              <div class="text-muted" style="font-size:13px;margin-top:4px">
+                ${sp.sponsorship_type.replace('_',' ')} · since ${sp.start_date.slice(0,10)}
+              </div>
+            </div>`).join('')}
+    </div>
+  `;
+  lucide.createIcons();
+
+  body.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      body.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      body.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      body.querySelector(`.tab-panel[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+    });
+  });
+}
+
+function openEditForm(studentId) {
+  const s = currentStudentDetail;
+  const classOptions = classesCache.map(c => `<option value="${c.id}" ${c.id === s.class_id ? 'selected' : ''}>${c.name}</option>`).join('');
+
+  document.getElementById('profileViewMode').style.display = 'none';
+  const editEl = document.getElementById('profileEditMode');
+  editEl.style.display = 'block';
+  editEl.innerHTML = `
+    <div id="editAlert"></div>
+    <div class="form-grid">
+      <div class="field"><label>First Name</label><input type="text" id="e_first_name" value="${s.first_name}"></div>
+      <div class="field"><label>Last Name</label><input type="text" id="e_last_name" value="${s.last_name}"></div>
+      <div class="field"><label>Date of Birth</label><input type="date" id="e_dob" value="${s.date_of_birth.slice(0,10)}"></div>
+      <div class="field"><label>Gender</label>
+        <select id="e_gender">
+          <option value="male" ${s.gender === 'male' ? 'selected' : ''}>Male</option>
+          <option value="female" ${s.gender === 'female' ? 'selected' : ''}>Female</option>
+        </select>
+      </div>
+      <div class="field"><label>Class</label><select id="e_class_id">${classOptions}</select></div>
+      <div class="field"><label>Status</label>
+        <select id="e_status">
+          <option value="active" ${s.status === 'active' ? 'selected' : ''}>Active</option>
+          <option value="promoted" ${s.status === 'promoted' ? 'selected' : ''}>Promoted</option>
+          <option value="transferred" ${s.status === 'transferred' ? 'selected' : ''}>Transferred</option>
+          <option value="left" ${s.status === 'left' ? 'selected' : ''}>Left</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2" style="margin-top:var(--space-3)">
+      <button class="btn btn-primary btn-sm" onclick="submitEditStudent(${studentId})"><i data-lucide="check"></i> Save Changes</button>
+      <button class="btn btn-secondary btn-sm" onclick="cancelEdit()">Cancel</button>
+    </div>
+  `;
+  lucide.createIcons();
+}
+
+function cancelEdit() {
+  document.getElementById('profileEditMode').style.display = 'none';
+  document.getElementById('profileEditMode').innerHTML = '';
+  document.getElementById('profileViewMode').style.display = 'block';
+}
+
+async function submitEditStudent(studentId) {
+  const alertBox = document.getElementById('editAlert');
+  const res = await MGAEMS.patch(`/api/v1/students/${studentId}`, {
+    first_name: document.getElementById('e_first_name').value.trim(),
+    last_name: document.getElementById('e_last_name').value.trim(),
+    date_of_birth: document.getElementById('e_dob').value,
+    gender: document.getElementById('e_gender').value,
+    class_id: document.getElementById('e_class_id').value,
+    status: document.getElementById('e_status').value,
+  });
+
+  if (!res.ok) {
+    alertBox.innerHTML = MGAEMS.errorHTML(res.error);
+    lucide.createIcons();
+    return;
+  }
+
+  document.querySelector('.modal-overlay').remove();
+  MGAEMS.toast('Learner details updated', 'success');
+  loadStudents();
+}
+
+async function openPromoteForm(studentId) {
+  const classOptions = classesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  const termsRes = await MGAEMS.get('/api/v1/terms');
+  const termOptions = termsRes.ok
+    ? termsRes.data.map(t => `<option value="${t.id}">${t.name} (${t.academic_year ? t.academic_year.name : ''})</option>`).join('')
+    : '';
+
+  const panel = document.querySelector('.tab-panel[data-panel="profile"]');
+  panel.insertAdjacentHTML('beforeend', `
+    <div class="card" style="margin-top:var(--space-4);background:var(--gray-50)">
+      <h3 style="margin-bottom:var(--space-3)">Promote Learner</h3>
+      <div id="promoteAlert"></div>
+      <div class="form-grid">
+        <div class="field"><label>To Class</label><select id="p_to_class">${classOptions}</select></div>
+        <div class="field"><label>Term</label><select id="p_term">${termOptions}</select></div>
+        <div class="field full"><label>Effective Date</label><input type="date" id="p_date"></div>
+        <div class="field full"><label>Reason (optional)</label><input type="text" id="p_reason"></div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="submitPromote(${studentId})">Confirm Promotion</button>
+    </div>
+  `);
+  lucide.createIcons();
+}
+
+async function submitPromote(studentId) {
+  const alertBox = document.getElementById('promoteAlert');
+  const res = await MGAEMS.post(`/api/v1/students/${studentId}/promote`, {
+    to_class_id: document.getElementById('p_to_class').value,
+    term_id: document.getElementById('p_term').value,
+    effective_date: document.getElementById('p_date').value || new Date().toISOString().slice(0,10),
+    reason: document.getElementById('p_reason').value.trim() || undefined,
+  });
+  if (!res.ok) {
+    alertBox.innerHTML = MGAEMS.errorHTML(res.error);
+    lucide.createIcons();
+    return;
+  }
+  document.querySelector('.modal-overlay').remove();
+  MGAEMS.toast('Learner promoted successfully', 'success');
+  loadStudents();
+}
+
+async function openTransferForm(studentId) {
+  const termsRes = await MGAEMS.get('/api/v1/terms');
+  const termOptions = termsRes.ok
+    ? termsRes.data.map(t => `<option value="${t.id}">${t.name}</option>`).join('')
+    : '';
+  const panel = document.querySelector('.tab-panel[data-panel="profile"]');
+  panel.insertAdjacentHTML('beforeend', `
+    <div class="card" style="margin-top:var(--space-4);background:var(--gray-50)">
+      <h3 style="margin-bottom:var(--space-3)">Transfer Learner</h3>
+      <div id="transferAlert"></div>
+      <div class="form-grid">
+        <div class="field"><label>Type</label>
+          <select id="t_type"><option value="transfer_out">Transfer Out (leaving school)</option><option value="transfer_in">Transfer In</option></select>
+        </div>
+        <div class="field"><label>Term</label><select id="t_term">${termOptions}</select></div>
+        <div class="field full"><label>Effective Date</label><input type="date" id="t_date"></div>
+        <div class="field full"><label>Reason</label><input type="text" id="t_reason"></div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="submitTransfer(${studentId})">Confirm Transfer</button>
+    </div>
+  `);
+  lucide.createIcons();
+}
+
+async function submitTransfer(studentId) {
+  const alertBox = document.getElementById('transferAlert');
+  const res = await MGAEMS.post(`/api/v1/students/${studentId}/transfer`, {
+    type: document.getElementById('t_type').value,
+    term_id: document.getElementById('t_term').value,
+    effective_date: document.getElementById('t_date').value || new Date().toISOString().slice(0,10),
+    reason: document.getElementById('t_reason').value.trim() || undefined,
+  });
+  if (!res.ok) {
+    alertBox.innerHTML = MGAEMS.errorHTML(res.error);
+    lucide.createIcons();
+    return;
+  }
+  document.querySelector('.modal-overlay').remove();
+  MGAEMS.toast('Transfer recorded', 'success');
+  loadStudents();
+}
+
+loadClassesIntoFilter().then(loadStudents);
+</script>
+</body>
+</html>

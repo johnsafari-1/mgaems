@@ -238,3 +238,54 @@ tr:hover td { background: var(--gray-50); }
 .flex-between { display: flex; align-items: center; justify-content: space-between; }
 .gap-2 { gap: var(--space-2); }
 .gap-3 { gap: var(--space-3); }
+
+/* ---------- Modals ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(16,24,40,0.45);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: var(--space-8) var(--space-4);
+  overflow-y: auto; z-index: 50;
+}
+.modal {
+  background: white; border-radius: var(--radius-lg); width: 100%; max-width: 560px;
+  box-shadow: var(--shadow-md); animation: modal-in 0.15s ease-out;
+}
+.modal.modal-lg { max-width: 780px; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-5); border-bottom: 1px solid var(--gray-200);
+}
+.modal-header h2 { font-size: var(--text-lg); }
+.modal-close { background: none; border: none; cursor: pointer; color: var(--gray-500); padding: 4px; border-radius: 6px; }
+.modal-close:hover { background: var(--gray-100); }
+.modal-body { padding: var(--space-5); max-height: 65vh; overflow-y: auto; }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: var(--space-3);
+  padding: var(--space-4) var(--space-5); border-top: 1px solid var(--gray-200);
+}
+
+/* ---------- Form grid (two-column on wider modals) ---------- */
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--space-4); }
+.form-grid .field.full { grid-column: 1 / -1; }
+
+/* ---------- Tabs (used in student/staff detail views) ---------- */
+.tabs { display: flex; gap: var(--space-1); border-bottom: 1px solid var(--gray-200); margin-bottom: var(--space-4); }
+.tab {
+  padding: var(--space-2) var(--space-4); font-size: var(--text-sm); font-weight: 600;
+  color: var(--gray-500); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+}
+.tab.active { color: var(--navy); border-color: var(--navy); }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ---------- Search / filter bar ---------- */
+.toolbar { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-4); flex-wrap: wrap; }
+.toolbar .search-input { position: relative; flex: 1; min-width: 200px; }
+.toolbar .search-input svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--gray-500); }
+.toolbar .search-input input { padding-left: 32px; }
+.toolbar select { padding: var(--space-2) var(--space-3); border: 1px solid var(--gray-300); border-radius: var(--radius); font-size: var(--text-sm); background: white; }
+
+/* ---------- Pagination ---------- */
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-top: 1px solid var(--gray-200); font-size: var(--text-sm); color: var(--gray-500); }
+.pagination .btn-sm[disabled] { opacity: 0.4; }
