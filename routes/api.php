@@ -20,6 +20,8 @@ use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\StudentController;
+use App\Http\Controllers\Api\TeacherAssignmentController;
+use App\Http\Controllers\Api\TimetableController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VisitorController;
 use Illuminate\Support\Facades\Route;
@@ -64,9 +66,21 @@ Route::prefix('v1')->group(function () {
             Route::get('/audit-logs', [AuditLogController::class, 'index']);
         });
 
-        // --- Academic Calendar: Years & Terms, read-only for now (SRS FR-ACAD-01) ---
+        // --- Academic Calendar: Years & Terms (SRS FR-ACAD-01) ---
         Route::get('/academic-years', [AcademicCalendarController::class, 'indexYears']);
         Route::get('/terms', [AcademicCalendarController::class, 'indexTerms']);
+
+        Route::middleware('role:system_admin,head_teacher')->group(function () {
+            Route::post('/academic-years', [AcademicCalendarController::class, 'storeYear']);
+            Route::patch('/academic-years/{academicYear}', [AcademicCalendarController::class, 'updateYear']);
+            Route::post('/academic-years/{academicYear}/activate', [AcademicCalendarController::class, 'activateYear']);
+            Route::delete('/academic-years/{academicYear}', [AcademicCalendarController::class, 'destroyYear']);
+
+            Route::post('/terms', [AcademicCalendarController::class, 'storeTerm']);
+            Route::patch('/terms/{term}', [AcademicCalendarController::class, 'updateTerm']);
+            Route::post('/terms/{term}/activate', [AcademicCalendarController::class, 'activateTerm']);
+            Route::delete('/terms/{term}', [AcademicCalendarController::class, 'destroyTerm']);
+        });
 
         // --- Academic Management: Classes, Streams, Subjects (SRS FR-ACAD-02/03) ---
         // Read: broad (staff, teachers, parents, students per User Role Matrix §4).
@@ -81,11 +95,25 @@ Route::prefix('v1')->group(function () {
             Route::delete('/classes/{class}', [AcademicStructureController::class, 'destroyClass']);
 
             Route::post('/streams', [AcademicStructureController::class, 'storeStream']);
+            Route::patch('/streams/{stream}', [AcademicStructureController::class, 'updateStream']);
             Route::delete('/streams/{stream}', [AcademicStructureController::class, 'destroyStream']);
 
             Route::post('/subjects', [AcademicStructureController::class, 'storeSubject']);
+            Route::patch('/subjects/{subject}', [AcademicStructureController::class, 'updateSubject']);
             Route::delete('/subjects/{subject}', [AcademicStructureController::class, 'destroySubject']);
             Route::post('/class-subjects', [AcademicStructureController::class, 'attachSubjectToClass']);
+            Route::delete('/class-subjects', [AcademicStructureController::class, 'detachSubjectFromClass']);
+
+            // --- Teacher Subject Assignments (SRS FR-ACAD-04) ---
+            Route::get('/teacher-assignments', [TeacherAssignmentController::class, 'index']);
+            Route::post('/teacher-assignments', [TeacherAssignmentController::class, 'store']);
+            Route::delete('/teacher-assignments/{classSubjectTeacher}', [TeacherAssignmentController::class, 'destroy']);
+
+            // --- Timetable (SRS FR-ACAD-06/07) ---
+            Route::get('/timetable/by-class', [TimetableController::class, 'indexByClass']);
+            Route::get('/timetable/by-teacher', [TimetableController::class, 'indexByTeacher']);
+            Route::post('/timetable', [TimetableController::class, 'store']);
+            Route::delete('/timetable/{timetableEntry}', [TimetableController::class, 'destroy']);
         });
 
         // --- Student Management (SRS FR-STU-01..04) ---

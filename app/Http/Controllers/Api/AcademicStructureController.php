@@ -22,7 +22,12 @@ class AcademicStructureController extends Controller
 
     public function indexClasses()
     {
-        return response()->json(['data' => SchoolClass::orderBy('sequence')->get()]);
+        return response()->json([
+            'data' => SchoolClass::withCount('students')
+                ->with('classTeacher:id,first_name,last_name')
+                ->orderBy('sequence')
+                ->get(),
+        ]);
     }
 
     public function storeClass(Request $request, AuditLogger $auditLogger)
@@ -31,12 +36,14 @@ class AcademicStructureController extends Controller
             'name' => ['required', 'string', 'max:30', 'unique:classes,name'],
             'level' => ['required', Rule::in(['primary', 'junior'])],
             'sequence' => ['required', 'integer', 'min:1', 'max:255'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'class_teacher_id' => ['nullable', 'exists:staff,id'],
         ]);
 
         $class = SchoolClass::create($validated);
         $auditLogger->log('CREATE_CLASS', 'SchoolClass', $class->id, $validated);
 
-        return response()->json(['data' => $class], 201);
+        return response()->json(['data' => $class->load('classTeacher')], 201);
     }
 
     public function updateClass(Request $request, SchoolClass $class, AuditLogger $auditLogger)
@@ -45,12 +52,14 @@ class AcademicStructureController extends Controller
             'name' => ['sometimes', 'string', 'max:30', Rule::unique('classes', 'name')->ignore($class->id)],
             'level' => ['sometimes', Rule::in(['primary', 'junior'])],
             'sequence' => ['sometimes', 'integer', 'min:1', 'max:255'],
+            'capacity' => ['nullable', 'integer', 'min:1', 'max:500'],
+            'class_teacher_id' => ['nullable', 'exists:staff,id'],
         ]);
 
         $class->update($validated);
         $auditLogger->log('UPDATE_CLASS', 'SchoolClass', $class->id, $validated);
 
-        return response()->json(['data' => $class->fresh()]);
+        return response()->json(['data' => $class->fresh()->load('classTeacher')]);
     }
 
     public function destroyClass(SchoolClass $class, AuditLogger $auditLogger)
@@ -58,6 +67,11 @@ class AcademicStructureController extends Controller
         if ($class->streams()->exists()) {
             return response()->json([
                 'error' => ['code' => 'CLASS_HAS_STREAMS', 'message' => 'Reassign or remove streams before deleting this class.'],
+            ], 409);
+        }
+        if ($class->students()->exists()) {
+            return response()->json([
+                'error' => ['code' => 'CLASS_HAS_STUDENTS', 'message' => 'This class has enrolled learners and cannot be deleted.'],
             ], 409);
         }
 
@@ -71,7 +85,10 @@ class AcademicStructureController extends Controller
 
     public function indexStreams(Request $request)
     {
-        $streams = Stream::when($request->query('class_id'), fn ($q, $id) => $q->where('class_id', $id))->get();
+        $streams = Stream::withCount('students')
+            ->with('schoolClass:id,name')
+            ->when($request->query('class_id'), fn ($q, $id) => $q->where('class_id', $id))
+            ->get();
 
         return response()->json(['data' => $streams]);
     }
@@ -93,11 +110,29 @@ class AcademicStructureController extends Controller
         $stream = Stream::create($validated);
         $auditLogger->log('CREATE_STREAM', 'Stream', $stream->id, $validated);
 
-        return response()->json(['data' => $stream], 201);
+        return response()->json(['data' => $stream->load('schoolClass')], 201);
+    }
+
+    public function updateStream(Request $request, Stream $stream, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:30'],
+        ]);
+
+        $stream->update($validated);
+        $auditLogger->log('UPDATE_STREAM', 'Stream', $stream->id, $validated);
+
+        return response()->json(['data' => $stream->fresh()->load('schoolClass')]);
     }
 
     public function destroyStream(Stream $stream, AuditLogger $auditLogger)
     {
+        if ($stream->students()->exists()) {
+            return response()->json([
+                'error' => ['code' => 'STREAM_HAS_STUDENTS', 'message' => 'This stream has enrolled learners and cannot be deleted.'],
+            ], 409);
+        }
+
         $stream->delete();
         $auditLogger->log('DELETE_STREAM', 'Stream', $stream->id);
 
@@ -116,12 +151,29 @@ class AcademicStructureController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:60', 'unique:subjects,name'],
             'code' => ['nullable', 'string', 'max:20', 'unique:subjects,code'],
+            'learning_area' => ['nullable', 'string', 'max:80'],
+            'status' => ['nullable', Rule::in(['active', 'inactive'])],
         ]);
 
         $subject = Subject::create($validated);
         $auditLogger->log('CREATE_SUBJECT', 'Subject', $subject->id, $validated);
 
         return response()->json(['data' => $subject], 201);
+    }
+
+    public function updateSubject(Request $request, Subject $subject, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:60', Rule::unique('subjects', 'name')->ignore($subject->id)],
+            'code' => ['nullable', 'string', 'max:20', Rule::unique('subjects', 'code')->ignore($subject->id)],
+            'learning_area' => ['nullable', 'string', 'max:80'],
+            'status' => ['sometimes', Rule::in(['active', 'inactive'])],
+        ]);
+
+        $subject->update($validated);
+        $auditLogger->log('UPDATE_SUBJECT', 'Subject', $subject->id, $validated);
+
+        return response()->json(['data' => $subject->fresh()]);
     }
 
     public function attachSubjectToClass(Request $request, AuditLogger $auditLogger)
@@ -143,6 +195,20 @@ class AcademicStructureController extends Controller
         $auditLogger->log('ATTACH_SUBJECT_TO_CLASS', 'SchoolClass', $class->id, $validated);
 
         return response()->json(['data' => ['message' => 'Subject attached to class.']], 201);
+    }
+
+    public function detachSubjectFromClass(Request $request, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'class_id' => ['required', 'exists:classes,id'],
+            'subject_id' => ['required', 'exists:subjects,id'],
+        ]);
+
+        $class = SchoolClass::findOrFail($validated['class_id']);
+        $class->subjects()->detach($validated['subject_id']);
+        $auditLogger->log('DETACH_SUBJECT_FROM_CLASS', 'SchoolClass', $class->id, $validated);
+
+        return response()->json(['data' => ['message' => 'Subject removed from class.']]);
     }
 
     public function destroySubject(Subject $subject, AuditLogger $auditLogger)
