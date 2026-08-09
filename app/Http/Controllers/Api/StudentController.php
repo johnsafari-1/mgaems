@@ -15,6 +15,9 @@ use Illuminate\Validation\Rule;
  * Registration (store) accepts bio-data plus optional guardians[] and
  * medical{} in a single request, matching UC-STU-01's main flow, and
  * auto-generates the admission number rather than accepting one.
+ *
+ * NOTE: streams were removed — Manna Goodnews Academy does not use them.
+ * Classes are the sole grouping unit.
  */
 class StudentController extends Controller
 {
@@ -22,7 +25,7 @@ class StudentController extends Controller
     {
         $perPage = min((int) $request->query('per_page', 15), 100);
 
-        $students = Student::with(['schoolClass', 'stream'])
+        $students = Student::with(['schoolClass'])
             ->when($request->query('class_id'), fn ($q, $id) => $q->where('class_id', $id))
             ->when($request->query('status'), fn ($q, $s) => $q->where('status', $s))
             ->when($request->query('search'), fn ($q, $s) => $q->where(function ($q2) use ($s) {
@@ -47,7 +50,6 @@ class StudentController extends Controller
             'date_of_birth' => ['required', 'date', 'before:today'],
             'gender' => ['required', Rule::in(['male', 'female'])],
             'class_id' => ['required', 'exists:classes,id'],
-            'stream_id' => ['nullable', 'exists:streams,id'],
             'admission_date' => ['required', 'date'],
 
             'guardians' => ['sometimes', 'array'],
@@ -74,7 +76,6 @@ class StudentController extends Controller
                 'date_of_birth' => $validated['date_of_birth'],
                 'gender' => $validated['gender'],
                 'class_id' => $validated['class_id'],
-                'stream_id' => $validated['stream_id'] ?? null,
                 'status' => 'active',
                 'admission_date' => $validated['admission_date'],
             ]);
@@ -93,14 +94,14 @@ class StudentController extends Controller
         $auditLogger->log('CREATE_STUDENT', 'Student', $student->id, ['admission_no' => $student->admission_no]);
 
         return response()->json([
-            'data' => $student->load('guardians', 'medicalInfo', 'schoolClass', 'stream'),
+            'data' => $student->load('guardians', 'medicalInfo', 'schoolClass'),
         ], 201);
     }
 
     public function show(Student $student)
     {
         return response()->json([
-            'data' => $student->load('guardians', 'medicalInfo', 'schoolClass', 'stream'),
+            'data' => $student->load('guardians', 'medicalInfo', 'schoolClass'),
         ]);
     }
 
@@ -112,18 +113,17 @@ class StudentController extends Controller
             'date_of_birth' => ['sometimes', 'date', 'before:today'],
             'gender' => ['sometimes', Rule::in(['male', 'female'])],
             'class_id' => ['sometimes', 'exists:classes,id'],
-            'stream_id' => ['nullable', 'exists:streams,id'],
             'status' => ['sometimes', Rule::in(['active', 'promoted', 'transferred', 'left'])],
         ]);
 
         $student->update($validated);
         $auditLogger->log('UPDATE_STUDENT', 'Student', $student->id, $validated);
 
-        return response()->json(['data' => $student->fresh(['schoolClass', 'stream'])]);
+        return response()->json(['data' => $student->fresh(['schoolClass'])]);
     }
 
     /**
-     * SRS FR-STU-07, UC-STU-03: promote a learner to a new class/stream at
+     * SRS FR-STU-07, UC-STU-03: promote a learner to a new class at
      * term/year end. Status stays 'active' — a promotion keeps the learner
      * enrolled, it just moves them forward; only transfer_out sets a
      * terminal status.
@@ -132,7 +132,6 @@ class StudentController extends Controller
     {
         $validated = $request->validate([
             'to_class_id' => ['required', 'exists:classes,id'],
-            'to_stream_id' => ['nullable', 'exists:streams,id'],
             'term_id' => ['required', 'exists:terms,id'],
             'reason' => ['nullable', 'string', 'max:255'],
             'effective_date' => ['required', 'date'],
@@ -143,7 +142,6 @@ class StudentController extends Controller
 
             $student->update([
                 'class_id' => $validated['to_class_id'],
-                'stream_id' => $validated['to_stream_id'] ?? null,
             ]);
 
             return $student->promotionsTransfers()->create([
@@ -204,16 +202,13 @@ class StudentController extends Controller
     }
 
     /**
-     * SRS FR-STU-09, UC-STU-04: consolidated academic history. Assessment
-     * and attendance history will merge into this response once those
-     * modules land (see Development Roadmap Phase 3) — for now this
-     * covers profile and class/promotion/transfer history.
+     * SRS FR-STU-09, UC-STU-04: consolidated academic history.
      */
     public function academicHistory(Student $student)
     {
         return response()->json([
             'data' => [
-                'student' => $student->load('schoolClass', 'stream'),
+                'student' => $student->load('schoolClass'),
                 'promotions_transfers' => $student->promotionsTransfers()
                     ->with(['fromClass', 'toClass', 'term'])
                     ->get(),

@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\SchoolClass;
-use App\Models\Stream;
 use App\Models\Subject;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -12,9 +11,12 @@ use Illuminate\Validation\Rule;
 
 /**
  * Implements SRS FR-ACAD-02/03 and API Design §5 (Academic Management) for
- * classes, streams, and subjects. Read access is broad (per the User Role
- * Matrix — Teacher/Parent/Student can view); write access is gated to
+ * classes and subjects. Read access is broad (per the User Role Matrix —
+ * Teacher/Parent/Student can view); write access is gated to
  * system_admin/head_teacher/deputy_head_teacher via routes/api.php.
+ *
+ * NOTE: streams were removed — Manna Goodnews Academy does not use them.
+ * Classes are the sole grouping unit.
  */
 class AcademicStructureController extends Controller
 {
@@ -64,11 +66,6 @@ class AcademicStructureController extends Controller
 
     public function destroyClass(SchoolClass $class, AuditLogger $auditLogger)
     {
-        if ($class->streams()->exists()) {
-            return response()->json([
-                'error' => ['code' => 'CLASS_HAS_STREAMS', 'message' => 'Reassign or remove streams before deleting this class.'],
-            ], 409);
-        }
         if ($class->students()->exists()) {
             return response()->json([
                 'error' => ['code' => 'CLASS_HAS_STUDENTS', 'message' => 'This class has enrolled learners and cannot be deleted.'],
@@ -79,64 +76,6 @@ class AcademicStructureController extends Controller
         $auditLogger->log('DELETE_CLASS', 'SchoolClass', $class->id);
 
         return response()->json(['data' => ['message' => 'Class deleted.']]);
-    }
-
-    // -------- Streams --------
-
-    public function indexStreams(Request $request)
-    {
-        $streams = Stream::withCount('students')
-            ->with('schoolClass:id,name')
-            ->when($request->query('class_id'), fn ($q, $id) => $q->where('class_id', $id))
-            ->get();
-
-        return response()->json(['data' => $streams]);
-    }
-
-    public function storeStream(Request $request, AuditLogger $auditLogger)
-    {
-        $validated = $request->validate([
-            'class_id' => ['required', 'exists:classes,id'],
-            'name' => ['required', 'string', 'max:30'],
-        ]);
-
-        $exists = Stream::where('class_id', $validated['class_id'])->where('name', $validated['name'])->exists();
-        if ($exists) {
-            return response()->json([
-                'error' => ['code' => 'DUPLICATE_STREAM', 'message' => 'This stream already exists for the selected class.'],
-            ], 409);
-        }
-
-        $stream = Stream::create($validated);
-        $auditLogger->log('CREATE_STREAM', 'Stream', $stream->id, $validated);
-
-        return response()->json(['data' => $stream->load('schoolClass')], 201);
-    }
-
-    public function updateStream(Request $request, Stream $stream, AuditLogger $auditLogger)
-    {
-        $validated = $request->validate([
-            'name' => ['sometimes', 'string', 'max:30'],
-        ]);
-
-        $stream->update($validated);
-        $auditLogger->log('UPDATE_STREAM', 'Stream', $stream->id, $validated);
-
-        return response()->json(['data' => $stream->fresh()->load('schoolClass')]);
-    }
-
-    public function destroyStream(Stream $stream, AuditLogger $auditLogger)
-    {
-        if ($stream->students()->exists()) {
-            return response()->json([
-                'error' => ['code' => 'STREAM_HAS_STUDENTS', 'message' => 'This stream has enrolled learners and cannot be deleted.'],
-            ], 409);
-        }
-
-        $stream->delete();
-        $auditLogger->log('DELETE_STREAM', 'Stream', $stream->id);
-
-        return response()->json(['data' => ['message' => 'Stream deleted.']]);
     }
 
     // -------- Subjects --------

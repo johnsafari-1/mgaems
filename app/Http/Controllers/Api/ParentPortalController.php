@@ -24,7 +24,7 @@ class ParentPortalController extends Controller
     public function myChildren()
     {
         $studentIds = Guardian::where('user_id', auth()->id())->pluck('student_id');
-        $children = Student::with('schoolClass', 'stream')->whereIn('id', $studentIds)->get();
+        $children = Student::with('schoolClass')->whereIn('id', $studentIds)->get();
 
         return response()->json(['data' => $children]);
     }

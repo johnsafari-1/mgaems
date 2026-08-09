@@ -87,7 +87,7 @@ class ReportCardController extends Controller
     }
 
     /**
-     * Streams the actual PDF file for download.
+     * Delivers the actual PDF file for download.
      */
     public function download(ReportCard $reportCard)
     {

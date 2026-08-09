@@ -8,7 +8,7 @@ class Subject extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['name', 'code'];
+    protected $fillable = ['name', 'code', 'learning_area', 'status'];
 
     public function classes()
     {

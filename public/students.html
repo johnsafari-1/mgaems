@@ -105,14 +105,13 @@ async function loadStudents() {
 
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Stream</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Status</th><th></th></tr></thead>
       <tbody>
         ${res.data.map(s => `
           <tr style="cursor:pointer" onclick="openStudentDetail(${s.id})">
             <td>${s.admission_no}</td>
             <td>${s.first_name} ${s.last_name}</td>
             <td>${s.school_class ? s.school_class.name : '—'}</td>
-            <td>${s.stream ? s.stream.name : '—'}</td>
             <td><span class="badge ${statusBadge[s.status] || 'badge-gray'}">${s.status}</span></td>
             <td><i data-lucide="chevron-right" style="width:16px;color:var(--gray-500)"></i></td>
           </tr>

@@ -13,7 +13,6 @@ class Student extends Model
         'date_of_birth',
         'gender',
         'class_id',
-        'stream_id',
         'photo_path',
         'status',
         'admission_date',
@@ -27,11 +26,6 @@ class Student extends Model
     public function schoolClass()
     {
         return $this->belongsTo(SchoolClass::class, 'class_id');
-    }
-
-    public function stream()
-    {
-        return $this->belongsTo(Stream::class, 'stream_id');
     }
 
     public function guardians()

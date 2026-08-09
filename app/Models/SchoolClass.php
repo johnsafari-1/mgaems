@@ -14,12 +14,7 @@ class SchoolClass extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['name', 'level', 'sequence'];
-
-    public function streams()
-    {
-        return $this->hasMany(Stream::class, 'class_id');
-    }
+    protected $fillable = ['name', 'level', 'sequence', 'capacity', 'class_teacher_id'];
 
     public function students()
     {

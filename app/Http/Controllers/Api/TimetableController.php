@@ -6,12 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\TimetableEntry;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Implements SRS FR-ACAD-06/07 — "foundation" scope: entries plus a real
- * teacher double-booking conflict check on save. A visual drag-and-drop
- * grid builder is a larger follow-up feature, not in this scope.
+ * teacher double-booking conflict check on save. (Streams removed —
+ * Manna Goodnews Academy does not use them.) A visual drag-and-drop grid
+ * builder is a larger follow-up feature, not in this scope.
  */
 class TimetableController extends Controller
 {
@@ -19,7 +19,7 @@ class TimetableController extends Controller
     {
         $validated = $request->validate(['class_id' => ['required', 'exists:classes,id']]);
 
-        $entries = TimetableEntry::with(['subject:id,name', 'staff:id,first_name,last_name', 'stream:id,name'])
+        $entries = TimetableEntry::with(['subject:id,name', 'staff:id,first_name,last_name'])
             ->where('class_id', $validated['class_id'])
             ->orderBy('day_of_week')->orderBy('start_time')
             ->get();
@@ -31,7 +31,7 @@ class TimetableController extends Controller
     {
         $validated = $request->validate(['staff_id' => ['required', 'exists:staff,id']]);
 
-        $entries = TimetableEntry::with(['subject:id,name', 'schoolClass:id,name', 'stream:id,name'])
+        $entries = TimetableEntry::with(['subject:id,name', 'schoolClass:id,name'])
             ->where('staff_id', $validated['staff_id'])
             ->orderBy('day_of_week')->orderBy('start_time')
             ->get();
@@ -43,7 +43,6 @@ class TimetableController extends Controller
     {
         $validated = $request->validate([
             'class_id' => ['required', 'exists:classes,id'],
-            'stream_id' => ['nullable', 'exists:streams,id'],
             'subject_id' => ['required', 'exists:subjects,id'],
             'staff_id' => ['required', 'exists:staff,id'],
             'day_of_week' => ['required', 'integer', 'min:1', 'max:7'],
@@ -68,7 +67,7 @@ class TimetableController extends Controller
         $entry = TimetableEntry::create($validated);
         $auditLogger->log('CREATE_TIMETABLE_ENTRY', 'TimetableEntry', $entry->id, $validated);
 
-        return response()->json(['data' => $entry->load('schoolClass', 'stream', 'subject', 'staff')], 201);
+        return response()->json(['data' => $entry->load('schoolClass', 'subject', 'staff')], 201);
     }
 
     public function destroy(TimetableEntry $timetableEntry, AuditLogger $auditLogger)

@@ -20,7 +20,6 @@ const canWriteStructure = WRITE_ROLES.includes(MGAEMS.currentUser().role);
 const canWriteCalendar = YEAR_TERM_WRITE_ROLES.includes(MGAEMS.currentUser().role);
 
 let classesCache = [];
-let streamsCache = [];
 let subjectsCache = [];
 let yearsCache = [];
 let termsCache = [];
@@ -32,7 +31,6 @@ document.getElementById('appMain').innerHTML = `
     <div class="tab active" data-tab="years">Academic Years</div>
     <div class="tab" data-tab="terms">Terms</div>
     <div class="tab" data-tab="classes">Classes</div>
-    <div class="tab" data-tab="streams">Streams</div>
     <div class="tab" data-tab="subjects">Subjects</div>
     <div class="tab" data-tab="assignments">Teacher Assignments</div>
     <div class="tab" data-tab="timetable">Timetable</div>
@@ -60,14 +58,6 @@ document.getElementById('appMain').innerHTML = `
       ${canWriteStructure ? '<button class="btn btn-primary btn-sm" onclick="openClassModal()"><i data-lucide="plus"></i> Add Class</button>' : ''}
     </div>
     <div class="card" id="classesCard" style="padding:0">${MGAEMS.loadingHTML()}</div>
-  </div>
-
-  <div class="tab-panel" data-panel="streams">
-    <div class="section-header">
-      <h2>Streams</h2>
-      ${canWriteStructure ? '<button class="btn btn-primary btn-sm" onclick="openStreamModal()"><i data-lucide="plus"></i> Add Stream</button>' : ''}
-    </div>
-    <div class="card" id="streamsCard" style="padding:0">${MGAEMS.loadingHTML()}</div>
   </div>
 
   <div class="tab-panel" data-panel="subjects">
@@ -361,72 +351,6 @@ function populateClassFilters() {
   if (tf) tf.innerHTML = options;
 }
 
-/* ================= Streams ================= */
-
-async function loadStreams() {
-  const el = document.getElementById('streamsCard');
-  const res = await MGAEMS.get('/api/v1/streams');
-  if (!res.ok) { el.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
-  streamsCache = res.data;
-  if (res.data.length === 0) {
-    el.innerHTML = MGAEMS.emptyStateHTML('No streams yet', 'Streams subdivide a class (e.g. Grade 4 Blue).', 'layers');
-    lucide.createIcons();
-    return;
-  }
-  el.innerHTML = `
-    <table>
-      <thead><tr><th>Stream</th><th>Class</th><th>Learners</th><th></th></tr></thead>
-      <tbody>${res.data.map(s => `
-        <tr>
-          <td>${s.name}</td>
-          <td>${s.school_class ? s.school_class.name : '—'}</td>
-          <td>${s.students_count ?? 0}</td>
-          <td>${canWriteStructure ? `<button class="btn btn-secondary btn-sm" onclick="deleteStream(${s.id})"><i data-lucide="trash-2"></i></button>` : ''}</td>
-        </tr>`).join('')}</tbody>
-    </table>`;
-  lucide.createIcons();
-}
-
-function openStreamModal() {
-  const classOptions = classesCache.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-  document.body.insertAdjacentHTML('beforeend', `
-    <div class="modal-overlay">
-      <div class="modal">
-        <div class="modal-header"><h2>Add Stream</h2><button class="modal-close" onclick="this.closest('.modal-overlay').remove()"><i data-lucide="x"></i></button></div>
-        <div class="modal-body">
-          <div id="streamAlert"></div>
-          <div class="field"><label>Class *</label><select id="s_class">${classOptions}</select></div>
-          <div class="field"><label>Stream Name *</label><input type="text" id="s_name" placeholder="e.g. Blue"></div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-          <button class="btn btn-primary" onclick="submitStream()">Save</button>
-        </div>
-      </div>
-    </div>`);
-  lucide.createIcons();
-}
-
-async function submitStream() {
-  const alertBox = document.getElementById('streamAlert');
-  const res = await MGAEMS.post('/api/v1/streams', {
-    class_id: document.getElementById('s_class').value,
-    name: document.getElementById('s_name').value.trim(),
-  });
-  if (!res.ok) { alertBox.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
-  document.querySelector('.modal-overlay').remove();
-  MGAEMS.toast('Stream added', 'success');
-  loadStreams();
-}
-
-async function deleteStream(id) {
-  if (!confirm('Delete this stream?')) return;
-  const res = await MGAEMS.del(`/api/v1/streams/${id}`);
-  if (!res.ok) { MGAEMS.toast(res.error, 'error'); return; }
-  MGAEMS.toast('Stream deleted', 'success');
-  loadStreams();
-}
-
 /* ================= Subjects ================= */
 
 async function loadSubjects() {
@@ -518,13 +442,12 @@ async function loadAssignments() {
   }
   el.innerHTML = `
     <table>
-      <thead><tr><th>Teacher</th><th>Subject</th><th>Class</th><th>Stream</th><th>Term</th><th></th></tr></thead>
+      <thead><tr><th>Teacher</th><th>Subject</th><th>Class</th><th>Term</th><th></th></tr></thead>
       <tbody>${res.data.map(a => `
         <tr>
           <td>${a.staff.first_name} ${a.staff.last_name}</td>
           <td>${a.subject.name}</td>
           <td>${a.school_class.name}</td>
-          <td>${a.stream ? a.stream.name : '—'}</td>
           <td>${a.term.name}</td>
           <td>${canWriteStructure ? `<button class="btn btn-secondary btn-sm" onclick="deleteAssignment(${a.id})"><i data-lucide="trash-2"></i></button>` : ''}</td>
         </tr>`).join('')}</tbody>
@@ -679,7 +602,7 @@ async function deleteTimetableEntry(id) {
 
 loadYears();
 loadTerms();
-loadClasses().then(() => { loadStreams(); loadSubjects(); loadAssignments(); });
+loadClasses().then(() => { loadSubjects(); loadAssignments(); });
 </script>
 </body>
 </html>

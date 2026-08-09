@@ -18,7 +18,7 @@ class StudentsExport implements FromCollection, WithHeadings, WithMapping
 
     public function collection()
     {
-        return Student::with('schoolClass', 'stream')
+        return Student::with('schoolClass')
             ->when($this->classId, fn ($q) => $q->where('class_id', $this->classId))
             ->when($this->status, fn ($q) => $q->where('status', $this->status))
             ->orderBy('last_name')
@@ -27,7 +27,7 @@ class StudentsExport implements FromCollection, WithHeadings, WithMapping
 
     public function headings(): array
     {
-        return ['Admission No', 'First Name', 'Last Name', 'Gender', 'Date of Birth', 'Class', 'Stream', 'Status', 'Admission Date'];
+        return ['Admission No', 'First Name', 'Last Name', 'Gender', 'Date of Birth', 'Class', 'Status', 'Admission Date'];
     }
 
     public function map($student): array
@@ -39,7 +39,6 @@ class StudentsExport implements FromCollection, WithHeadings, WithMapping
             ucfirst($student->gender),
             $student->date_of_birth->format('Y-m-d'),
             $student->schoolClass->name ?? '',
-            $student->stream->name ?? '',
             ucfirst($student->status),
             $student->admission_date->format('Y-m-d'),
         ];
