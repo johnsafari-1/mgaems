@@ -134,6 +134,7 @@ Route::prefix('v1')->group(function () {
         // AttendanceController note re: teacher-own-class scoping being a follow-up).
         // Read: same roles — Parent/Sponsor own-child access added with those portals.
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/attendance/my-classes', [AttendanceController::class, 'myClasses']);
             Route::post('/attendance/students', [AttendanceController::class, 'store']);
             Route::get('/attendance/students', [AttendanceController::class, 'index']);
             Route::get('/attendance/students/summary', [AttendanceController::class, 'summary']);

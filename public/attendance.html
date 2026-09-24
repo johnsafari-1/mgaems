@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MGAEMS — Attendance</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+<script src="/assets/app.js"></script>
+<script src="/assets/nav.js"></script>
+<script>
+MGAEMS.requireAuth();
+renderAppShell('/attendance.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+MGAEMS.initSidebar();
+
+const WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'teacher'];
+const canWrite = WRITE_ROLES.includes(MGAEMS.currentUser().role);
+let classesCache = [];
+const STATUS_OPTS = ['present', 'absent', 'late', 'excused'];
+const STATUS_BADGE = { present: 'badge-green', absent: 'badge-red', late: 'badge-amber', excused: 'badge-navy' };
+
+document.getElementById('appMain').innerHTML = `
+  <h1 style="margin-bottom:var(--space-4)">Attendance</h1>
+  <div class="tabs" id="mainTabs">
+    <div class="tab active" data-tab="mark">Mark Attendance</div>
+    <div class="tab" data-tab="history">History</div>
+    <div class="tab" data-tab="stats">Statistics</div>
+  </div>
+
+  <div class="tab-panel active" data-panel="mark">
+    <div class="card">
+      <div class="form-grid">
+        <div class="field"><label>Class *</label><select id="m_class"><option value="">Select a class…</option></select></div>
+        <div class="field"><label>Date *</label><input type="date" id="m_date"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadRoster()"><i data-lucide="users"></i> Load Class Roster</button>
+      <div id="rosterAlert"></div>
+      <div id="rosterWrap" style="margin-top:var(--space-4)"></div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="history">
+    <div class="card" style="padding:var(--space-4)">
+      <div class="toolbar">
+        <select id="h_class"><option value="">All Classes</option></select>
+        <input type="date" id="h_from" title="From">
+        <input type="date" id="h_to" title="To">
+        <button class="btn btn-secondary btn-sm" onclick="loadHistory()"><i data-lucide="search"></i> Filter</button>
+      </div>
+      <div id="historyWrap">${MGAEMS.loadingHTML()}</div>
+    </div>
+  </div>
+
+  <div class="tab-panel" data-panel="stats">
+    <div class="card">
+      <div class="form-grid">
+        <div class="field"><label>Class</label><select id="s_class"><option value="">Select a class…</option></select></div>
+        <div class="field"><label>From *</label><input type="date" id="s_from"></div>
+        <div class="field"><label>To *</label><input type="date" id="s_to"></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="loadStats()"><i data-lucide="bar-chart-3"></i> Get Statistics</button>
+      <div id="statsWrap" style="margin-top:var(--space-4)"></div>
+    </div>
+  </div>
+`;
+lucide.createIcons();
+
+document.querySelectorAll('#mainTabs .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.app-main > .tab-panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.querySelector(`.tab-panel[data-panel="${tab.dataset.tab}"]`).classList.add('active');
+  });
+});
+
+if (!canWrite) {
+  document.querySelector('.tab[data-tab="mark"]').style.display = 'none';
+  document.querySelector('.tab-panel[data-panel="mark"]').remove();
+  document.querySelector('.tab[data-tab="history"]').click();
+}
+
+async function loadClasses() {
+  const res = await MGAEMS.get('/api/v1/classes');
+  if (!res.ok) return;
+  classesCache = res.data;
+  const opts = res.data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  ['m_class', 'h_class', 's_class'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.insertAdjacentHTML('beforeend', opts);
+  });
+}
+
+/* ---------------- Mark Attendance ---------------- */
+
+async function loadRoster() {
+  const classId = document.getElementById('m_class').value;
+  const date = document.getElementById('m_date').value;
+  const alertBox = document.getElementById('rosterAlert');
+  const wrap = document.getElementById('rosterWrap');
+  alertBox.innerHTML = '';
+
+  if (!classId || !date) {
+    alertBox.innerHTML = MGAEMS.errorHTML('Select a class and a date first.');
+    lucide.createIcons();
+    return;
+  }
+
+  wrap.innerHTML = MGAEMS.loadingHTML();
+
+  const [studentsRes, existingRes] = await Promise.all([
+    MGAEMS.get(`/api/v1/students?class_id=${classId}&status=active&per_page=100`),
+    MGAEMS.get(`/api/v1/attendance/students?class_id=${classId}&from=${date}&to=${date}`),
+  ]);
+
+  if (!studentsRes.ok) {
+    wrap.innerHTML = MGAEMS.errorHTML(studentsRes.error);
+    lucide.createIcons();
+    return;
+  }
+
+  if (studentsRes.data.length === 0) {
+    wrap.innerHTML = MGAEMS.emptyStateHTML('No active learners in this class', '', 'users');
+    lucide.createIcons();
+    return;
+  }
+
+  const existingByStudent = {};
+  if (existingRes.ok) {
+    existingRes.data.forEach(r => { existingByStudent[r.student_id] = r.status; });
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Admission No</th><th>Name</th><th>Status</th></tr></thead>
+      <tbody>${studentsRes.data.map(s => `
+        <tr data-student-id="${s.id}">
+          <td>${s.admission_no}</td>
+          <td>${s.first_name} ${s.last_name}</td>
+          <td>
+            <select class="roster-status">
+              ${STATUS_OPTS.map(st => `<option value="${st}" ${existingByStudent[s.id] === st ? 'selected' : ''}>${st.charAt(0).toUpperCase() + st.slice(1)}</option>`).join('')}
+            </select>
+          </td>
+        </tr>`).join('')}</tbody>
+    </table>
+    <button class="btn btn-primary" style="margin-top:var(--space-4)" onclick="submitRoster(${classId}, '${date}')">
+      <i data-lucide="check"></i> Save Attendance
+    </button>
+  `;
+  lucide.createIcons();
+}
+
+async function submitRoster(classId, date) {
+  const rows = document.querySelectorAll('#rosterWrap tr[data-student-id]');
+  const records = Array.from(rows).map(row => ({
+    student_id: parseInt(row.dataset.studentId),
+    status: row.querySelector('.roster-status').value,
+  }));
+
+  const res = await MGAEMS.post('/api/v1/attendance/students', { class_id: classId, attendance_date: date, records });
+  if (!res.ok) { MGAEMS.toast(res.error, 'error'); return; }
+  MGAEMS.toast(`Attendance saved for ${records.length} learner(s)`, 'success');
+}
+
+/* ---------------- History ---------------- */
+
+async function loadHistory() {
+  const classId = document.getElementById('h_class').value;
+  const from = document.getElementById('h_from').value;
+  const to = document.getElementById('h_to').value;
+  const wrap = document.getElementById('historyWrap');
+  wrap.innerHTML = MGAEMS.loadingHTML();
+
+  const params = new URLSearchParams();
+  if (classId) params.set('class_id', classId);
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+
+  const res = await MGAEMS.get('/api/v1/attendance/students?' + params.toString());
+  if (!res.ok) { wrap.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
+
+  if (res.data.length === 0) {
+    wrap.innerHTML = MGAEMS.emptyStateHTML('No attendance records found', 'Try adjusting your filters, or mark attendance for a class.', 'calendar-check');
+    lucide.createIcons();
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>Date</th><th>Learner</th><th>Class</th><th>Status</th></tr></thead>
+      <tbody>${res.data.map(r => `
+        <tr>
+          <td>${r.attendance_date.slice(0,10)}</td>
+          <td>${r.student ? r.student.first_name + ' ' + r.student.last_name : '—'}</td>
+          <td>${r.school_class ? r.school_class.name : '—'}</td>
+          <td><span class="badge ${STATUS_BADGE[r.status]}">${r.status}</span></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  lucide.createIcons();
+}
+
+/* ---------------- Statistics ---------------- */
+
+async function loadStats() {
+  const classId = document.getElementById('s_class').value;
+  const from = document.getElementById('s_from').value;
+  const to = document.getElementById('s_to').value;
+  const wrap = document.getElementById('statsWrap');
+
+  if (!from || !to) {
+    wrap.innerHTML = MGAEMS.errorHTML('Please select both a start and end date.');
+    lucide.createIcons();
+    return;
+  }
+  if (!classId) {
+    wrap.innerHTML = MGAEMS.errorHTML('Please select a class.');
+    lucide.createIcons();
+    return;
+  }
+
+  wrap.innerHTML = MGAEMS.loadingHTML();
+  const res = await MGAEMS.get(`/api/v1/attendance/students/summary?class_id=${classId}&from=${from}&to=${to}`);
+  if (!res.ok) { wrap.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
+
+  const s = res.data;
+  wrap.innerHTML = `
+    <div class="stat-cards">
+      <div class="card stat-card"><div class="num">${s.counts.present}</div><div class="label">Present</div></div>
+      <div class="card stat-card"><div class="num">${s.counts.absent}</div><div class="label">Absent</div></div>
+      <div class="card stat-card"><div class="num">${s.counts.late}</div><div class="label">Late</div></div>
+      <div class="card stat-card"><div class="num">${s.counts.excused}</div><div class="label">Excused</div></div>
+      <div class="card stat-card"><div class="num">${s.attendance_rate !== null ? s.attendance_rate + '%' : '—'}</div><div class="label">Attendance Rate</div></div>
+    </div>`;
+  lucide.createIcons();
+}
+
+loadClasses();
+document.getElementById('m_date').value = new Date().toISOString().slice(0,10);
+</script>
+</body>
+</html>
