@@ -1,0 +1,47 @@
+services:
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: mgaems-app
+    working_dir: /var/www/html
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: mgaems
+      DB_USERNAME: mgaems_app
+      DB_PASSWORD: mgaems_password
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: mgaems-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: mgaems
+      MYSQL_USER: mgaems_app
+      MYSQL_PASSWORD: mgaems_password
+      MYSQL_ROOT_PASSWORD: mgaems_root_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mgaems_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mgaems_mysql_data:
