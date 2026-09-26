@@ -8,8 +8,10 @@ class Authenticate extends Middleware
 {
     protected function redirectTo(\Illuminate\Http\Request $request): ?string
     {
-        // API-first app — never redirect to a login page, just return null
-        // so Laravel responds 401 JSON instead (see UserController tests).
-        return null;
+        if ($request->expectsJson()) {
+            return null;
+        }
+
+        return '/login.html';
     }
 }
