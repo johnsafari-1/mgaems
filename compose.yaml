@@ -10,6 +10,7 @@ services:
       - "8000:8000"
     volumes:
       - .:/var/www/html
+      - mgaems_vendor:/var/www/html/vendor
     environment:
       APP_ENV: local
       APP_DEBUG: "true"
@@ -45,3 +46,4 @@ services:
 
 volumes:
   mgaems_mysql_data:
+  mgaems_vendor:
