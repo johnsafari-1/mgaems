@@ -20,6 +20,22 @@ use Illuminate\Support\Facades\Storage;
  */
 class ReportCardController extends Controller
 {
+    /** Find a generated card for the administrator's selected learner and term. */
+    public function index(Request $request)
+    {
+        $validated = $request->validate([
+            'student_id' => ['required', 'integer', 'exists:students,id'],
+            'term_id' => ['required', 'integer', 'exists:terms,id'],
+        ]);
+
+        $reportCard = ReportCard::with(
+            'student:id,first_name,last_name,admission_no',
+            'term:id,name'
+        )->where($validated)->first();
+
+        return response()->json(['data' => $reportCard]);
+    }
+
     public function generate(Request $request, Student $student, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
