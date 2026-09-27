@@ -17,6 +17,7 @@ class Assessment extends Model
         'score',
         'competency_rating',
         'remarks',
+        'recorded_at',
     ];
 
     protected $casts = [
