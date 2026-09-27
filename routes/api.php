@@ -142,6 +142,8 @@ Route::prefix('v1')->group(function () {
 
         // --- CBC Assessment (SRS FR-ASM-01..07) ---
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/assessments/context', [AssessmentController::class, 'context']);
+            Route::get('/assessments/learners', [AssessmentController::class, 'learners']);
             Route::post('/assessments', [AssessmentController::class, 'store']);
             Route::get('/assessments', [AssessmentController::class, 'index']);
             Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
