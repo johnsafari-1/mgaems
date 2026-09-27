@@ -151,6 +151,7 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/report-cards', [ReportCardController::class, 'index']);
             Route::post('/students/{student}/report-cards/generate', [ReportCardController::class, 'generate']);
         });
 

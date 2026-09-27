@@ -8,7 +8,7 @@ const MGAEMS_NAV_ITEMS = [
   { href: '/students.html', icon: 'users', label: 'Students' },
   { href: '/academic.html', icon: 'book-open', label: 'Academics' },
   { href: '/attendance.html', icon: 'calendar-check', label: 'Attendance' },
-  { href: '/assessments.html', icon: 'graduation-cap', label: 'Assessment' },
+  { href: '/assessment.html', icon: 'clipboard-check', label: 'Assessment' },
   { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
   { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff' },
   { href: '/communication.html', icon: 'megaphone', label: 'Communication' },
