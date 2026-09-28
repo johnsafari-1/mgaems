@@ -52,4 +52,9 @@ class Student extends Model
     {
         return $this->hasMany(ReportCard::class);
     }
+
+    public function groupSponsorships()
+    {
+        return $this->belongsToMany(Sponsorship::class)->withTimestamps();
+    }
 }

@@ -53,20 +53,31 @@ class SponsorController extends Controller
 
     public function show(Sponsor $sponsor)
     {
-        return response()->json(['data' => $sponsor->load('sponsorships.student:id,first_name,last_name,admission_no')]);
+        return response()->json(['data' => $sponsor->load([
+            'sponsorships.student:id,first_name,last_name,admission_no',
+            'sponsorships.students:id,first_name,last_name,admission_no',
+        ])->loadCount('sponsorships')]);
     }
 
     public function update(Request $request, Sponsor $sponsor, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
-            'sponsor_type' => ['sometimes', Rule::in(['individual', 'church', 'ministry', 'ngo', 'foundation', 'general'])],
-            'name' => ['sometimes', 'string', 'max:150'],
+            'sponsor_type' => ['sometimes', 'required', Rule::in(['individual', 'church', 'ministry', 'ngo', 'foundation', 'general'])],
+            'name' => ['sometimes', 'required', 'string', 'max:150'],
             'contact_person' => ['nullable', 'string', 'max:150'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:150'],
             'address' => ['nullable', 'string'],
             'notes' => ['nullable', 'string'],
         ]);
+
+        $name = $validated['name'] ?? $sponsor->name;
+        $type = $validated['sponsor_type'] ?? $sponsor->sponsor_type;
+        if (Sponsor::where('name', $name)->where('sponsor_type', $type)->whereKeyNot($sponsor->id)->exists()) {
+            return response()->json([
+                'error' => ['code' => 'DUPLICATE_SPONSOR', 'message' => 'A sponsor with this name and type already exists.'],
+            ], 409);
+        }
 
         $sponsor->update($validated);
         $auditLogger->log('UPDATE_SPONSOR', 'Sponsor', $sponsor->id, $validated);

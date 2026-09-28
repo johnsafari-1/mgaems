@@ -26,7 +26,7 @@ class SponsorPortalController extends Controller
         }
 
         $sponsorships = Sponsorship::where('sponsor_id', $sponsor->id)
-            ->with('student:id,first_name,last_name,admission_no')
+            ->with('student:id,first_name,last_name,admission_no', 'students:id,first_name,last_name,admission_no')
             ->get();
 
         return response()->json(['data' => $sponsorships]);

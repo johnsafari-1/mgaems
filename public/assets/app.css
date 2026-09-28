@@ -326,3 +326,6 @@ tr:hover td { background: var(--gray-50); }
   .app-header .user span { display: none; }
   .assessment-actions, .report-state { align-items: stretch; grid-template-columns: 1fr; flex-direction: column; }
 }
+
+/* Sponsorship management workspace */
+.sponsorship-toolbar .section-header{align-items:end;margin:0}.sponsorship-filters{flex:1;grid-template-columns:repeat(4,minmax(150px,1fr))}.actions{display:flex;gap:var(--space-2);white-space:nowrap}.detail-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4);margin:0 0 var(--space-5)}.detail-grid div{border-bottom:1px solid var(--gray-200);padding-bottom:var(--space-3)}.detail-grid dt{color:var(--gray-500);font-size:var(--text-sm);margin-bottom:4px}.detail-grid dd{margin:0;font-weight:600}.learner-picker{border:1px solid var(--gray-300);border-radius:8px;padding:var(--space-3);max-height:240px;overflow:auto}.learner-picker label{display:flex;gap:var(--space-2);padding:7px 4px;cursor:pointer}.learner-picker input{width:auto}.full-span{grid-column:1/-1}@media(max-width:768px){.sponsorship-toolbar .section-header{align-items:stretch}.actions{flex-wrap:wrap}.detail-grid{grid-template-columns:1fr}}
