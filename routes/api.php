@@ -178,15 +178,22 @@ Route::prefix('v1')->group(function () {
             Route::get('/children', [ParentPortalController::class, 'myChildren']);
             Route::get('/children/{student}/attendance', [ParentPortalController::class, 'childAttendance']);
             Route::get('/children/{student}/report-cards', [ParentPortalController::class, 'childReportCards']);
+            Route::get('/children/{student}/report-cards/{reportCard}/download', [ParentPortalController::class, 'downloadReportCard']);
             Route::get('/children/{student}/progress', [ParentPortalController::class, 'childProgress']);
         });
 
         // --- Sponsor Portal (SRS FR-SPP-01..06) ---
         Route::middleware('role:sponsor')->prefix('portal/sponsor')->group(function () {
             Route::get('/sponsorships', [SponsorPortalController::class, 'mySponsorships']);
+            Route::get('/sponsorships/{sponsorship}/learners', [SponsorPortalController::class, 'learners']);
             Route::get('/sponsorships/{sponsorship}/attendance', [SponsorPortalController::class, 'sponsorshipAttendance']);
             Route::get('/sponsorships/{sponsorship}/report-cards', [SponsorPortalController::class, 'sponsorshipReportCards']);
+            Route::get('/sponsorships/{sponsorship}/report-cards/{reportCard}/download', [SponsorPortalController::class, 'downloadReportCard']);
             Route::get('/sponsorships/{sponsorship}/comments', [SponsorPortalController::class, 'sponsorshipComments']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/attendance', [SponsorPortalController::class, 'learnerAttendance']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/report-cards', [SponsorPortalController::class, 'learnerReportCards']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/report-cards/{reportCard}/download', [SponsorPortalController::class, 'downloadLearnerReportCard']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/comments', [SponsorPortalController::class, 'learnerComments']);
         });
 
         // --- Human Resources (SRS FR-HR-01..07, FR-ADM-02) ---

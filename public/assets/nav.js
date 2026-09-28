@@ -18,7 +18,12 @@ const MGAEMS_NAV_ITEMS = [
 ];
 
 function renderAppShell(activeHref, logoUrl) {
-  const navLinks = MGAEMS_NAV_ITEMS.map(item => `
+  const role = MGAEMS.currentUser()?.role;
+  const portalItems = role === 'parent_guardian'
+    ? [{ href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' }]
+    : [{ href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' }];
+  const items = ['parent_guardian', 'sponsor'].includes(role) ? portalItems : MGAEMS_NAV_ITEMS;
+  const navLinks = items.map(item => `
     <a href="${item.href}" class="${item.href === activeHref ? 'active' : ''}">
       <i data-lucide="${item.icon}"></i> ${item.label}
     </a>`).join('');

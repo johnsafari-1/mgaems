@@ -68,6 +68,21 @@ const MGAEMS = (() => {
   const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
   const del = (path) => api(path, { method: 'DELETE' });
 
+  async function download(path, filename) {
+    try {
+      const res = await fetch(path, { headers: { Accept: 'application/pdf', Authorization: 'Bearer ' + token() } });
+      if (res.status === 401) { logout(); return { ok: false, error: 'Session expired.' }; }
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        return { ok: false, status: res.status, error: json.error?.message || 'Download failed.' };
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement('a'); link.href = url; link.download = filename; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return { ok: true };
+    } catch (e) { return { ok: false, error: 'Could not reach the server. Check your connection.' }; }
+  }
+
   /* ---------- UI helpers ---------- */
 
   function toast(message, type = 'info') {
@@ -119,5 +134,5 @@ const MGAEMS = (() => {
     if (el) el.textContent = `${user.username} — ${user.role.replace(/_/g, ' ')}`;
   }
 
-  return { requireAuth, logout, get, post, patch, del, toast, loadingHTML, emptyStateHTML, errorHTML, initIcons, initSidebar, currentUser };
+  return { requireAuth, logout, get, post, patch, del, download, toast, loadingHTML, emptyStateHTML, errorHTML, initIcons, initSidebar, currentUser };
 })();
