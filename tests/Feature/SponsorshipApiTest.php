@@ -104,7 +104,9 @@ class SponsorshipApiTest extends TestCase
         $this->postJson('/api/v1/sponsors', ['name' => 'Blocked', 'sponsor_type' => 'ngo'])->assertForbidden();
         $response = $this->getJson('/api/v1/sponsorships/learners')->assertOk()
             ->assertJsonMissingPath('data.0.date_of_birth')->assertJsonMissingPath('data.0.gender');
-        $this->assertSame(['admission_no', 'class_id', 'first_name', 'has_active_individual_sponsorship', 'id', 'last_name', 'school_class', 'status'], array_keys($response->json('data.0')));
+        $fields = array_keys($response->json('data.0'));
+        sort($fields);
+        $this->assertSame(['admission_no', 'class_id', 'first_name', 'has_active_individual_sponsorship', 'id', 'last_name', 'school_class', 'status'], $fields);
         Sanctum::actingAs($this->teacher);
         $this->getJson('/api/v1/sponsorships')->assertForbidden();
         $this->getJson('/api/v1/sponsorships/learners')->assertForbidden();
