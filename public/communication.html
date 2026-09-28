@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGAEMS — Communication</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .communication-summary { margin-bottom: var(--space-5); }
+  .communication-summary .stat-card { padding: var(--space-4); }
+  .communication-summary .num { display: flex; align-items: center; justify-content: center; gap: var(--space-2); }
+  .communication-summary .num svg { width: 20px; height: 20px; color: var(--gold); }
+  .communication-tabs { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); }
+  .communication-tabs .tabs { margin-bottom: 0; }
+  .communication-actions { display: flex; gap: var(--space-2); }
+  .announcement-list, .message-list { display: grid; gap: var(--space-3); }
+  .announcement-item, .message-item { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); background: white; }
+  .announcement-heading, .message-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+  .announcement-heading h2 { font-size: var(--text-base); color: var(--gray-900); }
+  .announcement-meta, .message-meta { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); color: var(--gray-500); font-size: var(--text-xs); margin-top: var(--space-2); }
+  .announcement-summary { white-space: pre-wrap; overflow-wrap: anywhere; margin: var(--space-3) 0 0; color: var(--gray-700); }
+  .message-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); cursor: pointer; }
+  .message-item:hover { background: var(--gray-50); }
+  .message-item.unread { border-left: 4px solid var(--navy); background: #fbfcfe; }
+  .message-item.unread .message-participant { font-weight: 700; color: var(--gray-900); }
+  .message-content { min-width: 0; }
+  .message-participant { overflow-wrap: anywhere; }
+  .message-preview { color: var(--gray-500); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 3px; }
+  .message-state { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); white-space: nowrap; }
+  .unread-count { background: var(--red); color: white; border-radius: 999px; min-width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; padding: 0 6px; font-size: var(--text-xs); font-weight: 700; }
+  .message-body { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--gray-900); margin-top: var(--space-4); }
+  .message-dialog-meta { border-bottom: 1px solid var(--gray-200); padding-bottom: var(--space-3); }
+  .dialog-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
+  .announcement-form textarea, .message-form textarea { width: 100%; min-height: 150px; resize: vertical; padding: var(--space-3); border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }
+  .announcement-form textarea:focus, .message-form textarea:focus { outline: none; border-color: var(--navy-light); box-shadow: 0 0 0 3px rgba(31,56,100,0.1); }
+  .communication-note { color: var(--gray-500); font-size: var(--text-xs); margin-top: var(--space-2); }
+  [hidden] { display: none !important; }
+  @media (max-width: 640px) {
+    .communication-tabs { align-items: stretch; flex-direction: column; }
+    .communication-tabs .tabs { overflow-x: auto; }
+    .communication-actions { justify-content: flex-end; }
+    .announcement-heading, .message-heading { flex-direction: column; }
+    .message-item { grid-template-columns: 1fr; }
+    .message-state { align-items: flex-start; flex-direction: row; }
+  }
+</style>
+</head>
+<body>
+<script src="/assets/app.js"></script>
+<script src="/assets/nav.js"></script>
+<script>
+const user = MGAEMS.requireAuth();
+const ANNOUNCEMENT_WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher'];
+const MESSAGE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher', 'parent_guardian', 'sponsor'];
+
+if (user) {
+  renderAppShell('/communication.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  MGAEMS.initSidebar();
+
+  const state = {
+    tab: 'announcements',
+    announcements: [],
+    messages: [],
+    modal: null,
+    announcementLoading: false,
+    messagesLoading: false,
+  };
+  const canPublish = ANNOUNCEMENT_WRITE_ROLES.includes(user.role);
+  const canMessage = MESSAGE_ROLES.includes(user.role);
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const audienceLabels = { school_wide: 'School-wide', class: 'Class', parents: 'Parents', sponsors: 'Sponsors', staff: 'Staff' };
+  const formatDate = value => {
+    if (!value) return 'Date unavailable';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  };
+  const isReceived = message => Number(message.recipient_id) === Number(user.id);
+  const isUnread = message => isReceived(message) && !message.read_at;
+  const unreadCount = () => state.messages.filter(isUnread).length;
+
+  document.getElementById('appMain').innerHTML = `
+    <div class="section-header"><h1>Communication</h1></div>
+    <div class="stat-cards communication-summary">
+      <div class="card stat-card"><div class="num" id="announcementCount">—</div><div class="label">Announcements available</div></div>
+      <div class="card stat-card"><div class="num" id="unreadCount"><i data-lucide="mail-open"></i> —</div><div class="label">Unread messages</div></div>
+      <div class="card stat-card"><div class="num" id="totalMessageCount">—</div><div class="label">Total messages</div></div>
+    </div>
+    <div class="communication-tabs">
+      <div class="tabs" role="tablist" aria-label="Communication sections">
+        <button class="tab active" id="announcementsTab" type="button" role="tab" aria-selected="true">Announcements</button>
+        ${canMessage ? '<button class="tab" id="messagesTab" type="button" role="tab" aria-selected="false">Messages <span id="tabUnreadCount"></span></button>' : ''}
+      </div>
+      <div class="communication-actions">
+        ${canPublish ? '<button class="btn btn-primary" id="newAnnouncement"><i data-lucide="megaphone"></i> New Announcement</button>' : ''}
+        ${canMessage ? '<button class="btn btn-secondary" id="newMessage"><i data-lucide="square-pen"></i> New Message</button>' : ''}
+      </div>
+    </div>
+    <section id="announcementsPanel" role="tabpanel" aria-labelledby="announcementsTab">
+      <div id="announcementList">${MGAEMS.loadingHTML('Loading announcements…')}</div>
+    </section>
+    ${canMessage ? '<section id="messagesPanel" role="tabpanel" aria-labelledby="messagesTab" hidden><div id="messageList"></div></section>' : ''}
+  `;
+  MGAEMS.initIcons();
+
+  document.getElementById('announcementsTab').addEventListener('click', () => selectTab('announcements'));
+  document.getElementById('messagesTab')?.addEventListener('click', () => selectTab('messages'));
+  document.getElementById('newAnnouncement')?.addEventListener('click', openAnnouncementForm);
+  document.getElementById('newMessage')?.addEventListener('click', openMessageForm);
+
+  function selectTab(tab) {
+    state.tab = tab;
+    document.getElementById('announcementsTab').classList.toggle('active', tab === 'announcements');
+    document.getElementById('announcementsTab').setAttribute('aria-selected', String(tab === 'announcements'));
+    const messagesTab = document.getElementById('messagesTab');
+    if (messagesTab) {
+      messagesTab.classList.toggle('active', tab === 'messages');
+      messagesTab.setAttribute('aria-selected', String(tab === 'messages'));
+    }
+    document.getElementById('announcementsPanel').hidden = tab !== 'announcements';
+    const messagesPanel = document.getElementById('messagesPanel');
+    if (messagesPanel) messagesPanel.hidden = tab !== 'messages';
+  }
+
+  function updateSummary() {
+    document.getElementById('announcementCount').textContent = state.announcementLoading ? '…' : String(state.announcements.length);
+    const unreadValue = !canMessage ? '—' : state.messagesLoading ? '…' : String(unreadCount());
+    document.getElementById('unreadCount').innerHTML = `<i data-lucide="mail-open"></i> ${unreadValue}`;
+    document.getElementById('totalMessageCount').textContent = canMessage && !state.messagesLoading ? String(state.messages.length) : '—';
+    const unread = unreadCount();
+    const tabCounter = document.getElementById('tabUnreadCount');
+    if (tabCounter) tabCounter.innerHTML = unread ? `<span class="unread-count" aria-label="${unread} unread">${unread}</span>` : '';
+    MGAEMS.initIcons();
+  }
+
+  async function loadAnnouncements() {
+    state.announcementLoading = true;
+    updateSummary();
+    const target = document.getElementById('announcementList');
+    target.innerHTML = MGAEMS.loadingHTML('Loading announcements…');
+    const result = await MGAEMS.get('/api/v1/announcements');
+    state.announcementLoading = false;
+    if (!result.ok) {
+      state.announcements = [];
+      target.innerHTML = `${MGAEMS.errorHTML(result.error)}<button class="btn btn-secondary btn-sm" id="retryAnnouncements"><i data-lucide="refresh-cw"></i> Retry</button>`;
+      target.querySelector('#retryAnnouncements').addEventListener('click', loadAnnouncements);
+      updateSummary();
+      MGAEMS.initIcons();
+      return;
+    }
+    state.announcements = [...result.data].sort((a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0));
+    renderAnnouncements();
+    updateSummary();
+  }
+
+  function renderAnnouncements() {
+    const target = document.getElementById('announcementList');
+    if (!state.announcements.length) {
+      target.innerHTML = MGAEMS.emptyStateHTML('No announcements available', 'Announcements published for your audience will appear here.', 'megaphone');
+      MGAEMS.initIcons();
+      return;
+    }
+    target.innerHTML = `<div class="announcement-list">${state.announcements.map(item => `
+      <article class="announcement-item">
+        <div class="announcement-heading">
+          <div><h2>${esc(item.title)}</h2><div class="announcement-meta">
+            <span><i data-lucide="users"></i> ${esc(audienceLabels[item.audience] || item.audience)}</span>
+            <span><i data-lucide="user-round"></i> ${item.publisher?.username ? esc(item.publisher.username) : item.published_by ? `Publisher account #${esc(item.published_by)}` : 'Publisher unavailable'}</span>
+            <span><i data-lucide="clock-3"></i> ${esc(formatDate(item.published_at))}</span>
+          </div></div>
+          <span class="badge badge-navy">${esc(audienceLabels[item.audience] || item.audience)}</span>
+        </div>
+        <p class="announcement-summary">${esc(item.body)}</p>
+      </article>`).join('')}</div>`;
+    MGAEMS.initIcons();
+  }
+
+  async function loadMessages() {
+    if (!canMessage) return;
+    state.messagesLoading = true;
+    updateSummary();
+    const target = document.getElementById('messageList');
+    target.innerHTML = MGAEMS.loadingHTML('Loading messages…');
+    const result = await MGAEMS.get('/api/v1/messages');
+    state.messagesLoading = false;
+    if (!result.ok) {
+      state.messages = [];
+      target.innerHTML = `${MGAEMS.errorHTML(result.error)}<button class="btn btn-secondary btn-sm" id="retryMessages"><i data-lucide="refresh-cw"></i> Retry</button>`;
+      target.querySelector('#retryMessages').addEventListener('click', loadMessages);
+      updateSummary();
+      MGAEMS.initIcons();
+      return;
+    }
+    state.messages = [...result.data].sort((a, b) => new Date(b.sent_at || 0) - new Date(a.sent_at || 0));
+    renderMessages();
+    updateSummary();
+  }
+
+  function renderMessages() {
+    const target = document.getElementById('messageList');
+    if (!state.messages.length) {
+      target.innerHTML = MGAEMS.emptyStateHTML('No messages yet', 'Messages you send or receive will appear here.', 'mail');
+      MGAEMS.initIcons();
+      return;
+    }
+    target.innerHTML = `<div class="message-list">${state.messages.map(message => {
+      const incoming = isReceived(message);
+      const unread = isUnread(message);
+      const messageStatus = unread ? 'Unread' : incoming || message.read_at ? 'Read' : 'Sent';
+      const participant = incoming ? message.sender?.username : message.recipient?.username;
+      return `<button class="message-item ${unread ? 'unread' : ''}" type="button" data-open-message="${message.id}" aria-label="${unread ? 'Unread message' : 'Message'} ${incoming ? 'from' : 'to'} ${esc(participant || 'user')}">
+        <span class="message-content"><span class="message-participant">${incoming ? 'From' : 'To'} ${esc(participant || `User #${incoming ? message.sender_id : message.recipient_id}`)}</span><span class="message-preview">${esc(message.body)}</span></span>
+        <span class="message-state"><span class="badge ${unread ? 'badge-amber' : messageStatus === 'Read' ? 'badge-gray' : 'badge-navy'}">${messageStatus}</span><small class="text-muted">${esc(formatDate(message.sent_at))}</small></span>
+      </button>`;
+    }).join('')}</div>`;
+    target.querySelectorAll('[data-open-message]').forEach(button => button.addEventListener('click', () => openMessage(button.dataset.openMessage)));
+    MGAEMS.initIcons();
+  }
+
+  function openMessage(id) {
+    const message = state.messages.find(item => Number(item.id) === Number(id));
+    if (!message) return;
+    const incoming = isReceived(message);
+    const participant = incoming ? message.sender?.username : message.recipient?.username;
+    const unread = isUnread(message);
+    const overlay = showModal(`Message ${incoming ? 'from' : 'to'} ${participant ? esc(participant) : `User #${incoming ? esc(message.sender_id) : esc(message.recipient_id)}`}`, `
+      <div id="messageReadAlert"></div>
+      <div class="message-dialog-meta">
+        <div><strong>${incoming ? 'From' : 'To'}:</strong> ${esc(participant || `User #${incoming ? message.sender_id : message.recipient_id}`)}</div>
+        <div class="communication-note">${esc(formatDate(message.sent_at))} · ${unread ? 'Unread' : incoming ? `Read ${message.read_at ? `· ${esc(formatDate(message.read_at))}` : ''}` : message.read_at ? `Read ${esc(formatDate(message.read_at))}` : 'Sent'}</div>
+      </div>
+      <div class="message-body">${esc(message.body)}</div>
+    `, unread ? 'Mark as read' : 'Close', unread ? async button => {
+      button.disabled = true;
+      button.textContent = 'Marking…';
+      const result = await MGAEMS.patch(`/api/v1/messages/${message.id}/read`, {});
+      if (!result.ok) {
+        const alert = document.getElementById('messageReadAlert');
+        alert.innerHTML = MGAEMS.errorHTML(result.error);
+        MGAEMS.initIcons();
+        button.disabled = false;
+        button.textContent = 'Mark as read';
+        return;
+      }
+      message.read_at = result.data.read_at || new Date().toISOString();
+      closeModal();
+      renderMessages();
+      updateSummary();
+    } : null);
+    if (!unread) overlay.querySelector('[data-submit]').addEventListener('click', closeModal);
+  }
+
+  function openAnnouncementForm() {
+    showModal('New Announcement', `
+      <div id="announcementFormAlert"></div>
+      <div class="announcement-form">
+        <div class="field"><label for="announcementTitle">Title *</label><input type="text" id="announcementTitle" maxlength="200" required></div>
+        <div class="field"><label for="announcementAudience">Audience *</label><select id="announcementAudience">
+          <option value="school_wide">School-wide</option><option value="staff">Staff</option><option value="parents">Parents</option><option value="sponsors">Sponsors</option>
+        </select></div>
+        <div class="field"><label for="announcementBody">Announcement *</label><textarea id="announcementBody" required></textarea></div>
+      </div>
+    `, 'Publish', async button => {
+      const payload = {
+        title: document.getElementById('announcementTitle').value.trim(),
+        body: document.getElementById('announcementBody').value.trim(),
+        audience: document.getElementById('announcementAudience').value,
+      };
+      if (!payload.title || !payload.body) { setModalError('Enter both a title and announcement text.'); return; }
+      await submit(button, 'Publishing…', () => MGAEMS.post('/api/v1/announcements', payload), 'Announcement published.', loadAnnouncements);
+    });
+  }
+
+  function openMessageForm() {
+    showModal('New Message', `
+      <div id="messageFormAlert"></div>
+      <div class="message-form">
+        <div class="field"><label for="messageRecipient">Recipient user ID *</label><input type="number" id="messageRecipient" min="1" step="1" required inputmode="numeric"><div class="communication-note">Use the recipient_id value recognized by MGAEMS. Recipients are validated by the existing API.</div></div>
+        <div class="field"><label for="messageBody">Message *</label><textarea id="messageBody" required></textarea></div>
+      </div>
+    `, 'Send Message', async button => {
+      const recipientId = Number(document.getElementById('messageRecipient').value);
+      const body = document.getElementById('messageBody').value.trim();
+      if (!Number.isInteger(recipientId) || recipientId < 1 || !body) { setModalError('Enter a valid recipient user ID and message.'); return; }
+      await submit(button, 'Sending…', () => MGAEMS.post('/api/v1/messages', { recipient_id: recipientId, body }), 'Message sent.', loadMessages);
+    });
+  }
+
+  function showModal(title, body, submitLabel, onSubmit) {
+    closeModal();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="communicationModalTitle">
+      <div class="modal-header"><h2 id="communicationModalTitle">${title}</h2><button class="modal-close" type="button" aria-label="Close dialog"><i data-lucide="x"></i></button></div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-footer"><button class="btn btn-secondary" type="button" data-cancel>Close</button><button class="btn btn-primary" type="button" data-submit>${esc(submitLabel)}</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    state.modal = overlay;
+    overlay.querySelector('.modal-close').addEventListener('click', closeModal);
+    overlay.querySelector('[data-cancel]').addEventListener('click', closeModal);
+    if (onSubmit) overlay.querySelector('[data-submit]').addEventListener('click', event => onSubmit(event.currentTarget));
+    overlay.addEventListener('click', event => { if (event.target === overlay) closeModal(); });
+    MGAEMS.initIcons();
+    return overlay;
+  }
+
+  function closeModal() {
+    state.modal?.remove();
+    state.modal = null;
+  }
+
+  function setModalError(message) {
+    const alert = document.querySelector('#announcementFormAlert, #messageFormAlert');
+    if (alert) { alert.innerHTML = MGAEMS.errorHTML(message); MGAEMS.initIcons(); }
+  }
+
+  async function submit(button, progressLabel, request, successMessage, reload) {
+    button.disabled = true;
+    button.innerHTML = `<span class="spinner" style="width:15px;height:15px;margin:0"></span> ${esc(progressLabel)}`;
+    const result = await request();
+    if (!result.ok) {
+      setModalError(result.error);
+      button.disabled = false;
+      button.textContent = progressLabel === 'Publishing…' ? 'Publish' : 'Send Message';
+      return;
+    }
+    closeModal();
+    MGAEMS.toast(successMessage, 'success');
+    reload();
+  }
+
+  updateSummary();
+  loadAnnouncements();
+  if (canMessage) loadMessages();
+}
+</script>
+</body>
+</html>

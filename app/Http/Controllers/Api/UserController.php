@@ -17,6 +17,11 @@ use Illuminate\Validation\Rule;
  */
 class UserController extends Controller
 {
+    public function roles()
+    {
+        return response()->json(['data' => Role::orderBy('name')->get(['id', 'name'])]);
+    }
+
     public function index(Request $request)
     {
         $perPage = min((int) $request->query('per_page', 15), 100);

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGAEMS — Visitors</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .visitor-summary { margin-bottom: var(--space-5); }
+  .visitor-summary .stat-card { padding: var(--space-4); }
+  .visitor-toolbar { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center; margin-bottom: var(--space-4); }
+  .visitor-toolbar .search-input { position: relative; flex: 1; min-width: 220px; }
+  .visitor-toolbar .search-input svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--gray-500); }
+  .visitor-toolbar .search-input input { width: 100%; padding: var(--space-2) var(--space-3) var(--space-2) 32px; border: 1px solid var(--gray-300); border-radius: var(--radius); font: inherit; }
+  .visitor-toolbar select, .visitor-toolbar input[type="date"] { padding: var(--space-2) var(--space-3); border: 1px solid var(--gray-300); border-radius: var(--radius); background: white; font: inherit; }
+  .visitor-table-wrap { overflow-x: auto; }
+  .visitor-table { min-width: 850px; }
+  .visitor-name small, .visitor-host small { display: block; color: var(--gray-500); }
+  .visitor-row { cursor: pointer; }
+  .visitor-row:focus-visible { outline: 2px solid var(--navy-light); outline-offset: -2px; }
+  .visitor-purpose { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .visitor-note { margin-bottom: var(--space-4); background: var(--gray-200); color: var(--gray-700); }
+  .visitor-form-note { color: var(--gray-500); font-size: var(--text-xs); margin-top: var(--space-1); }
+  .visitor-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3) var(--space-5); }
+  .visitor-detail-grid div { border-bottom: 1px solid var(--gray-200); padding-bottom: var(--space-2); }
+  .visitor-detail-grid dt { color: var(--gray-500); font-size: var(--text-xs); }
+  .visitor-detail-grid dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+  .visitor-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 640px) {
+    .visitor-toolbar { align-items: stretch; }
+    .visitor-toolbar > * { width: 100%; }
+    .visitor-detail-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<script src="/assets/app.js"></script>
+<script src="/assets/nav.js"></script>
+<script>
+const user = MGAEMS.requireAuth();
+const VISITOR_READ_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator'];
+const VISITOR_WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher'];
+if (user && !VISITOR_READ_ROLES.includes(user.role)) window.location.href = '/dashboard.html';
+
+if (user && VISITOR_READ_ROLES.includes(user.role)) {
+  renderAppShell('/visitors.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  MGAEMS.initSidebar();
+
+  const canRegister = VISITOR_WRITE_ROLES.includes(user.role);
+  const state = { visitors: [], search: '', visitorType: '', from: '', to: '', modal: null };
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const dateOnly = value => value ? String(value).slice(0, 10) : '—';
+  const dateTime = value => {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  };
+  const today = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  };
+  const typeLabels = { visitor: 'Visitor', church_team: 'Church team', mission_group: 'Mission group', volunteer: 'Volunteer', donor: 'Donor' };
+  const typeBadges = { visitor: 'badge-navy', church_team: 'badge-amber', mission_group: 'badge-navy', volunteer: 'badge-green', donor: 'badge-gray' };
+
+  document.getElementById('appMain').innerHTML = `
+    <div class="section-header">
+      <h1>Visitors</h1>
+      ${canRegister ? '<button class="btn btn-primary" id="registerVisitor"><i data-lucide="user-round-plus"></i> Register Visitor</button>' : ''}
+    </div>
+    <div class="stat-cards visitor-summary">
+      <div class="card stat-card"><div class="num" id="todayVisitors">—</div><div class="label">Today's Visitors</div></div>
+      <div class="card stat-card"><div class="num" id="totalVisitors">—</div><div class="label">Visitor Records</div></div>
+      <div class="card stat-card"><div class="num" id="volunteerVisitors">—</div><div class="label">Volunteer Visits</div></div>
+    </div>
+    <div class="alert visitor-note" role="note"><i data-lucide="info"></i><span>The visitor register stores visit dates and records only. Check-in/check-out timestamps and contact details are not part of the current schema.</span></div>
+    <div class="card" style="padding:var(--space-4)">
+      <div class="visitor-toolbar">
+        <div class="search-input"><i data-lucide="search"></i><input type="search" id="visitorSearch" placeholder="Search visitor, purpose, host or notes..." aria-label="Search visitor records"></div>
+        <select id="visitorTypeFilter" aria-label="Filter by visitor type">
+          <option value="">All Types</option><option value="visitor">Visitor</option><option value="church_team">Church team</option><option value="mission_group">Mission group</option><option value="volunteer">Volunteer</option><option value="donor">Donor</option>
+        </select>
+        <input type="date" id="visitorFrom" aria-label="Visits from date" title="From date">
+        <input type="date" id="visitorTo" aria-label="Visits through date" title="Through date">
+        <button class="btn btn-secondary btn-sm" id="clearVisitorFilters" type="button"><i data-lucide="x"></i> Clear</button>
+      </div>
+      <div id="visitorTable">${MGAEMS.loadingHTML('Loading visitor register…')}</div>
+    </div>`;
+  MGAEMS.initIcons();
+
+  if (canRegister) document.getElementById('registerVisitor').addEventListener('click', openRegisterForm);
+  document.getElementById('visitorSearch').addEventListener('input', event => { state.search = event.target.value.trim().toLowerCase(); renderVisitors(); });
+  document.getElementById('visitorTypeFilter').addEventListener('change', event => { state.visitorType = event.target.value; renderVisitors(); });
+  document.getElementById('visitorFrom').addEventListener('change', event => { state.from = event.target.value; renderVisitors(); });
+  document.getElementById('visitorTo').addEventListener('change', event => { state.to = event.target.value; renderVisitors(); });
+  document.getElementById('clearVisitorFilters').addEventListener('click', () => {
+    state.search = ''; state.visitorType = ''; state.from = ''; state.to = '';
+    document.getElementById('visitorSearch').value = '';
+    document.getElementById('visitorTypeFilter').value = '';
+    document.getElementById('visitorFrom').value = '';
+    document.getElementById('visitorTo').value = '';
+    renderVisitors();
+  });
+
+  async function loadVisitors() {
+    const wrap = document.getElementById('visitorTable');
+    wrap.innerHTML = MGAEMS.loadingHTML('Loading visitor register…');
+    const result = await MGAEMS.get('/api/v1/visitors');
+    if (!result.ok) {
+      state.visitors = [];
+      wrap.innerHTML = `${MGAEMS.errorHTML(result.error)}<button class="btn btn-secondary btn-sm" id="retryVisitors"><i data-lucide="refresh-cw"></i> Retry</button>`;
+      wrap.querySelector('#retryVisitors').addEventListener('click', loadVisitors);
+      updateSummary();
+      MGAEMS.initIcons();
+      return;
+    }
+    state.visitors = result.data;
+    updateSummary();
+    renderVisitors();
+  }
+
+  function updateSummary() {
+    const todayCount = state.visitors.filter(visitor => dateOnly(visitor.visit_date) === today()).length;
+    const volunteerCount = state.visitors.filter(visitor => visitor.visitor_type === 'volunteer').length;
+    document.getElementById('todayVisitors').textContent = String(todayCount);
+    document.getElementById('totalVisitors').textContent = String(state.visitors.length);
+    document.getElementById('volunteerVisitors').textContent = String(volunteerCount);
+  }
+
+  function filteredVisitors() {
+    return state.visitors.filter(visitor => {
+      const visitDate = dateOnly(visitor.visit_date);
+      if (state.visitorType && visitor.visitor_type !== state.visitorType) return false;
+      if (state.from && visitDate < state.from) return false;
+      if (state.to && visitDate > state.to) return false;
+      if (!state.search) return true;
+      const host = visitor.host_staff ? `${visitor.host_staff.first_name || ''} ${visitor.host_staff.last_name || ''}` : '';
+      return [visitor.visitor_name, visitor.purpose, visitor.notes, host, typeLabels[visitor.visitor_type]]
+        .some(value => String(value || '').toLowerCase().includes(state.search));
+    }).sort((a, b) => dateOnly(b.visit_date).localeCompare(dateOnly(a.visit_date)) || new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }
+
+  function renderVisitors() {
+    const target = document.getElementById('visitorTable');
+    const list = filteredVisitors();
+    if (!list.length) {
+      target.innerHTML = MGAEMS.emptyStateHTML(
+        state.search || state.visitorType || state.from || state.to ? 'No visitor records match these filters' : 'No visitor records yet',
+        state.search || state.visitorType || state.from || state.to ? 'Adjust the search, type, or date range.' : 'Register the first visitor to start the school visitor register.',
+        'clipboard-list'
+      );
+      MGAEMS.initIcons();
+      return;
+    }
+    target.innerHTML = `<div class="visitor-table-wrap"><table class="visitor-table">
+      <thead><tr><th>Visitor</th><th>Type</th><th>Purpose</th><th>Host staff</th><th>Visit date</th><th>Recorded</th></tr></thead>
+      <tbody>${list.map(visitor => `
+        <tr class="visitor-row" tabindex="0" role="button" data-visitor="${visitor.id}" aria-label="View ${esc(visitor.visitor_name)}">
+          <td class="visitor-name"><strong>${esc(visitor.visitor_name)}</strong>${visitor.notes ? `<small>${esc(visitor.notes)}</small>` : ''}</td>
+          <td><span class="badge ${typeBadges[visitor.visitor_type] || 'badge-gray'}">${esc(typeLabels[visitor.visitor_type] || visitor.visitor_type)}</span></td>
+          <td class="visitor-purpose" title="${esc(visitor.purpose || '')}">${esc(visitor.purpose || '—')}</td>
+          <td class="visitor-host">${visitor.host_staff ? `${esc(visitor.host_staff.first_name)} ${esc(visitor.host_staff.last_name)}` : `Staff #${esc(visitor.host_staff_id)}`}</td>
+          <td>${esc(dateOnly(visitor.visit_date))}</td>
+          <td>${esc(dateTime(visitor.created_at))}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`;
+    target.querySelectorAll('[data-visitor]').forEach(row => {
+      row.addEventListener('click', () => showVisitorDetails(state.visitors.find(visitor => Number(visitor.id) === Number(row.dataset.visitor))));
+      row.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); row.click(); } });
+    });
+  }
+
+  async function openRegisterForm() {
+    const hostsResult = await MGAEMS.get('/api/v1/staff?status=active');
+    if (!hostsResult.ok) { MGAEMS.toast(hostsResult.error, 'error'); return; }
+    const hosts = hostsResult.data;
+    const overlay = createModal('Register Visitor', `
+      <div id="visitorFormAlert"></div>
+      <div class="form-grid">
+        <div class="field"><label for="visitorName">Visitor name *</label><input type="text" id="visitorName" maxlength="150" required></div>
+        <div class="field"><label for="visitorType">Visitor type *</label><select id="visitorType" required>
+          <option value="visitor">Visitor</option><option value="church_team">Church team</option><option value="mission_group">Mission group</option><option value="volunteer">Volunteer</option><option value="donor">Donor</option>
+        </select></div>
+        <div class="field"><label for="visitorHostStaff">Host staff *</label><select id="visitorHostStaff" required><option value="">Select staff member…</option>${hosts.map(staff => `<option value="${staff.id}">${esc(staff.first_name)} ${esc(staff.last_name)} · ${esc(staff.role_title)}</option>`).join('')}</select>${hosts.length ? '' : '<div class="visitor-form-note">No active staff members are available to host this visit.</div>'}</div>
+        <div class="field"><label for="visitorDate">Visit date *</label><input type="date" id="visitorDate" value="${today()}" required></div>
+        <div class="field full"><label for="visitorPurpose">Purpose</label><input type="text" id="visitorPurpose" maxlength="255"></div>
+        <div class="field full"><label for="visitorNotes">Notes</label><textarea id="visitorNotes" rows="4"></textarea></div>
+      </div>
+      <div class="visitor-form-note">The current visitor record does not capture contact details or check-in/check-out times.</div>
+    `, 'Register Visit', async button => {
+      const visitorName = document.getElementById('visitorName').value.trim();
+      const hostValue = document.getElementById('visitorHostStaff').value;
+      const hostStaffId = Number(hostValue);
+      const visitDate = document.getElementById('visitorDate').value;
+      if (!visitorName || !hostValue || !Number.isInteger(hostStaffId) || hostStaffId < 1 || !visitDate) {
+        setFormError('Enter the visitor name, select a host staff member, and choose the visit date.');
+        return;
+      }
+      const payload = {
+        visitor_name: visitorName,
+        visitor_type: document.getElementById('visitorType').value,
+        host_staff_id: hostStaffId,
+        visit_date: visitDate,
+        purpose: document.getElementById('visitorPurpose').value.trim() || null,
+        notes: document.getElementById('visitorNotes').value.trim() || null,
+      };
+      await submit(button, payload);
+    });
+    return overlay;
+  }
+
+  async function submit(button, payload) {
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" style="width:15px;height:15px;margin:0"></span> Registering…';
+    const result = await MGAEMS.post('/api/v1/visitors', payload);
+    if (!result.ok) {
+      setFormError(result.error);
+      button.disabled = false;
+      button.textContent = 'Register Visit';
+      return;
+    }
+    closeModal();
+    MGAEMS.toast('Visitor registered.', 'success');
+    loadVisitors();
+  }
+
+  function showVisitorDetails(visitor) {
+    if (!visitor) return;
+    createModal(`${typeLabels[visitor.visitor_type] || 'Visitor'} details`, `
+      <dl class="visitor-detail-grid">
+        <div><dt>Name</dt><dd>${esc(visitor.visitor_name)}</dd></div>
+        <div><dt>Visitor type</dt><dd>${esc(typeLabels[visitor.visitor_type] || visitor.visitor_type)}</dd></div>
+        <div><dt>Host staff</dt><dd>${visitor.host_staff ? `${esc(visitor.host_staff.first_name)} ${esc(visitor.host_staff.last_name)}` : `Staff #${esc(visitor.host_staff_id)}`}</dd></div>
+        <div><dt>Visit date</dt><dd>${esc(dateOnly(visitor.visit_date))}</dd></div>
+        <div><dt>Recorded at</dt><dd>${esc(dateTime(visitor.created_at))}</dd></div>
+        <div><dt>Last updated</dt><dd>${esc(dateTime(visitor.updated_at))}</dd></div>
+        <div><dt>Purpose</dt><dd>${esc(visitor.purpose || '—')}</dd></div>
+      </dl>
+      <section class="section"><h3>Notes</h3><p class="visitor-notes">${esc(visitor.notes || 'No notes recorded.')}</p></section>
+    `, 'Close');
+  }
+
+  function createModal(title, body, submitLabel, onSubmit) {
+    closeModal();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `<div class="modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="visitorModalTitle">
+      <div class="modal-header"><h2 id="visitorModalTitle">${esc(title)}</h2><button class="modal-close" type="button" aria-label="Close dialog"><i data-lucide="x"></i></button></div>
+      <div class="modal-body">${body}</div>
+      <div class="modal-footer"><button class="btn btn-secondary" type="button" data-cancel>Cancel</button><button class="btn btn-primary" type="button" data-submit>${esc(submitLabel)}</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    state.modal = overlay;
+    overlay.querySelector('.modal-close').addEventListener('click', closeModal);
+    overlay.querySelector('[data-cancel]').addEventListener('click', closeModal);
+    if (onSubmit) overlay.querySelector('[data-submit]').addEventListener('click', event => onSubmit(event.currentTarget));
+    else overlay.querySelector('[data-submit]').addEventListener('click', closeModal);
+    overlay.addEventListener('click', event => { if (event.target === overlay) closeModal(); });
+    MGAEMS.initIcons();
+    return overlay;
+  }
+
+  function setFormError(message) {
+    const alert = document.getElementById('visitorFormAlert');
+    if (alert) { alert.innerHTML = MGAEMS.errorHTML(message); MGAEMS.initIcons(); }
+  }
+
+  function closeModal() {
+    state.modal?.remove();
+    state.modal = null;
+  }
+
+  loadVisitors();
+}
+</script>
+</body>
+</html>

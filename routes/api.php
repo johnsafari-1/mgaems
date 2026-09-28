@@ -54,6 +54,7 @@ Route::prefix('v1')->group(function () {
         // --- User Management (SRS FR-ADM-03, API Design §2) ---
         // Gated server-side by role, per FR-AUTH-04 — not just hidden in the UI.
         Route::middleware('role:system_admin')->group(function () {
+            Route::get('/roles', [UserController::class, 'roles']);
             Route::get('/users', [UserController::class, 'index']);
             Route::post('/users', [UserController::class, 'store']);
             Route::get('/users/{user}', [UserController::class, 'show']);

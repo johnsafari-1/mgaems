@@ -13,9 +13,9 @@ const MGAEMS_NAV_ITEMS = [
   { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
   { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
   { href: '/communication.html', icon: 'megaphone', label: 'Communication' },
-  { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors' },
-  { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports' },
-  { href: '/settings.html', icon: 'settings', label: 'Administration' },
+  { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator'] },
+  { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
+  { href: '/administration.html', icon: 'settings', label: 'Administration', roles: ['system_admin', 'head_teacher'] },
 ];
 
 function renderAppShell(activeHref, logoUrl) {

@@ -82,13 +82,12 @@ class BackupController extends Controller
         $process->run();
 
         if (! $process->isSuccessful()) {
-            $auditLogger->log('BACKUP_FAILED', null, null, ['error' => $process->getErrorOutput()]);
+            $auditLogger->log('BACKUP_FAILED', null, null, ['exit_code' => $process->getExitCode()]);
 
             return response()->json([
                 'error' => [
                     'code' => 'BACKUP_FAILED',
                     'message' => 'The backup could not be completed. Check that mysqldump is installed and reachable.',
-                    'detail' => $process->getErrorOutput(),
                 ],
             ], 500);
         }

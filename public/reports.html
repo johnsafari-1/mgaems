@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGAEMS — Reports &amp; Analytics</title>
+<link rel="stylesheet" href="/assets/app.css">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  .report-tabs { display: flex; gap: var(--space-1); overflow-x: auto; }
+  .report-panel { display: none; }
+  .report-panel.active { display: block; }
+  .report-summary { margin-bottom: var(--space-5); }
+  .report-summary .stat-card { padding: var(--space-4); }
+  .report-summary .num { display: flex; justify-content: center; align-items: center; gap: var(--space-2); }
+  .report-summary .num svg { width: 20px; height: 20px; color: var(--gold); }
+  .report-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+  .report-card h2 { margin-bottom: var(--space-3); }
+  .report-chart-row { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(90px, 2fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--gray-200); }
+  .report-chart-row:last-child { border-bottom: 0; }
+  .report-bar { height: 8px; border-radius: 999px; background: var(--gray-200); overflow: hidden; }
+  .report-bar span { display: block; height: 100%; background: var(--navy-light); border-radius: inherit; }
+  .report-filter-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--space-4); align-items: end; }
+  .report-filter-grid .field { margin-bottom: var(--space-4); }
+  .report-result { margin-top: var(--space-4); }
+  .report-result-card { display: grid; grid-template-columns: 1fr auto; gap: var(--space-4); align-items: center; }
+  .report-result-meta { display: grid; gap: var(--space-1); }
+  .report-result-meta small { color: var(--gray-500); }
+  .report-pagination { display: flex; align-items: center; justify-content: space-between; margin-top: var(--space-2); color: var(--gray-500); font-size: var(--text-sm); }
+  .report-actions { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+  .report-note { color: var(--gray-500); font-size: var(--text-xs); margin: 0 0 var(--space-4); }
+  .report-remark { white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 760px) {
+    .report-grid { grid-template-columns: 1fr; }
+    .report-filter-grid { grid-template-columns: 1fr; }
+    .report-result-card { grid-template-columns: 1fr; }
+    .report-result-card .btn { justify-self: start; }
+  }
+</style>
+</head>
+<body>
+<script src="/assets/app.js"></script>
+<script src="/assets/nav.js"></script>
+<script>
+const user = MGAEMS.requireAuth();
+const REPORT_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher'];
+if (user && !REPORT_ROLES.includes(user.role)) window.location.href = '/dashboard.html';
+
+if (user && REPORT_ROLES.includes(user.role)) {
+  renderAppShell('/reports.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  MGAEMS.initSidebar();
+
+  const state = {
+    statistics: null,
+    classes: [],
+    years: [],
+    terms: [],
+    students: [],
+    studentPage: 1,
+    studentTotal: 0,
+    selectedCard: null,
+    cardRequest: 0,
+    exportPreview: null,
+  };
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+  const reportStatusLabels = { active: 'Active', promoted: 'Promoted', transferred: 'Transferred', left: 'Left' };
+  const staffTypeLabels = { teaching: 'Teaching', non_teaching: 'Non-teaching' };
+  const formatDateTime = value => {
+    if (!value) return 'Date unavailable';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Date unavailable' : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
+  };
+
+  document.getElementById('appMain').innerHTML = `
+    <div class="section-header"><h1>Reports &amp; Analytics</h1></div>
+    <div class="tabs report-tabs" role="tablist" aria-label="Report categories">
+      <button class="tab active" id="overviewTab" type="button" role="tab" aria-selected="true">School Overview</button>
+      <button class="tab" id="studentsTab" type="button" role="tab" aria-selected="false">Student Report</button>
+      <button class="tab" id="reportCardsTab" type="button" role="tab" aria-selected="false">Report Cards</button>
+    </div>
+
+    <section class="report-panel active" id="overviewPanel" role="tabpanel" aria-labelledby="overviewTab">
+      <div class="stat-cards report-summary">
+        <div class="card stat-card"><div class="num" id="studentTotal">—</div><div class="label">Students</div></div>
+        <div class="card stat-card"><div class="num" id="staffTotal">—</div><div class="label">Staff</div></div>
+        <div class="card stat-card"><div class="num" id="activeSponsorships">—</div><div class="label">Active Sponsorships</div></div>
+        <div class="card stat-card"><div class="num" id="todayAttendance">—</div><div class="label">Today's Attendance Rate</div></div>
+      </div>
+      <div id="overviewError"></div>
+      <div class="report-grid">
+        <div class="card report-card"><h2>Students by status</h2><div id="studentsByStatus">${MGAEMS.loadingHTML('Loading school statistics…')}</div></div>
+        <div class="card report-card"><h2>Staff by type</h2><div id="staffByType">${MGAEMS.loadingHTML('Loading school statistics…')}</div></div>
+        <div class="card report-card"><h2>Attendance today</h2><div id="attendanceSummary">${MGAEMS.loadingHTML('Loading school statistics…')}</div></div>
+        <div class="card report-card"><h2>Sponsorship</h2><div id="sponsorshipSummary">${MGAEMS.loadingHTML('Loading school statistics…')}</div></div>
+      </div>
+    </section>
+
+    <section class="report-panel" id="studentsPanel" role="tabpanel" aria-labelledby="studentsTab">
+      <div class="card">
+        <div class="section-header"><div><h2>Student Report</h2><p class="report-note">Export the student fields supported by the existing Excel report.</p></div></div>
+        <div class="report-filter-grid">
+          <div class="field"><label for="exportClass">Class</label><select id="exportClass"><option value="">All classes</option></select></div>
+          <div class="field"><label for="exportStatus">Student status</label><select id="exportStatus"><option value="">All statuses</option><option value="active">Active</option><option value="promoted">Promoted</option><option value="transferred">Transferred</option><option value="left">Left</option></select></div>
+          <div class="field"><button class="btn btn-secondary" type="button" id="previewStudentReport"><i data-lucide="list-checks"></i> Preview Results</button></div>
+        </div>
+        <div id="studentExportPreview" class="report-result">${MGAEMS.emptyStateHTML('Choose filters to preview', 'The export supports class and student status filters.', 'file-spreadsheet')}</div>
+        <div class="report-actions"><button class="btn btn-primary" type="button" id="downloadStudentReport" disabled><i data-lucide="download"></i> Download Excel</button></div>
+      </div>
+    </section>
+
+    <section class="report-panel" id="reportCardsPanel" role="tabpanel" aria-labelledby="reportCardsTab">
+      <div class="section-header"><div><h2>Existing Report Cards</h2><p class="report-note">Find and download existing report cards. Generation remains in Assessment.</p></div></div>
+      <div class="card">
+        <div id="reportCardLookupError"></div>
+        <div class="report-filter-grid">
+          <div class="field"><label for="cardYear">Academic year</label><select id="cardYear"><option value="">All years</option></select></div>
+          <div class="field"><label for="cardTerm">Term</label><select id="cardTerm"><option value="">Select term…</option></select></div>
+          <div class="field"><label for="cardClass">Class</label><select id="cardClass"><option value="">Select class…</option></select></div>
+        </div>
+        <div class="report-filter-grid">
+          <div class="field"><label for="cardStudent">Student</label><select id="cardStudent" disabled><option value="">Select class first…</option></select></div>
+          <div class="field"><div class="report-pagination" id="studentPageBar" hidden></div></div>
+        </div>
+      </div>
+      <div id="reportCardResult" class="report-result">${MGAEMS.emptyStateHTML('Select a student and term', 'Existing report-card status will appear here.', 'file-text')}</div>
+    </section>
+  `;
+  MGAEMS.initIcons();
+
+  const tabs = [
+    ['overviewTab', 'overviewPanel'],
+    ['studentsTab', 'studentsPanel'],
+    ['reportCardsTab', 'reportCardsPanel'],
+  ];
+  tabs.forEach(([tabId, panelId]) => document.getElementById(tabId).addEventListener('click', () => selectTab(tabId, panelId)));
+  document.getElementById('previewStudentReport').addEventListener('click', previewStudentReport);
+  document.getElementById('downloadStudentReport').addEventListener('click', downloadStudentReport);
+  document.getElementById('exportClass').addEventListener('change', resetStudentPreview);
+  document.getElementById('exportStatus').addEventListener('change', resetStudentPreview);
+  document.getElementById('cardYear').addEventListener('change', updateCardTerms);
+  document.getElementById('cardTerm').addEventListener('change', loadSelectedReportCard);
+  document.getElementById('cardClass').addEventListener('change', () => { state.studentPage = 1; loadCardStudents(); });
+  document.getElementById('cardStudent').addEventListener('change', loadSelectedReportCard);
+
+  function selectTab(tabId, panelId) {
+    tabs.forEach(([id, panel]) => {
+      const active = id === tabId;
+      document.getElementById(id).classList.toggle('active', active);
+      document.getElementById(id).setAttribute('aria-selected', String(active));
+      document.getElementById(panel).classList.toggle('active', panel === panelId);
+    });
+  }
+
+  async function loadSchoolOverview() {
+    const result = await MGAEMS.get('/api/v1/reports/school-statistics');
+    if (!result.ok) {
+      document.getElementById('overviewError').innerHTML = `${MGAEMS.errorHTML(result.status === 403 ? 'You do not have permission to view school reporting.' : result.error)}<button class="btn btn-secondary btn-sm" id="retryOverview"><i data-lucide="refresh-cw"></i> Retry</button>`;
+      document.getElementById('retryOverview').addEventListener('click', loadSchoolOverview);
+      ['studentsByStatus', 'staffByType', 'attendanceSummary', 'sponsorshipSummary'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+      MGAEMS.initIcons();
+      return;
+    }
+    state.statistics = result.data;
+    renderOverview(result.data);
+  }
+
+  function renderOverview(data) {
+    document.getElementById('overviewError').innerHTML = '';
+    document.getElementById('studentTotal').textContent = String(data.students?.total ?? 0);
+    document.getElementById('staffTotal').textContent = String(data.staff?.total ?? 0);
+    document.getElementById('activeSponsorships').textContent = String(data.active_sponsorships ?? 0);
+    const attendance = data.attendance_today || {};
+    document.getElementById('todayAttendance').textContent = attendance.rate === null || attendance.rate === undefined ? '—' : `${attendance.rate}%`;
+    renderDistribution('studentsByStatus', data.students?.by_status || {}, reportStatusLabels, data.students?.total || 0, 'No student status data.');
+    renderDistribution('staffByType', data.staff?.by_type || {}, staffTypeLabels, data.staff?.total || 0, 'No staff type data.');
+    document.getElementById('attendanceSummary').innerHTML = attendance.recorded
+      ? `<div class="report-chart-row"><span>Attendance rate</span><div class="report-bar"><span style="width:${Math.max(0, Math.min(100, Number(attendance.rate) || 0))}%"></span></div><strong>${attendance.rate === null ? '—' : `${esc(attendance.rate)}%`}</strong></div><p class="report-note">${esc(attendance.recorded)} attendance record${attendance.recorded === 1 ? '' : 's'} for ${esc(attendance.date || 'today')}.</p>`
+      : MGAEMS.emptyStateHTML('No attendance recorded today', 'The endpoint reports no attendance rows for today.', 'calendar-check');
+    document.getElementById('sponsorshipSummary').innerHTML = `<div class="report-result-card"><div class="report-result-meta"><strong>${esc(data.active_sponsorships ?? 0)} active sponsorships</strong><small>Current active total from the sponsorship register.</small></div><i data-lucide="heart-handshake"></i></div>`;
+    MGAEMS.initIcons();
+  }
+
+  function renderDistribution(targetId, values, labels, total, emptyMessage) {
+    const target = document.getElementById(targetId);
+    const entries = Object.entries(values || {}).sort((a, b) => Number(b[1]) - Number(a[1]));
+    if (!entries.length) {
+      target.innerHTML = MGAEMS.emptyStateHTML(emptyMessage, '', 'chart-no-axes-column');
+      return;
+    }
+    target.innerHTML = entries.map(([key, value]) => {
+      const count = Number(value) || 0;
+      const width = total > 0 ? Math.min(100, count / total * 100) : 0;
+      return `<div class="report-chart-row"><span>${esc(labels[key] || key)}</span><div class="report-bar" role="img" aria-label="${count} ${esc(labels[key] || key)}"><span style="width:${width}%"></span></div><strong>${count}</strong></div>`;
+    }).join('');
+  }
+
+  async function loadLookups() {
+    const [classesResult, yearsResult, termsResult] = await Promise.all([
+      MGAEMS.get('/api/v1/classes'),
+      MGAEMS.get('/api/v1/academic-years'),
+      MGAEMS.get('/api/v1/terms'),
+    ]);
+    if (classesResult.ok) {
+      state.classes = classesResult.data;
+      const options = state.classes.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join('');
+      document.getElementById('exportClass').insertAdjacentHTML('beforeend', options);
+      document.getElementById('cardClass').insertAdjacentHTML('beforeend', options);
+    } else {
+      const message = classesResult.status === 403 ? 'You do not have permission to load class filters.' : classesResult.error;
+      document.getElementById('studentExportPreview').innerHTML = MGAEMS.errorHTML(message);
+      document.getElementById('reportCardLookupError').innerHTML = MGAEMS.errorHTML(message);
+    }
+    const lookupErrors = [];
+    if (yearsResult.ok) {
+      state.years = yearsResult.data;
+      document.getElementById('cardYear').insertAdjacentHTML('beforeend', state.years.map(item => `<option value="${item.id}">${esc(item.name)}</option>`).join(''));
+    } else lookupErrors.push(yearsResult.status === 403 ? 'You do not have permission to load academic years.' : yearsResult.error);
+    if (termsResult.ok) {
+      state.terms = termsResult.data;
+      updateCardTerms();
+    } else lookupErrors.push(termsResult.status === 403 ? 'You do not have permission to load terms.' : termsResult.error);
+    if (lookupErrors.length) {
+      document.getElementById('reportCardLookupError').innerHTML = MGAEMS.errorHTML(lookupErrors.join(' '));
+      MGAEMS.initIcons();
+    }
+  }
+
+  function updateCardTerms() {
+    const yearId = document.getElementById('cardYear').value;
+    const terms = state.terms.filter(term => !yearId || String(term.academic_year_id) === yearId);
+    const select = document.getElementById('cardTerm');
+    select.innerHTML = '<option value="">Select term…</option>' + terms.map(term => `<option value="${term.id}">${esc(term.name)}${term.academic_year?.name ? ` · ${esc(term.academic_year.name)}` : ''}</option>`).join('');
+    clearReportCardResult();
+  }
+
+  async function previewStudentReport() {
+    const button = document.getElementById('previewStudentReport');
+    const preview = document.getElementById('studentExportPreview');
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" style="width:15px;height:15px;margin:0"></span> Checking…';
+    preview.innerHTML = MGAEMS.loadingHTML('Checking matching students…');
+    const params = studentFilterParams();
+    params.set('per_page', '1');
+    const result = await MGAEMS.get('/api/v1/students?' + params.toString());
+    button.disabled = false;
+    button.innerHTML = '<i data-lucide="list-checks"></i> Preview Results';
+    MGAEMS.initIcons();
+    if (!result.ok) {
+      state.exportPreview = null;
+      preview.innerHTML = MGAEMS.errorHTML(result.status === 403 ? 'You do not have permission to view student reports.' : result.error);
+      document.getElementById('downloadStudentReport').disabled = true;
+      MGAEMS.initIcons();
+      return;
+    }
+    state.exportPreview = result.meta?.total ?? result.data.length;
+    if (!state.exportPreview) {
+      preview.innerHTML = MGAEMS.emptyStateHTML('No students match these filters', 'Change the class or status filters and preview again.', 'users');
+      document.getElementById('downloadStudentReport').disabled = true;
+    } else {
+      preview.innerHTML = `<div class="alert alert-success"><i data-lucide="circle-check"></i><span>${esc(state.exportPreview)} student record${state.exportPreview === 1 ? '' : 's'} match the selected filters.</span></div>`;
+      document.getElementById('downloadStudentReport').disabled = false;
+    }
+    MGAEMS.initIcons();
+  }
+
+  async function downloadStudentReport() {
+    if (!state.exportPreview) return;
+    const button = document.getElementById('downloadStudentReport');
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" style="width:15px;height:15px;margin:0"></span> Preparing Excel…';
+    const params = studentFilterParams();
+    const result = await MGAEMS.download('/api/v1/reports/students/export?' + params.toString(), 'students-report.xlsx');
+    button.disabled = false;
+    button.innerHTML = '<i data-lucide="download"></i> Download Excel';
+    MGAEMS.initIcons();
+    if (!result.ok) {
+      MGAEMS.toast(result.status === 403 ? 'You do not have permission to export student reports.' : result.error, 'error');
+      return;
+    }
+    MGAEMS.toast('Student report downloaded as Excel.', 'success');
+  }
+
+  function studentFilterParams() {
+    const params = new URLSearchParams();
+    const classId = document.getElementById('exportClass').value;
+    const status = document.getElementById('exportStatus').value;
+    if (classId) params.set('class_id', classId);
+    if (status) params.set('status', status);
+    return params;
+  }
+
+  function resetStudentPreview() {
+    state.exportPreview = null;
+    document.getElementById('downloadStudentReport').disabled = true;
+    document.getElementById('studentExportPreview').innerHTML = MGAEMS.emptyStateHTML('Preview required', 'Preview the matching students before downloading.', 'file-spreadsheet');
+    MGAEMS.initIcons();
+  }
+
+  async function loadCardStudents() {
+    const classId = document.getElementById('cardClass').value;
+    const select = document.getElementById('cardStudent');
+    state.students = [];
+    state.studentTotal = 0;
+    select.disabled = true;
+    select.innerHTML = '<option value="">Select learner…</option>';
+    clearReportCardResult();
+    const pageBar = document.getElementById('studentPageBar');
+    pageBar.hidden = true;
+    if (!classId) return;
+    select.innerHTML = '<option value="">Loading learners…</option>';
+    const result = await MGAEMS.get(`/api/v1/students?class_id=${encodeURIComponent(classId)}&per_page=100&page=${state.studentPage}`);
+    if (!result.ok) {
+      select.innerHTML = '<option value="">Unable to load learners</option>';
+      document.getElementById('reportCardResult').innerHTML = MGAEMS.errorHTML(result.status === 403 ? 'You do not have permission to view these students.' : result.error);
+      MGAEMS.initIcons();
+      return;
+    }
+    state.students = result.data;
+    state.studentTotal = result.meta?.total ?? result.data.length;
+    if (!state.students.length) {
+      select.innerHTML = '<option value="">No students in class</option>';
+      document.getElementById('reportCardResult').innerHTML = MGAEMS.emptyStateHTML('No students found', 'There are no students in this class.', 'users');
+      MGAEMS.initIcons();
+      return;
+    }
+    select.innerHTML = '<option value="">Select learner…</option>' + state.students.map(student => `<option value="${student.id}">${esc(student.first_name)} ${esc(student.last_name)} · ${esc(student.admission_no)}${student.status && student.status !== 'active' ? ` · ${esc(reportStatusLabels[student.status] || student.status)}` : ''}</option>`).join('');
+    select.disabled = false;
+    renderStudentPagination();
+  }
+
+  function renderStudentPagination() {
+    const pageBar = document.getElementById('studentPageBar');
+    const totalPages = Math.max(1, Math.ceil(state.studentTotal / 100));
+    pageBar.hidden = totalPages <= 1;
+    if (pageBar.hidden) return;
+    pageBar.innerHTML = `<span>Page ${state.studentPage} of ${totalPages}</span><span class="flex gap-2"><button class="btn btn-secondary btn-sm" type="button" data-student-page="-1" ${state.studentPage <= 1 ? 'disabled' : ''}><i data-lucide="chevron-left"></i></button><button class="btn btn-secondary btn-sm" type="button" data-student-page="1" ${state.studentPage >= totalPages ? 'disabled' : ''}><i data-lucide="chevron-right"></i></button></span>`;
+    pageBar.querySelectorAll('[data-student-page]').forEach(button => button.addEventListener('click', () => {
+      state.studentPage += Number(button.dataset.studentPage);
+      loadCardStudents();
+    }));
+    MGAEMS.initIcons();
+  }
+
+  async function loadSelectedReportCard() {
+    const studentId = document.getElementById('cardStudent').value;
+    const termId = document.getElementById('cardTerm').value;
+    const target = document.getElementById('reportCardResult');
+    if (!studentId || !termId) { clearReportCardResult(); return; }
+    const requestId = ++state.cardRequest;
+    target.innerHTML = MGAEMS.loadingHTML('Checking for an existing report card…');
+    const result = await MGAEMS.get(`/api/v1/report-cards?student_id=${encodeURIComponent(studentId)}&term_id=${encodeURIComponent(termId)}`);
+    if (requestId !== state.cardRequest) return;
+    if (!result.ok) {
+      state.selectedCard = null;
+      target.innerHTML = MGAEMS.errorHTML(result.status === 403 ? 'You do not have permission to view report cards.' : result.error);
+      MGAEMS.initIcons();
+      return;
+    }
+    state.selectedCard = result.data;
+    if (!result.data) {
+      target.innerHTML = MGAEMS.emptyStateHTML('No report card found', 'This student and term do not have an existing report-card record.', 'file-text');
+      MGAEMS.initIcons();
+      return;
+    }
+    renderReportCard(result.data);
+  }
+
+  function renderReportCard(card) {
+    const target = document.getElementById('reportCardResult');
+    const generated = card.generated_at ? formatDateTime(card.generated_at) : 'Date unavailable';
+    target.innerHTML = `<div class="card report-result-card">
+      <div class="report-result-meta">
+        <h2>${esc(card.student ? `${card.student.first_name} ${card.student.last_name}` : 'Report Card')}</h2>
+        <small>${esc(card.student?.admission_no || '')}${card.term?.name ? ` · ${esc(card.term.name)}` : ''}</small>
+        <span><span class="badge ${card.file_path ? 'badge-green' : 'badge-amber'}">${card.file_path ? 'Available' : 'Record only'}</span> ${card.generated_at ? `Generated ${esc(generated)}` : 'Generation date unavailable'}</span>
+        ${card.overall_remark ? `<p class="report-remark">${esc(card.overall_remark)}</p>` : ''}
+      </div>
+      ${card.file_path ? '<button class="btn btn-primary" type="button" id="downloadReportCard"><i data-lucide="download"></i> Download PDF</button>' : '<span class="text-muted">No PDF file is available.</span>'}
+    </div>`;
+    document.getElementById('downloadReportCard')?.addEventListener('click', downloadReportCard);
+    MGAEMS.initIcons();
+  }
+
+  async function downloadReportCard() {
+    const card = state.selectedCard;
+    if (!card?.id || !card.file_path) return;
+    const student = card.student;
+    const filename = `report-card-${student?.admission_no || card.student_id}.pdf`;
+    const button = document.getElementById('downloadReportCard');
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" style="width:15px;height:15px;margin:0"></span> Downloading…';
+    const result = await MGAEMS.download(`/api/v1/report-cards/${card.id}/download`, filename);
+    if (!result.ok) {
+      MGAEMS.toast(result.status === 403 ? 'You do not have permission to download this report card.' : result.error, 'error');
+      button.disabled = false;
+      button.innerHTML = '<i data-lucide="download"></i> Download PDF';
+      MGAEMS.initIcons();
+      return;
+    }
+    MGAEMS.toast('Report-card PDF downloaded.', 'success');
+    button.disabled = false;
+    button.innerHTML = '<i data-lucide="download"></i> Download PDF';
+    MGAEMS.initIcons();
+  }
+
+  function clearReportCardResult() {
+    state.cardRequest++;
+    state.selectedCard = null;
+    const target = document.getElementById('reportCardResult');
+    if (target) target.innerHTML = MGAEMS.emptyStateHTML('Select a student and term', 'Existing report-card status will appear here.', 'file-text');
+    MGAEMS.initIcons();
+  }
+
+  loadSchoolOverview();
+  loadLookups();
+}
+</script>
+</body>
+</html>

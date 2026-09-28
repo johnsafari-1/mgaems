@@ -39,7 +39,7 @@ if (user && MANAGER_ROLES.includes(user.role)) {
   MGAEMS.initSidebar();
 
   const main = document.getElementById('appMain');
-  const state = { search: '', timer: null, modal: null, selectedStudents: new Map(), excludedStudents: new Set() };
+  const state = { search: '', timer: null, modal: null, selectedStudents: new Map(), excludedStudents: new Set(), learnerPage: 1, learnerTotalPages: 1, learnerSearch: '' };
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 
   main.innerHTML = `
@@ -93,13 +93,15 @@ if (user && MANAGER_ROLES.includes(user.role)) {
     </table></div>`;
     wrap.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => openGuardianModal(result.data.find(item => item.id === Number(button.dataset.edit)))));
     wrap.querySelectorAll('[data-link]').forEach(button => button.addEventListener('click', () => openLinkModal(result.data.find(item => item.id === Number(button.dataset.link)))));
-    wrap.querySelectorAll('[data-unlink]').forEach(button => button.addEventListener('click', () => unlinkStudent(button.dataset.unlink, button.dataset.student)));
+    wrap.querySelectorAll('[data-unlink]').forEach(button => button.addEventListener('click', () => unlinkStudent(button.dataset.unlink, button.dataset.student, button)));
     MGAEMS.initIcons();
   }
 
   async function openGuardianModal(guardian = null) {
     state.selectedStudents = new Map((guardian?.students || []).map(student => [String(student.id), student]));
     state.excludedStudents = new Set();
+    state.learnerPage = 1;
+    state.learnerSearch = '';
     const accountsResult = await MGAEMS.get('/api/v1/guardians/accounts');
     if (!accountsResult.ok) { MGAEMS.toast(accountsResult.error, 'error'); return; }
     const accounts = accountsResult.data;
@@ -135,6 +137,7 @@ if (user && MANAGER_ROLES.includes(user.role)) {
       <div class="guardian-student-picker" id="studentPicker" ${guardian ? 'hidden' : ''}>
         <div class="field"><label for="studentSearch">Link learner(s) *</label><input type="search" id="studentSearch" placeholder="Search name or admission number"></div>
         <div class="guardian-student-list" id="studentChoices">${MGAEMS.loadingHTML('Loading learners…')}</div>
+        <div class="pagination" id="studentPagination" style="display:none"></div>
       </div>
     `, guardian ? 'Save Changes' : 'Create Guardian', async button => {
       const payload = {
@@ -182,10 +185,13 @@ if (user && MANAGER_ROLES.includes(user.role)) {
   async function openLinkModal(guardian) {
     state.selectedStudents = new Map();
     state.excludedStudents = new Set(guardian.students.map(student => String(student.id)));
+    state.learnerPage = 1;
+    state.learnerSearch = '';
     showModal(`Link learner to ${guardian.full_name}`, `
       <div id="guardianFormError"></div>
       <div class="field"><label for="studentSearch">Search learners</label><input type="search" id="studentSearch" placeholder="Name or admission number"></div>
       <div class="guardian-student-list" id="studentChoices">${MGAEMS.loadingHTML('Loading learners…')}</div>
+      <div class="pagination" id="studentPagination" style="display:none"></div>
     `, 'Link Learners', async button => {
       const student_ids = [...state.selectedStudents.keys()].map(Number);
       if (!student_ids.length) { setModalError('Select at least one learner to link.'); return; }
@@ -243,32 +249,47 @@ if (user && MANAGER_ROLES.includes(user.role)) {
   async function loadStudentChoices(search) {
     const choices = document.getElementById('studentChoices');
     if (!choices) return;
+    state.learnerSearch = search;
     choices.innerHTML = MGAEMS.loadingHTML('Loading learners…');
-    const params = new URLSearchParams({ per_page: '100' });
+    const params = new URLSearchParams({ per_page: '100', page: String(state.learnerPage) });
     if (search) params.set('search', search);
     const result = await MGAEMS.get('/api/v1/students?' + params.toString());
     if (!result.ok) { choices.innerHTML = MGAEMS.errorHTML(result.error); MGAEMS.initIcons(); return; }
+    state.learnerTotalPages = Math.max(1, Math.ceil((result.meta?.total || 0) / (result.meta?.per_page || 100)));
     const students = result.data.filter(student => !state.excludedStudents.has(String(student.id)));
     if (!students.length) {
       choices.innerHTML = '<div class="empty-state" style="padding:var(--space-4)"><div class="title">No available learners found</div></div>';
-      return;
+    } else {
+      choices.innerHTML = students.map(student => `<label class="guardian-student-option">
+        <input type="checkbox" data-student-choice="${student.id}" ${state.selectedStudents.has(String(student.id)) ? 'checked' : ''}>
+        <span>${esc(student.first_name)} ${esc(student.last_name)}<small>${esc(student.admission_no)} · ${esc(student.school_class?.name || 'No class')} · ${esc(student.status)}</small></span>
+      </label>`).join('');
+      choices.querySelectorAll('[data-student-choice]').forEach(input => input.addEventListener('change', () => {
+        const id = input.dataset.studentChoice;
+        const student = students.find(item => String(item.id) === id);
+        if (input.checked) state.selectedStudents.set(id, student);
+        else state.selectedStudents.delete(id);
+      }));
     }
-    choices.innerHTML = students.map(student => `<label class="guardian-student-option">
-      <input type="checkbox" data-student-choice="${student.id}" ${state.selectedStudents.has(String(student.id)) ? 'checked' : ''}>
-      <span>${esc(student.first_name)} ${esc(student.last_name)}<small>${esc(student.admission_no)} · ${esc(student.school_class?.name || 'No class')} · ${esc(student.status)}</small></span>
-    </label>`).join('');
-    choices.querySelectorAll('[data-student-choice]').forEach(input => input.addEventListener('change', () => {
-      const id = input.dataset.studentChoice;
-      const student = students.find(item => String(item.id) === id);
-      if (input.checked) state.selectedStudents.set(id, student);
-      else state.selectedStudents.delete(id);
+    const pagination = document.getElementById('studentPagination');
+    pagination.style.display = state.learnerTotalPages > 1 ? 'flex' : 'none';
+    pagination.innerHTML = `<span>Page ${state.learnerPage} of ${state.learnerTotalPages}</span><div class="flex gap-2">
+      <button class="btn btn-secondary btn-sm" data-page="-1" ${state.learnerPage <= 1 ? 'disabled' : ''}><i data-lucide="chevron-left"></i> Prev</button>
+      <button class="btn btn-secondary btn-sm" data-page="1" ${state.learnerPage >= state.learnerTotalPages ? 'disabled' : ''}>Next <i data-lucide="chevron-right"></i></button>
+    </div>`;
+    pagination.querySelectorAll('[data-page]').forEach(button => button.addEventListener('click', () => {
+      state.learnerPage += Number(button.dataset.page);
+      loadStudentChoices(state.learnerSearch);
     }));
+    MGAEMS.initIcons();
   }
 
-  async function unlinkStudent(guardianId, studentId) {
+  async function unlinkStudent(guardianId, studentId, button) {
     if (!window.confirm('Unlink this learner from the guardian? Their other learner links and account will remain unchanged.')) return;
+    button.disabled = true;
+    button.innerHTML = '<span class="spinner" style="width:14px;height:14px;margin:0"></span>';
     const result = await MGAEMS.del(`/api/v1/guardians/${guardianId}/students/${studentId}`);
-    if (!result.ok) { MGAEMS.toast(result.error, 'error'); return; }
+    if (!result.ok) { MGAEMS.toast(result.error, 'error'); button.disabled = false; button.innerHTML = '<i data-lucide="unlink"></i>'; MGAEMS.initIcons(); return; }
     MGAEMS.toast('Learner unlinked.', 'success');
     loadGuardians();
   }
