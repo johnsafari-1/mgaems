@@ -162,6 +162,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/sponsors', [SponsorController::class, 'index']);
             Route::get('/sponsors/{sponsor}', [SponsorController::class, 'show']);
             Route::get('/sponsorships', [SponsorshipController::class, 'index']);
+            Route::get('/sponsorships/learners', [SponsorshipController::class, 'learners']);
+            Route::get('/sponsorships/{sponsorship}', [SponsorshipController::class, 'show']);
         });
 
         Route::middleware('role:system_admin,sponsor_coordinator')->group(function () {
