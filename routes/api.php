@@ -201,6 +201,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/staff', [StaffController::class, 'index']);
             Route::get('/staff/{staff}', [StaffController::class, 'show']);
             Route::patch('/staff/{staff}', [StaffController::class, 'update']);
+            Route::post('/staff/{staff}/qualifications', [StaffController::class, 'storeQualification']);
+            Route::patch('/staff/{staff}/qualifications/{qualification}', [StaffController::class, 'updateQualification']);
+            Route::delete('/staff/{staff}/qualifications/{qualification}', [StaffController::class, 'destroyQualification']);
+            Route::post('/staff/{staff}/emergency-contacts', [StaffController::class, 'storeEmergencyContact']);
+            Route::patch('/staff/{staff}/emergency-contacts/{contact}', [StaffController::class, 'updateEmergencyContact']);
+            Route::delete('/staff/{staff}/emergency-contacts/{contact}', [StaffController::class, 'destroyEmergencyContact']);
             Route::get('/departments', [DepartmentController::class, 'index']);
         });
 
