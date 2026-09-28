@@ -23,14 +23,8 @@ function renderAppShell(activeHref, logoUrl) {
   const portalItems = role === 'parent_guardian'
     ? [{ href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' }]
     : [{ href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' }];
-<<<<<<< HEAD
   const items = (['parent_guardian', 'sponsor'].includes(role) ? portalItems : MGAEMS_NAV_ITEMS)
     .filter(item => !item.roles || item.roles.includes(role));
-=======
-  const items = ['parent_guardian', 'sponsor'].includes(role)
-    ? portalItems
-    : MGAEMS_NAV_ITEMS.filter(item => !item.roles || item.roles.includes(role));
->>>>>>> 5d2f130 (Add parent and guardian management)
   const navLinks = items.map(item => `
     <a href="${item.href}" class="${item.href === activeHref ? 'active' : ''}">
       <i data-lucide="${item.icon}"></i> ${item.label}
