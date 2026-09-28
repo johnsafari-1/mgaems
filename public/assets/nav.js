@@ -10,7 +10,7 @@ const MGAEMS_NAV_ITEMS = [
   { href: '/attendance.html', icon: 'calendar-check', label: 'Attendance' },
   { href: '/assessment.html', icon: 'clipboard-check', label: 'Assessment' },
   { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
-  { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff' },
+  { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
   { href: '/communication.html', icon: 'megaphone', label: 'Communication' },
   { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors' },
   { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports' },
@@ -22,7 +22,8 @@ function renderAppShell(activeHref, logoUrl) {
   const portalItems = role === 'parent_guardian'
     ? [{ href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' }]
     : [{ href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' }];
-  const items = ['parent_guardian', 'sponsor'].includes(role) ? portalItems : MGAEMS_NAV_ITEMS;
+  const items = (['parent_guardian', 'sponsor'].includes(role) ? portalItems : MGAEMS_NAV_ITEMS)
+    .filter(item => !item.roles || item.roles.includes(role));
   const navLinks = items.map(item => `
     <a href="${item.href}" class="${item.href === activeHref ? 'active' : ''}">
       <i data-lucide="${item.icon}"></i> ${item.label}
