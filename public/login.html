@@ -76,7 +76,9 @@ async function login() {
 
     localStorage.setItem('mgaems_token', data.data.token);
     localStorage.setItem('mgaems_user', JSON.stringify(data.data.user));
-    window.location.href = '/dashboard.html';
+    const role = data.data.user.role;
+    window.location.href = role === 'parent_guardian' ? '/parent-portal.html'
+      : role === 'sponsor' ? '/sponsor-portal.html' : '/dashboard.html';
   } catch (e) {
     alertBox.innerHTML = MGAEMS.errorHTML('Could not reach the server. Is it running?');
     lucide.createIcons();
