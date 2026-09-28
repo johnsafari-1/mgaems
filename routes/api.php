@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\GuardianController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
@@ -127,6 +128,16 @@ Route::prefix('v1')->group(function () {
             Route::patch('/students/{student}', [StudentController::class, 'update']);
             Route::post('/students/{student}/promote', [StudentController::class, 'promote']);
             Route::post('/students/{student}/transfer', [StudentController::class, 'transfer']);
+        });
+
+        // --- Parent / Guardian Management ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/guardians', [GuardianController::class, 'index']);
+            Route::get('/guardians/accounts', [GuardianController::class, 'accounts']);
+            Route::post('/guardians', [GuardianController::class, 'store']);
+            Route::patch('/guardians/{guardian}', [GuardianController::class, 'update']);
+            Route::post('/guardians/{guardian}/students', [GuardianController::class, 'linkStudents']);
+            Route::delete('/guardians/{guardian}/students/{student}', [GuardianController::class, 'unlinkStudent']);
         });
 
         // --- Attendance (SRS FR-ATT-01/02/03) ---
