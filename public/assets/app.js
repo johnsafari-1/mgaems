@@ -120,6 +120,28 @@ const MGAEMS = (() => {
       </div>`;
   }
 
+  function escapeHTML(value) {
+    const node = document.createElement('div');
+    node.textContent = value == null ? '' : String(value);
+    return node.innerHTML;
+  }
+
+  async function loadAcademicContext() {
+    const el = document.getElementById('academicContext');
+    if (!el) return;
+    const [years, terms] = await Promise.all([get('/api/v1/academic-years'), get('/api/v1/terms')]);
+    if (!years.ok || !terms.ok) {
+      el.innerHTML = '<i data-lucide="calendar-range"></i><span>Academic context unavailable</span>';
+      initIcons();
+      return;
+    }
+    const year = years.data.find(item => item.is_current);
+    const term = terms.data.find(item => item.is_current);
+    const context = [year?.name, term?.name].filter(Boolean).map(escapeHTML).join(' · ');
+    el.innerHTML = `<i data-lucide="calendar-range"></i><span>${context || 'No active academic period'}</span>`;
+    initIcons();
+  }
+
   function initIcons() {
     if (window.lucide) window.lucide.createIcons();
   }
@@ -130,9 +152,25 @@ const MGAEMS = (() => {
     document.querySelectorAll('.app-sidebar a').forEach(a => {
       if (a.getAttribute('href') === window.location.pathname) a.classList.add('active');
     });
-    const el = document.getElementById('userInfo');
-    if (el) el.textContent = `${user.username} — ${user.role.replace(/_/g, ' ')}`;
+    const sidebar = document.getElementById('appSidebar');
+    const mobileButton = document.getElementById('mobileMenu');
+    const collapseButton = document.getElementById('sidebarToggle');
+    const scrim = document.getElementById('sidebarScrim');
+    const setMobileOpen = open => {
+      document.body.classList.toggle('nav-open', open);
+      mobileButton?.setAttribute('aria-expanded', String(open));
+    };
+    mobileButton?.addEventListener('click', () => setMobileOpen(!document.body.classList.contains('nav-open')));
+    scrim?.addEventListener('click', () => setMobileOpen(false));
+    collapseButton?.addEventListener('click', () => {
+      const collapsed = document.body.classList.toggle('sidebar-collapsed');
+      collapseButton.setAttribute('aria-expanded', String(!collapsed));
+      collapseButton.setAttribute('aria-label', collapsed ? 'Expand navigation' : 'Collapse navigation');
+      collapseButton.innerHTML = `<i data-lucide="panel-left-${collapsed ? 'open' : 'close'}"></i>`;
+      initIcons();
+    });
+    loadAcademicContext();
   }
 
-  return { requireAuth, logout, get, post, patch, del, download, toast, loadingHTML, emptyStateHTML, errorHTML, initIcons, initSidebar, currentUser };
+  return { requireAuth, logout, get, post, patch, del, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, initIcons, initSidebar, currentUser };
 })();
