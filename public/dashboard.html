@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MGAEMS — Dashboard</title>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="https://unpkg.com/lucide@latest"></script>
@@ -15,95 +16,83 @@ renderAppShell('/dashboard.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyU
 MGAEMS.initSidebar();
 
 document.getElementById('appMain').innerHTML = `
-  <div class="stat-cards" id="statsCards">${MGAEMS.loadingHTML()}</div>
-  <div class="section">
-    <div class="section-header"><h2>Recent Announcements</h2></div>
-    <div class="card" id="announcementsCard">${MGAEMS.loadingHTML()}</div>
+  <div class="page-intro">
+    <div><p class="eyebrow">School overview</p><h2>Operational dashboard</h2><p>Live information from across Manna Goodnews Academy.</p></div>
+    <span class="data-note"><i data-lucide="database"></i> Database-backed information</span>
   </div>
-  <div class="section" id="studentsSection">
-    <div class="section-header">
-      <h2>Learners</h2>
-      <a href="/students.html" class="btn btn-secondary btn-sm"><i data-lucide="arrow-right"></i> View all</a>
-    </div>
-    <div class="card" id="studentsCard" style="padding:0">${MGAEMS.loadingHTML()}</div>
+  <section aria-labelledby="keyIndicators"><h2 class="sr-only" id="keyIndicators">Key indicators</h2><div class="metric-grid" id="statsCards">${MGAEMS.loadingHTML('Loading school indicators…')}</div></section>
+  <div class="dashboard-grid">
+    <section class="panel dashboard-main" aria-labelledby="announcementsHeading">
+      <div class="panel-header"><div><span class="section-kicker">Today</span><h2 id="announcementsHeading">Latest announcements</h2></div><a href="/communication.html" class="btn btn-secondary btn-sm">Communication <i data-lucide="arrow-right"></i></a></div>
+      <div id="announcementsCard">${MGAEMS.loadingHTML('Loading announcements…')}</div>
+    </section>
+    <section class="panel" aria-labelledby="academicHeading">
+      <div class="panel-header"><div><span class="section-kicker">Academic snapshot</span><h2 id="academicHeading">Current context</h2></div><i class="panel-icon" data-lucide="school"></i></div>
+      <div id="academicSnapshot">${MGAEMS.loadingHTML('Loading academic context…')}</div>
+    </section>
   </div>
-`;
-lucide.createIcons();
+  <section class="panel" id="studentsSection" aria-labelledby="learnersHeading">
+    <div class="panel-header"><div><span class="section-kicker">Recently registered</span><h2 id="learnersHeading">Learners</h2></div><a href="/students.html" class="btn btn-secondary btn-sm">View all <i data-lucide="arrow-right"></i></a></div>
+    <div class="table-scroll" id="studentsCard">${MGAEMS.loadingHTML('Loading learners…')}</div>
+  </section>`;
+MGAEMS.initIcons();
+
+const safe = MGAEMS.escapeHTML;
+const metric = (icon, value, label, detail, tone = '') => `<article class="metric-card ${tone}"><div class="metric-icon"><i data-lucide="${icon}"></i></div><div class="metric-content"><span>${label}</span><strong>${value}</strong><small>${detail}</small></div></article>`;
 
 async function loadSchoolInfo() {
   const res = await MGAEMS.get('/api/v1/settings/school');
-  if (res.ok) {
-    document.getElementById('schoolName').textContent = res.data.school_name;
-    document.getElementById('schoolMotto').textContent = res.data.motto || '';
-  }
+  if (res.ok && res.data.school_name) document.title = `${res.data.school_name} — Dashboard`;
 }
 
 async function loadStats() {
   const el = document.getElementById('statsCards');
   const res = await MGAEMS.get('/api/v1/reports/school-statistics');
-  if (!res.ok) { el.style.display = 'none'; return; } // role can't see stats — hide, don't error
+  if (!res.ok) {
+    if (res.status === 403) { el.closest('section').hidden = true; return; }
+    el.innerHTML = MGAEMS.errorHTML(res.error); MGAEMS.initIcons(); return;
+  }
   const s = res.data;
-  el.innerHTML = `
-    <div class="card stat-card"><div class="num">${s.students.total}</div><div class="label">Learners</div></div>
-    <div class="card stat-card"><div class="num">${s.staff.total}</div><div class="label">Staff</div></div>
-    <div class="card stat-card"><div class="num">${s.active_sponsorships}</div><div class="label">Active Sponsorships</div></div>
-    <div class="card stat-card"><div class="num">${s.attendance_today.rate !== null ? s.attendance_today.rate + '%' : '—'}</div><div class="label">Attendance Today</div></div>
-  `;
+  const attendance = s.attendance_today.rate === null ? '—' : `${safe(s.attendance_today.rate)}%`;
+  const attendanceDetail = s.attendance_today.recorded ? `${safe(s.attendance_today.recorded)} records today` : 'No attendance recorded today';
+  el.innerHTML = [
+    metric('graduation-cap', safe(s.students.total), 'Registered learners', 'All learner records'),
+    metric('calendar-check', attendance, 'Attendance today', attendanceDetail, 'metric-success'),
+    metric('heart-handshake', safe(s.active_sponsorships), 'Active sponsorships', 'Currently active records'),
+    metric('users-round', safe(s.staff.total), 'Staff records', 'All staff records'),
+  ].join('');
+  MGAEMS.initIcons();
 }
 
 async function loadAnnouncements() {
   const el = document.getElementById('announcementsCard');
   const res = await MGAEMS.get('/api/v1/announcements');
-  if (!res.ok) { el.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
-  if (res.data.length === 0) {
-    el.innerHTML = MGAEMS.emptyStateHTML('No announcements yet', 'Published announcements will appear here.', 'megaphone');
-    lucide.createIcons();
-    return;
-  }
-  el.innerHTML = res.data.map((a, i) => `
-    <div style="padding:14px 0; ${i > 0 ? 'border-top:1px solid var(--gray-200)' : ''}">
-      <div class="flex gap-2"><strong>${a.title}</strong> <span class="badge badge-navy">${a.audience.replace(/_/g,' ')}</span></div>
-      <div class="text-muted" style="font-size:13px;margin-top:4px;">${a.body}</div>
-    </div>
-  `).join('');
+  if (!res.ok) { el.innerHTML = MGAEMS.errorHTML(res.error); MGAEMS.initIcons(); return; }
+  if (!res.data.length) { el.innerHTML = MGAEMS.emptyStateHTML('No announcements', 'Relevant published announcements will appear here.', 'megaphone'); MGAEMS.initIcons(); return; }
+  el.innerHTML = `<div class="activity-list">${res.data.slice(0, 5).map(a => `<article class="activity-item"><span class="activity-marker"><i data-lucide="megaphone"></i></span><div><div class="activity-heading"><strong>${safe(a.title)}</strong><span class="badge badge-navy">${safe(a.audience.replace(/_/g, ' '))}</span></div><p>${safe(a.body)}</p>${a.published_at ? `<time datetime="${safe(a.published_at)}">${safe(new Date(a.published_at).toLocaleDateString('en-KE', { dateStyle: 'medium' }))}</time>` : ''}</div></article>`).join('')}</div>`;
+  MGAEMS.initIcons();
+}
+
+async function loadAcademicSnapshot() {
+  const el = document.getElementById('academicSnapshot');
+  const [years, terms, classes] = await Promise.all([MGAEMS.get('/api/v1/academic-years'), MGAEMS.get('/api/v1/terms'), MGAEMS.get('/api/v1/classes')]);
+  if (!years.ok || !terms.ok || !classes.ok) { el.innerHTML = MGAEMS.errorHTML('Academic snapshot is unavailable.'); MGAEMS.initIcons(); return; }
+  const year = years.data.find(item => item.is_current);
+  const term = terms.data.find(item => item.is_current);
+  el.innerHTML = `<dl class="snapshot-list"><div><dt>Academic year</dt><dd>${year ? safe(year.name) : 'Not set'}</dd></div><div><dt>Current term</dt><dd>${term ? safe(term.name) : 'Not set'}</dd></div><div><dt>Classes</dt><dd>${safe(classes.data ? classes.data.length : classes.data?.length || classes.length)}</dd></div></dl><p class="panel-footnote"><i data-lucide="info"></i> Academic context is read-only on this dashboard.</p>`;
+  MGAEMS.initIcons();
 }
 
 async function loadStudents() {
   const section = document.getElementById('studentsSection');
   const el = document.getElementById('studentsCard');
   const res = await MGAEMS.get('/api/v1/students?per_page=5');
-  if (!res.ok) {
-    if (res.status === 403) { section.style.display = 'none'; return; }
-    el.innerHTML = `<div style="padding:20px">${MGAEMS.errorHTML(res.error)}</div>`;
-    lucide.createIcons();
-    return;
-  }
-  if (res.data.length === 0) {
-    el.innerHTML = MGAEMS.emptyStateHTML('No learners registered yet', 'Register your first learner to see them here.', 'users');
-    lucide.createIcons();
-    return;
-  }
-  el.innerHTML = `
-    <table>
-      <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Status</th></tr></thead>
-      <tbody>
-        ${res.data.map(s => `
-          <tr>
-            <td>${s.admission_no}</td>
-            <td>${s.first_name} ${s.last_name}</td>
-            <td>${s.school_class ? s.school_class.name : '—'}</td>
-            <td><span class="badge ${s.status === 'active' ? 'badge-green' : 'badge-gray'}">${s.status}</span></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+  if (!res.ok) { if (res.status === 403) { section.hidden = true; return; } el.innerHTML = MGAEMS.errorHTML(res.error); MGAEMS.initIcons(); return; }
+  if (!res.data.length) { el.innerHTML = MGAEMS.emptyStateHTML('No learners registered', 'Registered learner records will appear here.', 'users'); MGAEMS.initIcons(); return; }
+  el.innerHTML = `<table><thead><tr><th>Admission no.</th><th>Learner</th><th>Class</th><th>Status</th></tr></thead><tbody>${res.data.map(student => `<tr><td><span class="mono">${safe(student.admission_no)}</span></td><td><strong>${safe(`${student.first_name} ${student.last_name}`)}</strong></td><td>${student.school_class ? safe(student.school_class.name) : '<span class="text-muted">Not assigned</span>'}</td><td><span class="badge ${student.status === 'active' ? 'badge-green' : 'badge-gray'}">${safe(student.status)}</span></td></tr>`).join('')}</tbody></table>`;
 }
 
-loadSchoolInfo();
-loadStats();
-loadAnnouncements();
-loadStudents();
+loadSchoolInfo(); loadStats(); loadAnnouncements(); loadAcademicSnapshot(); loadStudents();
 </script>
 </body>
 </html>
