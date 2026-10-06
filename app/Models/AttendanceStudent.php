@@ -18,6 +18,13 @@ class AttendanceStudent extends Model
         'attendance_date' => 'date',
     ];
 
+    // Keep the SQL DATE value date-only; Laravel's default date write format
+    // includes a time even for date casts (not normalized by SQLite).
+    public function setAttendanceDateAttribute($value): void
+    {
+        $this->attributes['attendance_date'] = $value instanceof \DateTimeInterface ? $value->format('Y-m-d') : $value;
+    }
+
     public function student()
     {
         return $this->belongsTo(Student::class);
