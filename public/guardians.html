@@ -4,12 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MGAEMS — Parents / Guardians</title>
+<script src="/assets/app.js"></script>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
   .guardian-learners { display: flex; flex-wrap: wrap; gap: 6px; min-width: 220px; }
   .guardian-learner { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid var(--gray-200); border-radius: 6px; background: var(--gray-50); }
-  .guardian-learner button, .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--gray-300); border-radius: 6px; background: white; color: var(--gray-700); cursor: pointer; }
+  .guardian-learner button, .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid var(--gray-300); border-radius: 6px; background:var(--surface); color: var(--gray-700); cursor: pointer; }
   .guardian-learner button { width: 22px; height: 22px; border: 0; color: var(--red); }
   .guardian-learner svg, .icon-button svg { width: 14px; height: 14px; }
   .guardian-actions { display: flex; gap: 6px; white-space: nowrap; }
@@ -28,7 +29,6 @@
 </style>
 </head>
 <body>
-<script src="/assets/app.js"></script>
 <script src="/assets/nav.js"></script>
 <script>
 const user = MGAEMS.requireAuth();

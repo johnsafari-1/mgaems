@@ -2,108 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MGAEMS — Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGAEMS ? Dashboard</title>
+<script src="/assets/app.js"></script>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-<script src="/assets/app.js"></script>
 <script src="/assets/nav.js"></script>
-<script>
-const user = MGAEMS.requireAuth();
-renderAppShell('/dashboard.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
-MGAEMS.initSidebar();
-
-document.getElementById('appMain').innerHTML = `
-  <div class="stat-cards" id="statsCards">${MGAEMS.loadingHTML()}</div>
-  <div class="section">
-    <div class="section-header"><h2>Recent Announcements</h2></div>
-    <div class="card" id="announcementsCard">${MGAEMS.loadingHTML()}</div>
-  </div>
-  <div class="section" id="studentsSection">
-    <div class="section-header">
-      <h2>Learners</h2>
-      <a href="/students.html" class="btn btn-secondary btn-sm"><i data-lucide="arrow-right"></i> View all</a>
-    </div>
-    <div class="card" id="studentsCard" style="padding:0">${MGAEMS.loadingHTML()}</div>
-  </div>
-`;
-lucide.createIcons();
-
-async function loadSchoolInfo() {
-  const res = await MGAEMS.get('/api/v1/settings/school');
-  if (res.ok) {
-    document.getElementById('schoolName').textContent = res.data.school_name;
-    document.getElementById('schoolMotto').textContent = res.data.motto || '';
-  }
-}
-
-async function loadStats() {
-  const el = document.getElementById('statsCards');
-  const res = await MGAEMS.get('/api/v1/reports/school-statistics');
-  if (!res.ok) { el.style.display = 'none'; return; } // role can't see stats — hide, don't error
-  const s = res.data;
-  el.innerHTML = `
-    <div class="card stat-card"><div class="num">${s.students.total}</div><div class="label">Learners</div></div>
-    <div class="card stat-card"><div class="num">${s.staff.total}</div><div class="label">Staff</div></div>
-    <div class="card stat-card"><div class="num">${s.active_sponsorships}</div><div class="label">Active Sponsorships</div></div>
-    <div class="card stat-card"><div class="num">${s.attendance_today.rate !== null ? s.attendance_today.rate + '%' : '—'}</div><div class="label">Attendance Today</div></div>
-  `;
-}
-
-async function loadAnnouncements() {
-  const el = document.getElementById('announcementsCard');
-  const res = await MGAEMS.get('/api/v1/announcements');
-  if (!res.ok) { el.innerHTML = MGAEMS.errorHTML(res.error); lucide.createIcons(); return; }
-  if (res.data.length === 0) {
-    el.innerHTML = MGAEMS.emptyStateHTML('No announcements yet', 'Published announcements will appear here.', 'megaphone');
-    lucide.createIcons();
-    return;
-  }
-  el.innerHTML = res.data.map((a, i) => `
-    <div style="padding:14px 0; ${i > 0 ? 'border-top:1px solid var(--gray-200)' : ''}">
-      <div class="flex gap-2"><strong>${a.title}</strong> <span class="badge badge-navy">${a.audience.replace(/_/g,' ')}</span></div>
-      <div class="text-muted" style="font-size:13px;margin-top:4px;">${a.body}</div>
-    </div>
-  `).join('');
-}
-
-async function loadStudents() {
-  const section = document.getElementById('studentsSection');
-  const el = document.getElementById('studentsCard');
-  const res = await MGAEMS.get('/api/v1/students?per_page=5');
-  if (!res.ok) {
-    if (res.status === 403) { section.style.display = 'none'; return; }
-    el.innerHTML = `<div style="padding:20px">${MGAEMS.errorHTML(res.error)}</div>`;
-    lucide.createIcons();
-    return;
-  }
-  if (res.data.length === 0) {
-    el.innerHTML = MGAEMS.emptyStateHTML('No learners registered yet', 'Register your first learner to see them here.', 'users');
-    lucide.createIcons();
-    return;
-  }
-  el.innerHTML = `
-    <table>
-      <thead><tr><th>Admission No</th><th>Name</th><th>Class</th><th>Status</th></tr></thead>
-      <tbody>
-        ${res.data.map(s => `
-          <tr>
-            <td>${s.admission_no}</td>
-            <td>${s.first_name} ${s.last_name}</td>
-            <td>${s.school_class ? s.school_class.name : '—'}</td>
-            <td><span class="badge ${s.status === 'active' ? 'badge-green' : 'badge-gray'}">${s.status}</span></td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
-
-loadSchoolInfo();
-loadStats();
-loadAnnouncements();
-loadStudents();
-</script>
+<script src="/assets/dashboard.js"></script>
 </body>
 </html>

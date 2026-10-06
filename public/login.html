@@ -2,43 +2,38 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MGAEMS — Sign In</title>
+<script src="/assets/app.js"></script>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="https://unpkg.com/lucide@latest"></script>
-<style>
-  body { display: flex; align-items: center; justify-content: center; height: 100vh; }
-  .login-card { width: 380px; text-align: center; }
-  .login-card img { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; margin-bottom: var(--space-3); }
-  .login-card .sub { color: var(--gray-500); font-size: var(--text-sm); margin-bottom: var(--space-6); }
-  .login-card .btn-primary { width: 100%; margin-top: var(--space-2); }
-  .login-card .theme-toggle { margin-top: var(--space-5); font-size: var(--text-xs); color: var(--gray-500); }
-</style>
 </head>
-<body>
+<body class="login-page">
   <div class="card login-card">
-    <img src="/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg" onerror="this.style.display='none'">
+    <img src="/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg" alt="" onerror="this.style.display='none'">
     <h1>Manna Goodnews Academy</h1>
     <div class="sub">Education Management System</div>
 
     <div id="alertBox"></div>
 
     <div class="field" style="text-align:left">
-      <label>Username</label>
+      <label for="username">Username</label>
       <input type="text" id="username" autocomplete="username">
     </div>
     <div class="field" style="text-align:left">
-      <label>Password</label>
+      <label for="password">Password</label>
       <input type="password" id="password" autocomplete="current-password">
     </div>
 
     <button class="btn btn-primary" id="loginBtn" onclick="login()">
       <i data-lucide="log-in"></i> <span id="loginBtnLabel">Sign In</span>
     </button>
+    <button type="button" class="btn btn-secondary icon-control" data-theme-toggle aria-label="Switch theme"></button>
   </div>
 
-<script src="/assets/app.js"></script>
 <script>
 lucide.createIcons();
+MGAEMS.initThemeControls();
 
 async function login() {
   const username = document.getElementById('username').value.trim();

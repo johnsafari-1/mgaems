@@ -1,5 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MGAEMS — Sponsorship Management</title><link rel="stylesheet" href="/assets/app.css"><script src="https://unpkg.com/lucide@latest"></script></head><body>
-<script src="/assets/app.js"></script><script src="/assets/nav.js"></script><script>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MGAEMS — Sponsorship Management</title><script src="/assets/app.js"></script>
+<link rel="stylesheet" href="/assets/app.css"><script src="https://unpkg.com/lucide@latest"></script></head><body>
+<script src="/assets/nav.js"></script><script>
 const user=MGAEMS.requireAuth();renderAppShell('/sponsorship.html','/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');MGAEMS.initSidebar();
 const canWrite=['system_admin','sponsor_coordinator'].includes(user.role),state={tab:'sponsors',sponsors:[],items:[],learners:[]};
 const esc=v=>String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])),label=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()),date=v=>v?new Date(v+'T00:00:00').toLocaleDateString():'—';
