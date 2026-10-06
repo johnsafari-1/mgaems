@@ -41,10 +41,11 @@
 </head>
 <body>
 <script src="/assets/nav.js"></script>
+<script src="/assets/report-history.js"></script>
 <script>
 const user = MGAEMS.requireAuth();
 const REPORT_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher'];
-if (user && !REPORT_ROLES.includes(user.role)) window.location.href = '/dashboard.html';
+if (user && !REPORT_ROLES.includes(user.role)) window.location.href = MGAEMS.landingPage(user);
 
 if (user && REPORT_ROLES.includes(user.role)) {
   renderAppShell('/reports.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
@@ -372,18 +373,19 @@ if (user && REPORT_ROLES.includes(user.role)) {
       <div class="report-result-meta">
         <h2>${esc(card.student ? `${card.student.first_name} ${card.student.last_name}` : 'Report Card')}</h2>
         <small>${esc(card.student?.admission_no || '')}${card.term?.name ? ` · ${esc(card.term.name)}` : ''}</small>
-        <span><span class="badge ${card.file_path ? 'badge-green' : 'badge-amber'}">${card.file_path ? 'Available' : 'Record only'}</span> ${card.generated_at ? `Generated ${esc(generated)}` : 'Generation date unavailable'}</span>
+        <span><span class="badge ${card.download_available ? 'badge-green' : 'badge-amber'}">${card.download_available ? 'Available' : 'Record only'}</span> ${card.generated_at ? `Generated ${esc(generated)}` : 'Generation date unavailable'} · Revision ${esc(card.revision_number)}</span>
         ${card.overall_remark ? `<p class="report-remark">${esc(card.overall_remark)}</p>` : ''}
       </div>
-      ${card.file_path ? '<button class="btn btn-primary" type="button" id="downloadReportCard"><i data-lucide="download"></i> Download PDF</button>' : '<span class="text-muted">No PDF file is available.</span>'}
+      <div class="form-actions"><button type="button" class="btn btn-secondary" id="retainedReportHistory">Retained revisions</button>${card.download_available ? '<button class="btn btn-primary" type="button" id="downloadReportCard"><i data-lucide="download"></i> Download PDF</button>' : '<span class="text-muted">No PDF file is available.</span>'}</div>
     </div>`;
     document.getElementById('downloadReportCard')?.addEventListener('click', downloadReportCard);
+    document.getElementById('retainedReportHistory').addEventListener('click', () => MGAEMS.openReportHistory(card.id, document.getElementById('retainedReportHistory')));
     MGAEMS.initIcons();
   }
 
   async function downloadReportCard() {
     const card = state.selectedCard;
-    if (!card?.id || !card.file_path) return;
+    if (!card?.id || !card.download_available) return;
     const student = card.student;
     const filename = `report-card-${student?.admission_no || card.student_id}.pdf`;
     const button = document.getElementById('downloadReportCard');

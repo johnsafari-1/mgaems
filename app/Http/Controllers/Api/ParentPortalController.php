@@ -55,7 +55,8 @@ class ParentPortalController extends Controller
         $progress = Assessment::where('student_id', $student->id)
             ->with('subject:id,name', 'term:id,name')->orderByDesc('recorded_at')->get()
             ->map(fn (Assessment $assessment) => [
-                'subject' => $assessment->subject?->name, 'term' => $assessment->term?->name,
+                'subject' => $assessment->context_snapshot['subject']['name'] ?? $assessment->subject?->name,
+                'term' => $assessment->context_snapshot['term']['name'] ?? $assessment->term?->name,
                 'assessment_type' => $assessment->assessment_type, 'score' => $assessment->score,
                 'competency_rating' => $assessment->competency_rating, 'remarks' => $assessment->remarks,
                 'recorded_date' => $assessment->recorded_at?->toDateString(),
@@ -92,9 +93,10 @@ class ParentPortalController extends Controller
 
     private function reportCardData(ReportCard $card): array
     {
-        return ['id' => $card->id, 'term' => $card->term ? ['id' => $card->term->id, 'name' => $card->term->name] : null,
+        $snapshot = $card->publishedSnapshot();
+        return ['id' => $card->id, 'term' => $card->term ? ['id' => $card->term->id, 'name' => $snapshot['term']['name'] ?? $card->term->name] : null,
             'overall_remark' => $card->overall_remark, 'generated_date' => $card->generated_at?->toDateString(),
-            'download_available' => (bool) $card->file_path];
+            'download_available' => $card->file_path && Storage::disk('private')->exists($card->file_path)];
     }
 
     private function denyUnlessOwnChild(Student $student, AuditLogger $auditLogger)
@@ -106,10 +108,7 @@ class ParentPortalController extends Controller
 
     private function download(ReportCard $card)
     {
-        if (! $card->file_path || ! Storage::disk('private')->exists($card->file_path)) {
-            return response()->json(['error' => ['code' => 'FILE_NOT_FOUND', 'message' => 'The report card file could not be found.']], 404);
-        }
-        return Storage::disk('private')->download($card->file_path, "report-card-{$card->student_id}-{$card->term_id}.pdf");
+        return app(\App\Services\ReportArtifacts::class)->download($card);
     }
 
     private function forbidden()

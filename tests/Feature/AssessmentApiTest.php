@@ -75,7 +75,8 @@ class AssessmentApiTest extends TestCase
         $this->getJson('/api/v1/assessments/context')->assertOk()
             ->assertJsonPath('data.scope', 'assigned')
             ->assertJsonCount(1, 'data.assignments')
-            ->assertJsonPath('data.assignments.0.staff_id', $this->teacherStaff->id);
+            ->assertJsonPath('data.assignments.0.class_id', $this->context['class_id'])
+            ->assertJsonMissingPath('data.assignments.0.staff_id');
     }
 
     public function test_assigned_teacher_can_create_and_update_without_a_duplicate(): void
@@ -84,7 +85,7 @@ class AssessmentApiTest extends TestCase
         $payload = $this->context + ['student_id' => $this->student->id, 'score' => 64];
 
         $this->postJson('/api/v1/assessments', $payload)->assertCreated();
-        $this->postJson('/api/v1/assessments', $payload + ['score' => 88])->assertOk()
+        $this->postJson('/api/v1/assessments', array_replace($payload, ['score' => 88]))->assertOk()
             ->assertJsonPath('data.score', '88.00');
 
         $this->assertDatabaseCount('assessments', 1);

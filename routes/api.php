@@ -160,12 +160,15 @@ Route::prefix('v1')->group(function () {
             Route::get('/assessments/learners', [AssessmentController::class, 'learners']);
             Route::post('/assessments', [AssessmentController::class, 'store']);
             Route::get('/assessments', [AssessmentController::class, 'index']);
-            Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
-            Route::get('/report-cards/{reportCard}/download', [ReportCardController::class, 'download']);
         });
 
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/assessments/{assessment}/revisions', [AssessmentController::class, 'revisions']);
             Route::get('/report-cards', [ReportCardController::class, 'index']);
+            Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
+            Route::get('/report-cards/{reportCard}/download', [ReportCardController::class, 'download']);
+            Route::get('/report-cards/{reportCard}/revisions', [ReportCardController::class, 'revisions']);
+            Route::get('/report-cards/{reportCard}/revisions/{revision}/download', [ReportCardController::class, 'downloadRevision']);
             Route::post('/students/{student}/report-cards/generate', [ReportCardController::class, 'generate']);
         });
 

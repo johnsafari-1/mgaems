@@ -80,8 +80,8 @@ class SponsorPortalController extends Controller
         $resolved = $this->resolveLearner($sponsorship, $student, $logger);
         if (! $resolved instanceof Student) return $resolved;
         $cards = ReportCard::where('student_id', $resolved->id)->with('term:id,name')->orderByDesc('generated_at')->get()->map(fn ($c) => [
-            'id' => $c->id, 'term' => $c->term ? ['id' => $c->term->id, 'name' => $c->term->name] : null,
-            'overall_remark' => $c->overall_remark, 'generated_date' => $c->generated_at?->toDateString(), 'download_available' => (bool) $c->file_path,
+            'id' => $c->id, 'term' => $c->term ? ['id' => $c->term->id, 'name' => $c->publishedSnapshot()['term']['name'] ?? $c->term->name] : null,
+            'overall_remark' => $c->overall_remark, 'generated_date' => $c->generated_at?->toDateString(), 'download_available' => $c->file_path && Storage::disk('private')->exists($c->file_path),
         ]);
         return response()->json(['data' => $cards]);
     }
@@ -92,7 +92,8 @@ class SponsorPortalController extends Controller
         if (! $resolved instanceof Student) return $resolved;
         $items = Assessment::where('student_id', $resolved->id)->whereNotNull('remarks')
             ->with('subject:id,name', 'term:id,name')->orderByDesc('recorded_at')->get()->map(fn ($a) => [
-                'subject' => $a->subject?->name, 'term' => $a->term?->name, 'assessment_type' => $a->assessment_type,
+                'subject' => $a->context_snapshot['subject']['name'] ?? $a->subject?->name,
+                'term' => $a->context_snapshot['term']['name'] ?? $a->term?->name, 'assessment_type' => $a->assessment_type,
                 'score' => $a->score, 'competency_rating' => $a->competency_rating, 'remarks' => $a->remarks,
                 'recorded_date' => $a->recorded_at?->toDateString(),
             ]);
@@ -104,9 +105,7 @@ class SponsorPortalController extends Controller
         $resolved = $this->resolveLearner($sponsorship, $student, $logger);
         if (! $resolved instanceof Student) return $resolved;
         if ($card->student_id !== $resolved->id) return $this->forbidden('This report card is not part of the sponsorship.');
-        if (! $card->file_path || ! Storage::disk('private')->exists($card->file_path))
-            return response()->json(['error' => ['code' => 'FILE_NOT_FOUND', 'message' => 'The report card file could not be found.']], 404);
-        return Storage::disk('private')->download($card->file_path, "report-card-{$card->student_id}-{$card->term_id}.pdf");
+        return app(\App\Services\ReportArtifacts::class)->download($card);
     }
 
     private function resolveLearner(Sponsorship $sponsorship, ?Student $student, AuditLogger $logger)

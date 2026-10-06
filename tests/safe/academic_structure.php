@@ -1,6 +1,6 @@
 <?php
 
-// Guarded standalone checks: no dotenv, migrations, PHPUnit configuration,
+// Guarded standalone checks: no dotenv, development migrations, PHPUnit configuration,
 // development connection, or persistent fixtures are used.
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -96,11 +96,15 @@ Schema::create('assessments', function (Blueprint $table) {
 Schema::create('report_cards', function (Blueprint $table) {
     $table->id(); $table->foreignId('student_id')->constrained(); $table->foreignId('term_id')->constrained()->restrictOnDelete();
     $table->string('file_path')->nullable(); $table->string('overall_remark')->nullable(); $table->timestamp('generated_at')->nullable();
+    $table->foreignId('generated_by')->nullable()->constrained('users')->nullOnDelete(); $table->unique(['student_id', 'term_id'], 'uq_report_card');
 });
 Schema::create('audit_logs', function (Blueprint $table) {
     $table->id(); $table->foreignId('user_id')->nullable()->constrained(); $table->string('action'); $table->string('entity_type')->nullable();
     $table->unsignedBigInteger('entity_id')->nullable(); $table->text('details')->nullable(); $table->string('ip_address')->nullable(); $table->timestamp('created_at');
 });
+
+// Exercise the additive history migration only against these explicit memory fixtures.
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_06_000035_add_assessment_and_report_history.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {
@@ -252,7 +256,8 @@ check('existing assessment authorization and performance semantics remain intact
     $request = requestFor($teacher, ['class_id' => $class->id, 'subject_id' => $subject->id, 'term_id' => $term->id, 'assessment_type' => 'continuous', 'student_id' => $child->id, 'score' => 80, 'competency_rating' => 'Meeting Expectation']);
     ensure($controller->store($request, new AuditLogger($request))->getStatusCode() === 201, 'Existing score and performance rating');
     $other = area(); $bad = requestFor($teacher, array_replace($request->all(), ['subject_id' => $other->id]));
-    ensure($controller->store($bad, new AuditLogger($bad))->getStatusCode() === 403, 'No unassigned assessment rights');
+    try { $controller->store($bad, new AuditLogger($bad)); throw new RuntimeException('Expected unassigned assessment denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'No unassigned assessment rights'); }
 });
 
 check('report cards alone protect period dates and deletion', function () use ($calendar, $leader) {

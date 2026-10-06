@@ -83,12 +83,13 @@ class AcademicIntegrity
 
     public function hasAssessments(int $classId, int $subjectId, ?int $termId = null): bool
     {
-        // Assessments have no stored class snapshot. Include recorded placements,
-        // rather than looking only at the learner's class after later promotions.
+        // Prefer captured assessment classes. For unresolved legacy rows include
+        // recorded placements, rather than relying only on current learner class.
         return Assessment::where('subject_id', $subjectId)
             ->when($termId, fn ($query) => $query->where('term_id', $termId))
-            ->whereHas('student', fn ($query) => $query->where('class_id', $classId)
-                ->orWhereHas('promotionsTransfers', fn ($history) => $history->where('from_class_id', $classId)->orWhere('to_class_id', $classId)))
+            ->where(fn ($query) => $query->where('class_id', $classId)
+                ->orWhere(fn ($legacy) => $legacy->whereNull('class_id')->whereHas('student', fn ($student) => $student->where('class_id', $classId)
+                    ->orWhereHas('promotionsTransfers', fn ($history) => $history->where('from_class_id', $classId)->orWhere('to_class_id', $classId)))))
             ->exists();
     }
 
