@@ -434,6 +434,14 @@ tr:hover td { background: var(--gray-50); }
 .login-card .field { text-align: left; }
 .login-card .btn-primary { width: 100%; margin-top: var(--space-2); }
 .login-card [data-theme-toggle] { margin-top: var(--space-5); }
+.form-error-list { color: var(--red); padding-left: var(--space-5); font-size: var(--text-sm); }
+[aria-invalid="true"] { border-color: var(--red) !important; }
+.text-meta { display: block; font-size: var(--text-xs); color: var(--gray-500); }
+.selection-summary { padding: var(--space-3); margin: var(--space-3) 0; background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.selection-summary .actions { flex-wrap: wrap; }
+.form-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
+.record-list .record-item input[type="checkbox"] { width: auto; flex-shrink: 0; }
+.record-list label.record-item { align-items: flex-start; }
 
 @media (max-width: 1100px) {
   .overview-grid { grid-template-columns: 1fr; }

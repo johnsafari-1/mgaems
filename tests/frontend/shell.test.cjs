@@ -156,6 +156,14 @@ test('API 401 preserves logout, credential cleanup, and login redirect', async (
   assert.equal(vm.runInContext('window.location.href', h.context), '/login.html');
 });
 
+test('API preserves Laravel field validation errors for domain forms', async () => {
+  const h = harness();
+  h.context.fetch = async () => ({ ok: false, status: 422, json: async () => ({ message: 'Validation failed.', errors: { admission_date: ['Admission cannot precede birth.'] } }) });
+  const result = await h.app.post('/api/v1/students', {});
+  assert.equal(result.status, 422);
+  assert.equal(result.fields.admission_date[0], 'Admission cannot precede birth.');
+});
+
 test('dashboard escapes payloads and keeps loaded, empty, denied, error, and retry states distinct', async () => {
   const h = harness();
   let attempts = 0;

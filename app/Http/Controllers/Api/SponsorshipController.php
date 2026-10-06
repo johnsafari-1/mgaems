@@ -23,7 +23,11 @@ class SponsorshipController extends Controller
 
     public function index(Request $request)
     {
-        $items = Sponsorship::with(self::RELATIONS)
+        $filter = $request->validate(['student_id' => ['sometimes', 'integer', 'exists:students,id']]);
+        $items = Sponsorship::with(isset($filter['student_id']) ? ['sponsor:id,name'] : self::RELATIONS)
+            ->when($filter['student_id'] ?? null, fn ($query, $id) => $query->where(fn ($query) => $query
+                ->where(fn ($query) => $query->where('sponsorship_type', 'individual')->where('student_id', $id))
+                ->orWhere(fn ($query) => $query->where('sponsorship_type', 'group')->whereHas('students', fn ($query) => $query->where('students.id', $id)))))
             ->when($request->query('sponsor_id'), fn ($q, $v) => $q->where('sponsor_id', $v))
             ->when($request->query('sponsorship_type'), fn ($q, $v) => $q->where('sponsorship_type', $v))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
@@ -35,6 +39,17 @@ class SponsorshipController extends Controller
                         ->orWhereHas('students', fn ($q) => $q->where('first_name', 'like', "%{$search}%")->orWhere('last_name', 'like', "%{$search}%")->orWhere('admission_no', 'like', "%{$search}%"));
                 });
             })->orderByDesc('start_date')->get();
+
+        if (isset($filter['student_id'])) {
+            return response()->json(['data' => $items->map(fn ($item) => [
+                'id' => $item->id,
+                'sponsor' => $item->sponsor ? ['id' => $item->sponsor->id, 'name' => $item->sponsor->name] : null,
+                'sponsorship_type' => $item->sponsorship_type,
+                'status' => $item->status,
+                'start_date' => $item->start_date?->toDateString(),
+                'end_date' => $item->end_date?->toDateString(),
+            ])]);
+        }
 
         return response()->json(['data' => $items]);
     }
