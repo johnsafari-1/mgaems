@@ -88,9 +88,11 @@ Route::prefix('v1')->group(function () {
         // Read: broad (staff, teachers, parents, students per User Role Matrix §4).
         Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
         Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
+        Route::get('/class-subjects', [AcademicStructureController::class, 'indexClassSubjects']);
 
         // Write: system_admin, head_teacher (Full); deputy_head_teacher (Manage).
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/academic/staff-options', [AcademicStructureController::class, 'staffOptions']);
             Route::post('/classes', [AcademicStructureController::class, 'storeClass']);
             Route::patch('/classes/{class}', [AcademicStructureController::class, 'updateClass']);
             Route::delete('/classes/{class}', [AcademicStructureController::class, 'destroyClass']);
