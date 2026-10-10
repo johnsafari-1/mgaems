@@ -280,8 +280,13 @@ check('Parent Portal retains ownership checks and unlink revokes only the select
 });
 
 check('backend role middleware denies teacher guardian management and parent staff access', function () use ($teacher, $leader) {
+    Schema::create('staff', function (Blueprint $table) {
+        $table->id(); $table->foreignId('user_id')->unique()->constrained('users'); $table->string('status');
+    });
     $middleware = new EnsureRole(); $next = fn () => response()->json(['data' => []]);
     ensure($middleware->handle(requestFor($teacher), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 403, 'Teacher contact denial');
+    ensure($middleware->handle(requestFor($leader), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 403, 'Unlinked leadership denied');
+    DB::table('staff')->insert(['user_id' => $leader->id, 'status' => 'active']);
     ensure($middleware->handle(requestFor($leader), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 200, 'Leadership permission');
     ensure($middleware->handle(requestFor(userFor('parent_guardian')), $next, 'system_admin', 'head_teacher', 'teacher')->getStatusCode() === 403, 'Parent staff denial');
 });

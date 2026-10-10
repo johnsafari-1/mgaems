@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -79,45 +80,61 @@ class UserController extends Controller
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'locked'])],
         ]);
 
-        // Guard rail: never allow the last active System Administrator to be
-        // demoted/deactivated, per UC-AUTH-04's "prevent lockout" rule.
-        if ($this->wouldRemoveLastAdmin($user, $validated)) {
-            return response()->json([
-                'error' => [
-                    'code' => 'LAST_ADMIN_PROTECTED',
-                    'message' => 'Cannot change the role/status of the last active System Administrator.',
-                ],
-            ], 409);
-        }
+        return DB::transaction(function () use ($user, $validated, $auditLogger) {
+            // Serialize administrator changes, preserving the last-admin guard
+            // even when two administrators are changed concurrently.
+            Role::where('name', Role::SYSTEM_ADMIN)->lockForUpdate()->firstOrFail();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
 
-        if (isset($validated['role'])) {
-            $validated['role_id'] = Role::where('name', $validated['role'])->firstOrFail()->id;
-            unset($validated['role']);
-        }
+            // Guard rail: never allow the last active System Administrator to be
+            // demoted/deactivated, per UC-AUTH-04's "prevent lockout" rule.
+            if ($this->wouldRemoveLastAdmin($user, $validated)) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'LAST_ADMIN_PROTECTED',
+                        'message' => 'Cannot change the role/status of the last active System Administrator.',
+                    ],
+                ], 409);
+            }
 
-        $user->update($validated);
-        $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
+            if (isset($validated['role'])) {
+                $validated['role_id'] = Role::where('name', $validated['role'])->firstOrFail()->id;
+                unset($validated['role']);
+            }
 
-        return response()->json(['data' => $this->transform($user->fresh('role'))]);
+            $user->update($validated);
+            if ($user->status !== 'active') {
+                $user->tokens()->delete();
+            }
+            $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
+
+            return response()->json(['data' => $this->transform($user->fresh('role'))]);
+        });
     }
 
     public function destroy(User $user, AuditLogger $auditLogger)
     {
-        if ($this->wouldRemoveLastAdmin($user, ['status' => 'inactive'])) {
-            return response()->json([
-                'error' => [
-                    'code' => 'LAST_ADMIN_PROTECTED',
-                    'message' => 'Cannot deactivate the last active System Administrator.',
-                ],
-            ], 409);
-        }
+        return DB::transaction(function () use ($user, $auditLogger) {
+            Role::where('name', Role::SYSTEM_ADMIN)->lockForUpdate()->firstOrFail();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
 
-        // Soft deactivation, not a hard delete — preserves audit/history integrity
-        // per Database Schema §4 (Referential Integrity Notes).
-        $user->update(['status' => 'inactive']);
-        $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
+            if ($this->wouldRemoveLastAdmin($user, ['status' => 'inactive'])) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'LAST_ADMIN_PROTECTED',
+                        'message' => 'Cannot deactivate the last active System Administrator.',
+                    ],
+                ], 409);
+            }
 
-        return response()->json(['data' => ['message' => 'User deactivated.']]);
+            // Soft deactivation, not a hard delete — preserves audit/history integrity
+            // per Database Schema §4 (Referential Integrity Notes).
+            $user->update(['status' => 'inactive']);
+            $user->tokens()->delete();
+            $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
+
+            return response()->json(['data' => ['message' => 'User deactivated.']]);
+        });
     }
 
     private function wouldRemoveLastAdmin(User $user, array $changes): bool

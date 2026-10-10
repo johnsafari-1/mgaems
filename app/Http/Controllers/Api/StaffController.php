@@ -95,7 +95,7 @@ class StaffController extends Controller
         ]);
 
         $staff->update($validated);
-        $auditLogger->log('UPDATE_STAFF', 'Staff', $staff->id, $validated);
+        $auditLogger->log('UPDATE_STAFF', 'Staff', $staff->id, ['changes' => array_keys($validated)]);
 
         return response()->json(['data' => $staff->fresh(['department'])]);
     }

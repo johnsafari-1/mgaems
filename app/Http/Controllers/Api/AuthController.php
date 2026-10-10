@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * Implements docs/MGAEMS_APIDesign.docx §2 (Authentication & User Management)
@@ -49,37 +52,51 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->status !== 'active') {
-            $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
+        // Serialize token issuance with account deactivation. A login that
+        // started before deactivation must not issue a token afterwards.
+        return DB::transaction(function () use ($user, $throttleKey, $auditLogger) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            if ($user->status !== 'active') {
+                $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
+
+                return response()->json([
+                    'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
+                ], 403);
+            }
+
+            RateLimiter::clear($throttleKey);
+
+            $token = $user->createToken('mgaems-web')->plainTextToken;
+            $user->forceFill(['last_login_at' => now()])->save();
+            $auditLogger->log('LOGIN_SUCCESS', 'User', $user->id);
 
             return response()->json([
-                'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
-            ], 403);
-        }
-
-        RateLimiter::clear($throttleKey);
-
-        $token = $user->createToken('mgaems-web')->plainTextToken;
-        $user->forceFill(['last_login_at' => now()])->save();
-        $auditLogger->log('LOGIN_SUCCESS', 'User', $user->id);
-
-        return response()->json([
-            'data' => [
-                'token' => $token,
-                'user' => [
-                    'id' => $user->id,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'role' => $user->role?->name,
+                'data' => [
+                    'token' => $token,
+                    'user' => [
+                        'id' => $user->id,
+                        'username' => $user->username,
+                        'email' => $user->email,
+                        'role' => $user->role?->name,
+                    ],
                 ],
-            ],
-        ]);
+            ]);
+        });
     }
 
     public function logout(Request $request, AuditLogger $auditLogger)
     {
         $auditLogger->log('LOGOUT', 'User', $request->user()->id);
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            // Token logout keeps other devices signed in, as before.
+            $token->delete();
+        } elseif ($request->hasSession()) {
+            Auth::guard('web')->logoutCurrentDevice();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['data' => ['message' => 'Logged out.']]);
     }

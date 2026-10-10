@@ -319,6 +319,8 @@ check('significant writes use existing audit records and teachers remain non-adm
         && DB::table('audit_logs')->where('action', 'CREATE_TIMETABLE_ENTRY')->exists(), 'Existing audit system used');
     $middleware = new EnsureRole(); $next = fn () => response()->json(['data' => []]);
     ensure($middleware->handle(requestFor($teacher), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 403, 'Teacher administration denied');
+    ensure($middleware->handle(requestFor($leader), $next, 'system_admin', 'head_teacher')->getStatusCode() === 403, 'Unlinked leadership denied');
+    staff($leader);
     ensure($middleware->handle(requestFor($leader), $next, 'system_admin', 'head_teacher')->getStatusCode() === 200, 'Existing calendar authority');
 });
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Role;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,7 +27,16 @@ class EnsureRole
             ], 401);
         }
 
-        if (! in_array($user->role?->name, $roles, true)) {
+        if ($user->status !== 'active') {
+            return response()->json([
+                'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
+            ], 403);
+        }
+
+        $role = $user->role?->name;
+        if (! in_array($role, $roles, true)
+            || (in_array($role, Role::STAFF_ROLES, true)
+                && ! $user->staff()->where('status', 'active')->exists())) {
             return response()->json([
                 'error' => ['code' => 'FORBIDDEN', 'message' => 'You do not have permission to access this resource.'],
             ], 403);

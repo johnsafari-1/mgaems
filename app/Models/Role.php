@@ -20,6 +20,15 @@ class Role extends Model
     public const SPONSOR = 'sponsor';
     public const STUDENT = 'student';
 
+    // These permissions derive from a current employment relationship.
+    // System Administrator and portal roles can legitimately be non-Staff.
+    public const STAFF_ROLES = [
+        self::HEAD_TEACHER,
+        self::DEPUTY_HEAD_TEACHER,
+        self::SPONSOR_COORDINATOR,
+        self::TEACHER,
+    ];
+
     public function users()
     {
         return $this->hasMany(User::class);
