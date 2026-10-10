@@ -1,6 +1,6 @@
 <?php
 
-// Standalone HTTP regressions: no dotenv, PHPUnit config, repository migrations,
+// Standalone HTTP regressions: no dotenv, PHPUnit config, general migrations,
 // persistent database or file fixtures. Refuse caches that can override isolation.
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 $root = dirname(__DIR__, 2);
@@ -63,6 +63,8 @@ Schema::create('users', function (Blueprint $table) {
     $table->id(); $table->string('username')->unique(); $table->string('email')->unique(); $table->string('password_hash');
     $table->foreignId('role_id')->constrained(); $table->string('status'); $table->timestamp('last_login_at')->nullable(); $table->timestamps();
 });
+// The targeted additive session migration is exercised on memory fixtures only.
+(require $root.'/database/migrations/2026_10_10_000036_add_user_session_version.php')->up();
 Schema::create('personal_access_tokens', function (Blueprint $table) {
     $table->id(); $table->morphs('tokenable'); $table->string('name'); $table->string('token', 64)->unique();
     $table->text('abilities')->nullable(); $table->timestamp('last_used_at')->nullable(); $table->timestamp('expires_at')->nullable(); $table->timestamps();
@@ -97,7 +99,7 @@ Schema::create('students', function (Blueprint $table) {
     $table->id(); $table->string('admission_no'); $table->string('first_name'); $table->string('last_name');
     $table->foreignId('class_id'); $table->string('status');
 });
-Schema::create('guardians', function (Blueprint $table) { $table->id(); $table->foreignId('student_id'); $table->foreignId('user_id'); });
+Schema::create('guardians', function (Blueprint $table) { $table->id(); $table->foreignId('student_id'); $table->foreignId('user_id')->nullable(); });
 Schema::create('sponsors', function (Blueprint $table) { $table->id(); $table->foreignId('user_id'); });
 Schema::create('sponsorships', function (Blueprint $table) {
     $table->id(); $table->foreignId('sponsor_id'); $table->foreignId('student_id')->nullable(); $table->string('program_name')->nullable();

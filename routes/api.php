@@ -51,6 +51,40 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
+        // Operational health content explicitly excludes System Administrator.
+        // Scalar IDs avoid pre-authorization model binding/existence disclosure.
+        Route::prefix('health')->middleware('health.access:manage')->group(function () {
+            Route::get('/profiles', [\App\Http\Controllers\Api\HealthProfileController::class, 'index']);
+            Route::post('/profiles', [\App\Http\Controllers\Api\HealthProfileController::class, 'store']);
+            Route::get('/profiles/{profile}', [\App\Http\Controllers\Api\HealthProfileController::class, 'show']);
+            Route::patch('/profiles/{profile}', [\App\Http\Controllers\Api\HealthProfileController::class, 'update']);
+            Route::post('/profiles/{profile}/review', [\App\Http\Controllers\Api\HealthProfileController::class, 'review']);
+            Route::get('/profiles/{profile}/revisions', [\App\Http\Controllers\Api\HealthProfileController::class, 'revisions']);
+            Route::get('/profiles/{profile}/alerts', [\App\Http\Controllers\Api\HealthAlertController::class, 'index']);
+            Route::post('/profiles/{profile}/alerts', [\App\Http\Controllers\Api\HealthAlertController::class, 'store']);
+            Route::get('/profiles/{profile}/alerts/{alert}', [\App\Http\Controllers\Api\HealthAlertController::class, 'show']);
+            Route::patch('/profiles/{profile}/alerts/{alert}', [\App\Http\Controllers\Api\HealthAlertController::class, 'update']);
+            Route::post('/profiles/{profile}/alerts/{alert}/verify', [\App\Http\Controllers\Api\HealthAlertController::class, 'verify']);
+            Route::get('/profiles/{profile}/alerts/{alert}/revisions', [\App\Http\Controllers\Api\HealthAlertController::class, 'revisions']);
+            Route::get('/incidents', [\App\Http\Controllers\Api\HealthIncidentController::class, 'index']);
+            Route::post('/incidents', [\App\Http\Controllers\Api\HealthIncidentController::class, 'store']);
+            Route::get('/incidents/{incident}', [\App\Http\Controllers\Api\HealthIncidentController::class, 'show']);
+            Route::patch('/incidents/{incident}', [\App\Http\Controllers\Api\HealthIncidentController::class, 'update']);
+            Route::get('/incidents/{incident}/revisions', [\App\Http\Controllers\Api\HealthIncidentController::class, 'revisions']);
+            foreach (['actions' => \App\Http\Controllers\Api\HealthActionController::class,
+                'notifications' => \App\Http\Controllers\Api\HealthNotificationController::class,
+                'referrals' => \App\Http\Controllers\Api\HealthReferralController::class] as $path => $controller) {
+                Route::get('/incidents/{incident}/'.$path, [$controller, 'index']);
+                Route::post('/incidents/{incident}/'.$path, [$controller, 'store']);
+                Route::get('/incidents/{incident}/'.$path.'/{entry}', [$controller, 'show']);
+                Route::patch('/incidents/{incident}/'.$path.'/{entry}', [$controller, 'update']);
+                Route::get('/incidents/{incident}/'.$path.'/{entry}/revisions', [$controller, 'revisions']);
+            }
+            Route::get('/access-log', [\App\Http\Controllers\Api\HealthAccessLogController::class, 'index']);
+        });
+        Route::get('/health/safety/learners/{student}', [\App\Http\Controllers\Api\HealthSafetyController::class, 'show'])
+            ->middleware('health.access:safety');
+
         // --- User Management (SRS FR-ADM-03, API Design §2) ---
         // Gated server-side by role, per FR-AUTH-04 — not just hidden in the UI.
         Route::middleware('role:system_admin')->group(function () {

@@ -47,5 +47,6 @@ class Kernel extends HttpKernel
 
         // Ours — enforces RBAC per SRS FR-AUTH-04. See app/Http/Middleware/EnsureRole.php.
         'role' => \App\Http\Middleware\EnsureRole::class,
+        'health.access' => \App\Http\Middleware\EnsureHealthAccess::class,
     ];
 }

@@ -102,6 +102,11 @@ class UserController extends Controller
                 unset($validated['role']);
             }
 
+            // Health sessions cannot regain access after reactivation or a role grant.
+            if (($validated['status'] ?? $user->status) !== 'active'
+                || (isset($validated['role_id']) && (int) $validated['role_id'] !== (int) $user->role_id)) {
+                $user->session_version = (int) $user->session_version + 1;
+            }
             $user->update($validated);
             if ($user->status !== 'active') {
                 $user->tokens()->delete();
@@ -129,6 +134,7 @@ class UserController extends Controller
 
             // Soft deactivation, not a hard delete — preserves audit/history integrity
             // per Database Schema §4 (Referential Integrity Notes).
+            $user->session_version = (int) $user->session_version + 1;
             $user->update(['status' => 'inactive']);
             $user->tokens()->delete();
             $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
