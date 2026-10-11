@@ -8,6 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Health instants use UTC DATETIME(6), without MySQL session-timezone conversion or the TIMESTAMP 2038 limit.
         // New records only. Legacy student_medical_info is deliberately untouched.
         Schema::create('learner_health_profiles', function (Blueprint $table) {
             $table->id();
@@ -19,11 +20,12 @@ return new class extends Migration
             $table->string('source', 40);
             $table->string('source_reference', 200)->nullable();
             $table->foreignId('recorded_by')->constrained('users')->restrictOnDelete();
-            $table->timestamp('recorded_at');
+            $table->dateTime('recorded_at', 6);
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->restrictOnDelete();
-            $table->timestamp('reviewed_at')->nullable();
+            $table->dateTime('reviewed_at', 6)->nullable();
             $table->unsignedInteger('revision_number')->default(0);
-            $table->timestamps();
+            $table->dateTime('created_at', 6)->nullable();
+            $table->dateTime('updated_at', 6)->nullable();
         });
         Schema::create('health_safety_alerts', function (Blueprint $table) {
             $table->id();
@@ -37,19 +39,20 @@ return new class extends Migration
             $table->date('starts_on');
             $table->date('ends_on')->nullable();
             $table->foreignId('verified_by')->nullable()->constrained('users')->restrictOnDelete();
-            $table->timestamp('verified_at')->nullable();
+            $table->dateTime('verified_at', 6)->nullable();
             $table->string('verification_basis', 200)->nullable();
             $table->uuid('request_id')->unique();
             $table->char('request_hash', 64);
             $table->unsignedInteger('revision_number')->default(0);
-            $table->timestamps();
+            $table->dateTime('created_at', 6)->nullable();
+            $table->dateTime('updated_at', 6)->nullable();
             $table->index(['profile_id', 'is_active', 'starts_on'], 'idx_health_alert_active');
         });
         Schema::create('school_health_incidents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('student_id')->constrained('students')->restrictOnDelete();
-            $table->timestamp('occurred_at');
-            $table->timestamp('recorded_at');
+            $table->dateTime('occurred_at', 6);
+            $table->dateTime('recorded_at', 6);
             $table->string('location', 120);
             $table->string('category', 30);
             $table->text('observations');
@@ -63,7 +66,8 @@ return new class extends Migration
             $table->uuid('request_id')->unique();
             $table->char('request_hash', 64);
             $table->unsignedInteger('revision_number')->default(0);
-            $table->timestamps();
+            $table->dateTime('created_at', 6)->nullable();
+            $table->dateTime('updated_at', 6)->nullable();
             $table->index(['student_id', 'occurred_at'], 'idx_health_incident_learner');
         });
         foreach (['health_incident_actions', 'health_guardian_notifications', 'health_external_referrals'] as $name) {
@@ -71,13 +75,13 @@ return new class extends Migration
                 $table->id();
                 $table->foreignId('incident_id')->constrained('school_health_incidents')->restrictOnDelete();
                 $table->foreignId('actor_id')->constrained('users')->restrictOnDelete();
-                $table->timestamp('recorded_at');
+                $table->dateTime('recorded_at', 6);
                 $table->uuid('request_id')->unique();
                 $table->char('request_hash', 64);
                 $table->unsignedInteger('revision_number')->default(0);
                 if ($name === 'health_incident_actions') {
                     $table->string('action_type', 30);
-                    $table->timestamp('action_at');
+                    $table->dateTime('action_at', 6);
                     $table->text('action');
                     $table->text('result')->nullable();
                     $table->string('status_after', 20)->nullable();
@@ -87,18 +91,19 @@ return new class extends Migration
                     // facts and the original ID remain in the protected snapshot.
                     $table->foreignId('guardian_id')->nullable()->constrained('guardians')->nullOnDelete();
                     $table->string('channel', 20);
-                    $table->timestamp('attempted_at');
+                    $table->dateTime('attempted_at', 6);
                     $table->string('outcome', 30);
                     $table->json('contact_snapshot')->nullable();
                 } else {
-                    $table->timestamp('referred_at');
+                    $table->dateTime('referred_at', 6);
                     $table->text('reason');
                     $table->string('destination', 200)->nullable();
                     $table->text('authorization_details')->nullable();
                     $table->text('handover_details')->nullable();
                     $table->string('follow_up_status', 30);
                 }
-                $table->timestamps();
+                $table->dateTime('created_at', 6)->nullable();
+                $table->dateTime('updated_at', 6)->nullable();
                 $table->index(['incident_id', 'recorded_at']);
             });
         }
@@ -111,7 +116,7 @@ return new class extends Migration
             $table->string('change_type', 30);
             $table->text('correction_reason')->nullable();
             $table->foreignId('actor_id')->constrained('users')->restrictOnDelete();
-            $table->timestamp('recorded_at');
+            $table->dateTime('recorded_at', 6);
             $table->unique(['record_type', 'record_id', 'revision_number'], 'uq_health_record_revision');
         });
         Schema::create('health_access_logs', function (Blueprint $table) {
@@ -120,7 +125,7 @@ return new class extends Migration
             $table->string('operation', 40);
             $table->string('record_type', 20);
             $table->unsignedBigInteger('record_id')->nullable();
-            $table->timestamp('recorded_at');
+            $table->dateTime('recorded_at', 6);
             $table->index('recorded_at');
         });
     }

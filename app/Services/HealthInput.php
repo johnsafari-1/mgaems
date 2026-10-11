@@ -18,7 +18,7 @@ class HealthInput
 
     public function time(): array
     {
-        return ['required', 'date_format:Y-m-d\TH:i:sP', 'before_or_equal:now'];
+        return ['required', new \App\Rules\HealthInstant];
     }
 
     public function source(): array
@@ -80,7 +80,7 @@ class HealthInput
         $data = $record->only(array_keys($rules));
         foreach ($data as $key => $value) {
             if ($value instanceof \DateTimeInterface) {
-                $data[$key] = $value->format(in_array($key, ['starts_on', 'ends_on'], true) ? 'Y-m-d' : 'Y-m-d\TH:i:sP');
+                $data[$key] = $value->format(in_array($key, ['starts_on', 'ends_on'], true) ? 'Y-m-d' : 'Y-m-d\TH:i:s.uP');
             }
         }
 
@@ -91,7 +91,7 @@ class HealthInput
     {
         foreach (['occurred_at', 'action_at', 'attempted_at', 'referred_at'] as $key) {
             if (isset($data[$key])) {
-                $data[$key] = \Carbon\Carbon::parse($data[$key])->setTimezone(config('app.timezone'));
+                $data[$key] = \App\Rules\HealthInstant::parse($data[$key]);
             }
         }
 

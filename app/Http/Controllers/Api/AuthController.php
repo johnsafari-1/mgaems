@@ -52,10 +52,17 @@ class AuthController extends Controller
             ]);
         }
 
-        // Serialize token issuance with account deactivation. A login that
-        // started before deactivation must not issue a token afterwards.
-        return DB::transaction(function () use ($user, $throttleKey, $auditLogger) {
+        // Serialize token issuance with deactivation and password recovery.
+        $verifiedHash = $user->password_hash;
+        $response = DB::transaction(function () use ($user, $verifiedHash, $credentials, $throttleKey, $auditLogger) {
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            if ($user->password_hash !== $verifiedHash && ! Hash::check($credentials['password'], $user->password_hash)) {
+                RateLimiter::hit($throttleKey, 60);
+                $auditLogger->log('LOGIN_FAILED', 'User', $user->id, ['attempted_username' => $credentials['username']]);
+
+                return null;
+            }
 
             if ($user->status !== 'active') {
                 $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
@@ -83,6 +90,11 @@ class AuthController extends Controller
                 ],
             ]);
         });
+        if ($response === null) {
+            throw ValidationException::withMessages(['username' => ['The provided credentials are incorrect.']]);
+        }
+
+        return $response;
     }
 
     public function logout(Request $request, AuditLogger $auditLogger)

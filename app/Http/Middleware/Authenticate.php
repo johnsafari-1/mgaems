@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
 use Illuminate\Http\Exceptions\HttpResponseException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class Authenticate extends Middleware
 {
@@ -33,6 +34,23 @@ class Authenticate extends Middleware
             throw new HttpResponseException(response()->json([
                 'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
             ], 403));
+        }
+
+        if (in_array('web', $guards, true) || ! ($user->currentAccessToken() instanceof PersonalAccessToken)) {
+            $identity = $request->hasSession() ? $request->session()->get('mgaems_health_identity') : null;
+            // Keep pre-epoch ordinary sessions usable only until the first
+            // revocation. Health retains its stricter login-marker requirement.
+            $valid = $identity === null ? (int) $user->session_version === 0
+                : (is_array($identity) && ($identity['user_id'] ?? null) === $user->id
+                    && ($identity['session_version'] ?? null) === (int) $user->session_version);
+            if (! $valid) {
+                if ($request->hasSession()) {
+                    $this->auth->guard('web')->logoutCurrentDevice();
+                    $request->session()->invalidate();
+                    $request->session()->regenerateToken();
+                }
+                $this->unauthenticated($request, $guards);
+            }
         }
     }
 

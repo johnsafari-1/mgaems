@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 abstract class HealthRecord extends Model
 {
+    use \App\Models\Concerns\UsesHealthUtcDates;
+
     protected $guarded = ['id'];
 
     protected static function booted(): void

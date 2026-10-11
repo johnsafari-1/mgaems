@@ -250,7 +250,10 @@ records were created. No `.env.testing` or `phpunit.xml` was created.
 
 ## I. Migration application and data safety
 
-Both new migrations are **pending on development and production databases**.
+Both new migrations were delivered unapplied. The development preflight confirmed
+both pending; production application status is unverified and must be checked
+independently before any deployment. The later corrective work and UTC timestamp
+contract are documented in [health-safety-corrective-fixes.md](health-safety-corrective-fixes.md).
 No development database connection, migration, reset/wipe/reseed, or data write
 was performed. Thus this task did not alter or remove development data.
 

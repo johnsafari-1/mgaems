@@ -12,7 +12,7 @@ class HealthContext
 {
     public function capture(Student $student, Carbon $occurred): array
     {
-        $date = $occurred->toDateString();
+        $date = $occurred->copy()->setTimezone(config('app.timezone'))->toDateString();
         // Current placement alone does not prove historical placement.
         $placement = PromotionTransfer::where('student_id', $student->id)->where('effective_date', '<=', $date)
             ->orderByDesc('effective_date')->orderByDesc('id')->sharedLock()->first();

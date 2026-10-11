@@ -40,10 +40,17 @@ class PasswordResetController extends Controller
         if ($user) {
             $plainToken = Str::random(64);
 
-            DB::table('password_reset_tokens')->updateOrInsert(
-                ['email' => $user->email],
-                ['token' => Hash::make($plainToken), 'created_at' => now()]
-            );
+            // Issuance and consumption use the same user-first lock order.
+            $user = DB::transaction(function () use ($user, $plainToken, $auditLogger) {
+                $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+                DB::table('password_reset_tokens')->updateOrInsert(
+                    ['email' => $user->email],
+                    ['token' => Hash::make($plainToken), 'created_at' => now()]
+                );
+                $auditLogger->log('PASSWORD_RESET_REQUESTED', 'User', $user->id);
+
+                return $user;
+            });
 
             $resetUrl = rtrim(config('app.url'), '/').'/reset-password?email='.
                 urlencode($user->email).'&token='.$plainToken;
@@ -51,8 +58,6 @@ class PasswordResetController extends Controller
             Mail::to($user->email)->queue(
                 new PasswordResetMail($resetUrl, self::TOKEN_EXPIRY_MINUTES)
             );
-
-            $auditLogger->log('PASSWORD_RESET_REQUESTED', 'User', $user->id);
         }
 
         return response()->json([
@@ -70,34 +75,39 @@ class PasswordResetController extends Controller
             'password' => ['required', 'string', 'min:10', 'confirmed'],
         ]);
 
-        $record = DB::table('password_reset_tokens')
-            ->where('email', $validated['email'])
-            ->first();
+        return DB::transaction(function () use ($validated, $auditLogger) {
+            $user = User::where('email', $validated['email'])->lockForUpdate()->first();
+            $record = DB::table('password_reset_tokens')
+                ->where('email', $validated['email'])->lockForUpdate()->first();
 
-        if (! $record || ! Hash::check($validated['token'], $record->token)) {
-            return response()->json([
-                'error' => ['code' => 'INVALID_TOKEN', 'message' => 'This reset link is invalid.'],
-            ], 422);
-        }
+            if (! $user || ! $record || ! Hash::check($validated['token'], $record->token)) {
+                return response()->json([
+                    'error' => ['code' => 'INVALID_TOKEN', 'message' => 'This reset link is invalid.'],
+                ], 422);
+            }
 
-        $isExpired = now()->diffInMinutes($record->created_at) > self::TOKEN_EXPIRY_MINUTES;
+            $isExpired = now()->diffInMinutes($record->created_at) > self::TOKEN_EXPIRY_MINUTES;
 
-        if ($isExpired) {
+            if ($isExpired) {
+                DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
+
+                return response()->json([
+                    'error' => ['code' => 'EXPIRED_TOKEN', 'message' => 'This reset link has expired. Please request a new one.'],
+                ], 422);
+            }
+
+            $user->forceFill([
+                'password_hash' => Hash::make($validated['password']),
+                'session_version' => (int) $user->session_version + 1,
+            ])->save();
+            $user->tokens()->delete();
+
+            // Single-use: delete the token immediately after a successful reset.
             DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
 
-            return response()->json([
-                'error' => ['code' => 'EXPIRED_TOKEN', 'message' => 'This reset link has expired. Please request a new one.'],
-            ], 422);
-        }
+            $auditLogger->log('PASSWORD_RESET_COMPLETED', 'User', $user->id);
 
-        $user = User::where('email', $validated['email'])->firstOrFail();
-        $user->update(['password_hash' => Hash::make($validated['password'])]);
-
-        // Single-use: delete the token immediately after a successful reset.
-        DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
-
-        $auditLogger->log('PASSWORD_RESET_COMPLETED', 'User', $user->id);
-
-        return response()->json(['data' => ['message' => 'Password updated. You can now log in.']]);
+            return response()->json(['data' => ['message' => 'Password updated. You can now log in.']]);
+        });
     }
 }

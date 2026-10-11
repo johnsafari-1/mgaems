@@ -72,11 +72,13 @@ class HealthIncidentController extends HealthController
             $input = new HealthInput;
             $data = $input->normalize($input->merged($request, $record, $input->incident()));
             foreach (['actions' => 'action_at', 'notifications' => 'attempted_at', 'referrals' => 'referred_at'] as $relation => $time) {
-                if ($record->$relation()->where($time, '<', $data['occurred_at'])->exists()) {
+                // Query bindings otherwise discard microseconds on this connection.
+                if ($record->$relation()->where($time, '<', $record->fromDateTime($data['occurred_at']))->exists()) {
                     throw ValidationException::withMessages(['occurred_at' => 'An incident cannot start after its recorded actions, notifications or referrals.']);
                 }
             }
-            if ($record->occurred_at->toDateString() !== $data['occurred_at']->toDateString()) {
+            if ($record->occurred_at->copy()->setTimezone(config('app.timezone'))->toDateString()
+                !== $data['occurred_at']->copy()->setTimezone(config('app.timezone'))->toDateString()) {
                 $student = Student::whereKey($record->student_id)->sharedLock()->firstOrFail();
                 $record->fill((new HealthContext)->capture($student, $data['occurred_at']));
             }
