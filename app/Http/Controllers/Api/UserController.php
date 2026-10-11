@@ -49,7 +49,7 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:100', 'unique:users,username'],
             'email' => ['required', 'email', 'max:150', 'unique:users,email'],
             'password' => ['required', 'string', 'min:10'],
-            'role' => ['required', Rule::in($this->validRoleNames())],
+            'role' => ['required', Rule::in(array_values(array_diff($this->validRoleNames(), [Role::STUDENT])))],
         ]);
 
         $role = Role::where('name', $validated['role'])->firstOrFail();
@@ -85,6 +85,10 @@ class UserController extends Controller
             // even when two administrators are changed concurrently.
             Role::where('name', Role::SYSTEM_ADMIN)->lockForUpdate()->firstOrFail();
             $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            if (($validated['role'] ?? null) === Role::STUDENT && ! $user->hasRole(Role::STUDENT)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['role' => 'New Student-role accounts are not supported in this release.']);
+            }
 
             // Guard rail: never allow the last active System Administrator to be
             // demoted/deactivated, per UC-AUTH-04's "prevent lockout" rule.

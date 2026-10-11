@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\AcademicClassResource;
 use App\Models\Assessment;
 use App\Models\ClassSubjectTeacher;
+use App\Models\Guardian;
 use App\Models\SchoolClass;
 use App\Models\Staff;
 use App\Models\Subject;
+use App\Models\Student;
 use App\Models\TimetableEntry;
 use App\Services\AcademicIntegrity;
 use App\Services\AuditLogger;
@@ -32,6 +34,10 @@ class AcademicStructureController extends Controller
         if ($request->user()?->hasRole('student')) {
             // Existing academic reference access does not grant school statistics or HR.
             return response()->json(['data' => SchoolClass::orderBy('sequence')->orderBy('name')->get(['id', 'name', 'level'])]);
+        }
+        if ($request->user()?->hasRole('parent_guardian')) {
+            $classes = Student::whereIn('id', Guardian::where('user_id', $request->user()->id)->select('student_id'))->select('class_id');
+            return response()->json(['data' => SchoolClass::whereIn('id', $classes)->orderBy('sequence')->orderBy('name')->get(['id', 'name', 'level'])]);
         }
         $classes = SchoolClass::withCount(['students', 'subjects'])
             ->with('classTeacher:id,first_name,last_name')->orderBy('sequence')->orderBy('name')->get();

@@ -495,7 +495,7 @@ if (user && ADMIN_ROLES.includes(user.role)) {
       <div class="form-grid">
         <div class="field"><label for="newUsername">Username *</label><input id="newUsername" maxlength="100" autocomplete="off" required></div>
         <div class="field"><label for="newEmail">Email *</label><input id="newEmail" type="email" maxlength="150" autocomplete="off" required></div>
-        <div class="field"><label for="newRole">Role *</label><select id="newRole" required><option value="">Select role…</option>${state.roles.map(role => `<option value="${esc(role.name)}">${esc(prettyRole(role.name))}</option>`).join('')}</select></div>
+        <div class="field"><label for="newRole">Role *</label><select id="newRole" required><option value="">Select role…</option>${state.roles.filter(role => role.name !== 'student').map(role => `<option value="${esc(role.name)}">${esc(prettyRole(role.name))}</option>`).join('')}</select></div>
         <div class="field"><label for="newPassword">Initial password *</label><input id="newPassword" type="password" minlength="10" autocomplete="new-password" required></div>
       </div>
     `, 'Create User', async button => {
@@ -530,7 +530,7 @@ if (user && ADMIN_ROLES.includes(user.role)) {
       <div class="form-grid">
         <div class="field"><label>Username</label><input class="admin-readonly" value="${esc(account.username)}" readonly></div>
         <div class="field"><label for="editUserEmail">Email *</label><input id="editUserEmail" type="email" maxlength="150" value="${esc(account.email)}" required></div>
-        <div class="field"><label for="editUserRole">Role</label><select id="editUserRole">${state.roles.map(role => `<option value="${esc(role.name)}" ${role.name === account.role ? 'selected' : ''}>${esc(prettyRole(role.name))}</option>`).join('')}</select></div>
+        <div class="field"><label for="editUserRole">Role</label><select id="editUserRole">${state.roles.filter(role => role.name !== 'student' || account.role === 'student').map(role => `<option value="${esc(role.name)}" ${role.name === account.role ? 'selected' : ''}>${esc(prettyRole(role.name))}</option>`).join('')}</select></div>
         <div class="field"><label for="editUserStatus">Status</label><select id="editUserStatus"><option value="active" ${account.status === 'active' ? 'selected' : ''}>Active</option><option value="inactive" ${account.status === 'inactive' ? 'selected' : ''}>Inactive</option><option value="locked" ${account.status === 'locked' ? 'selected' : ''}>Locked</option></select></div>
       </div>
     `, 'Save Changes', async button => {

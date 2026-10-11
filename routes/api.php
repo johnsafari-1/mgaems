@@ -231,6 +231,8 @@ Route::prefix('v1')->group(function () {
         // --- Parent Portal (SRS FR-PAR-01..06) ---
         Route::middleware('role:parent_guardian')->prefix('portal/parent')->group(function () {
             Route::get('/children', [ParentPortalController::class, 'myChildren']);
+            Route::get('/children/{student}', [ParentPortalController::class, 'childOverview']);
+            Route::get('/children/{student}/timetable', [ParentPortalController::class, 'childTimetable']);
             Route::get('/children/{student}/attendance', [ParentPortalController::class, 'childAttendance']);
             Route::get('/children/{student}/report-cards', [ParentPortalController::class, 'childReportCards']);
             Route::get('/children/{student}/report-cards/{reportCard}/download', [ParentPortalController::class, 'downloadReportCard']);
@@ -281,8 +283,10 @@ Route::prefix('v1')->group(function () {
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor,student');
 
         // Messaging: every role except Student per the User Role Matrix.
+        // Parent sending fails closed until the school approves recipient scope.
+        Route::post('/messages', [MessageController::class, 'store'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,sponsor');
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor')->group(function () {
-            Route::post('/messages', [MessageController::class, 'store']);
             Route::get('/messages', [MessageController::class, 'index']);
             Route::patch('/messages/{message}/read', [MessageController::class, 'markRead']);
         });

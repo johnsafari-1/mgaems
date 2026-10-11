@@ -13,6 +13,9 @@ class MessageController extends Controller
 {
     public function store(Request $request)
     {
+        if ($request->user()?->hasRole('parent_guardian')) {
+            return response()->json(['error' => ['code' => 'FORBIDDEN', 'message' => 'Parent messaging is not available. Contact the school through its established channels.']], 403);
+        }
         $validated = $request->validate([
             'recipient_id' => ['required', 'exists:users,id'],
             'body' => ['required', 'string'],
