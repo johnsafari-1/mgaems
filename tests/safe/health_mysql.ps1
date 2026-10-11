@@ -1,3 +1,4 @@
+param([ValidateSet('health_mysql.php', 'sponsorship_mysql.php')][string]$Suite = 'health_mysql.php')
 $ErrorActionPreference = 'Stop'
 if ((Get-Location).Path -ne 'D:\mgaems') { throw 'Run only from D:\mgaems.' }
 $testName = 'mgaems-health-corrective-test-' + [guid]::NewGuid().ToString('N')
@@ -12,13 +13,13 @@ try {
     $ready = $false
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
         $ErrorActionPreference = 'Continue'
-        'SELECT 1;' | docker exec -i $testId sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysql -uroot --silent' *> $null
+        'SELECT 1;' | docker exec -i $testId sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h127.0.0.1 -uroot --silent' *> $null
         $ErrorActionPreference = 'Stop'
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }
         Start-Sleep -Seconds 2
     }
     if (-not $ready) { throw 'Disposable MySQL did not become ready.' }
-    docker run --pull never --rm --network "container:$testId" --mount 'type=bind,source=D:\mgaems,target=/var/www/html,readonly' --mount type=volume,source=mgaems_mgaems_vendor,target=/var/www/html/vendor,readonly -w /var/www/html -e MGAEMS_DISPOSABLE_MYSQL=health-corrective-fixtures -e "MGAEMS_TEST_MYSQL_PASSWORD=$testPassword" --entrypoint php $phpImage tests/safe/health_mysql.php
+    docker run --pull never --rm --network "container:$testId" --mount 'type=bind,source=D:\mgaems,target=/var/www/html,readonly' --mount type=volume,source=mgaems_mgaems_vendor,target=/var/www/html/vendor,readonly -w /var/www/html -e MGAEMS_DISPOSABLE_MYSQL=health-corrective-fixtures -e "MGAEMS_TEST_MYSQL_PASSWORD=$testPassword" --entrypoint php $phpImage -d zend.exception_ignore_args=1 "tests/safe/$Suite"
     if ($LASTEXITCODE -ne 0) { throw 'Isolated MySQL regressions failed.' }
 } finally {
     if ($testId) {

@@ -19,6 +19,7 @@ const MGAEMS_NAV_ITEMS = {
   parent: { href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' },
   sponsor: { href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' },
   teacher: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Teacher Workspace' },
+  coordinator: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Sponsor Coordinator Workspace' },
   myLearners: { href: '/students.html', icon: 'users', label: 'My Learners' },
   myTimetable: { href: '/teacher-timetable.html', icon: 'calendar-days', label: 'My Timetable' },
 };
@@ -30,7 +31,7 @@ const MGAEMS_ROLE_NAV = {
   head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
   deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV],
   teacher: ['teacher', 'myLearners', 'myTimetable', 'attendance', 'assessment', 'communication'],
-  sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
+  sponsor_coordinator: ['sponsorship', 'coordinator', 'communication', 'visitors'],
   parent_guardian: ['parent'],
   sponsor: ['sponsor'],
   // Existing announcements are usable; a Student Portal is not implemented.
@@ -63,7 +64,7 @@ function renderAppShell(activeHref, logoUrl) {
       <header class="app-header">
         <div class="header-context">
           <button type="button" class="btn btn-secondary icon-control" id="navigationToggle" aria-controls="appSidebar" aria-expanded="true" aria-label="Collapse navigation"><i data-lucide="menu" aria-hidden="true"></i></button>
-          <div><strong>${esc(pageTitle)}</strong>${!['parent_guardian', 'sponsor'].includes(role) ? '<div class="sub" id="academicContext" role="status">Loading academic context…</div>' : ''}</div>
+          <div><strong>${esc(pageTitle)}</strong>${!['parent_guardian', 'sponsor', 'sponsor_coordinator'].includes(role) ? '<div class="sub" id="academicContext" role="status">Loading academic context…</div>' : ''}</div>
         </div>
         <div class="user">
           <span id="userInfo"></span>

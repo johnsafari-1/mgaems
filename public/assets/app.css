@@ -467,3 +467,10 @@ tr:hover td { background: var(--gray-50); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Sponsorship filters and searched allocation controls fit the shared mobile shell. */
+.sponsorship-picker { min-width: 0; }
+.sponsorship-matches { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); overflow-wrap: anywhere; }
+.sponsorship-matches .btn { max-width: 100%; white-space: normal; text-align: left; overflow-wrap: anywhere; }
+@media (max-width: 1000px) { .filter-grid.sponsorship-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .filter-grid.sponsorship-filters { grid-template-columns: minmax(0, 1fr); } }

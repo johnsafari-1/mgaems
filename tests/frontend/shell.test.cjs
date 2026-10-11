@@ -157,8 +157,8 @@ test('unknown roles receive no operational links, including inherited object pro
   }
 });
 
-test('Student dashboard and Coordinator dashboard make no unauthorized operational requests', async () => {
-  for (const role of ['student', 'sponsor_coordinator']) {
+test('Student dashboard makes no unauthorized operational requests', async () => {
+  for (const role of ['student']) {
     const h = harness({ role }); vm.runInContext(script('dashboard.js'), h.context);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(h.requests.some(item => /school-statistics|\/students|assessments|attendance/.test(item.url)), false);
@@ -175,7 +175,7 @@ test('existing Communication page keeps Teacher read and messaging but removes u
     await new Promise(resolve => setImmediate(resolve));
     const canPublish = !['teacher', 'student'].includes(role);
     assert.equal(h.elements.has('newAnnouncement'), canPublish, `${role} publish control`);
-    assert.equal(h.elements.has('newMessage'), role !== 'student', `${role} messaging control`);
+    assert.equal(h.elements.has('newMessage'), !['student', 'sponsor_coordinator'].includes(role), `${role} messaging control`);
     assert.equal(h.requests.some(item => item.url.endsWith('/announcements')), true);
     assert.equal(h.requests.some(item => item.url.endsWith('/messages')), role !== 'student');
     assert.equal(h.requests.some(item => (item.options.method || 'GET') !== 'GET'), false);

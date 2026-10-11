@@ -119,10 +119,12 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Academic Management: Classes, Subjects (SRS FR-ACAD-02/03) ---
-        // Read: broad (staff, teachers, parents, students per User Role Matrix §4).
-        Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
-        Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
-        Route::get('/class-subjects', [AcademicStructureController::class, 'indexClassSubjects']);
+        // Coordinator operations use minimal sponsorship references, not school academics.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher,parent_guardian,sponsor,student')->group(function () {
+            Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
+            Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
+            Route::get('/class-subjects', [AcademicStructureController::class, 'indexClassSubjects']);
+        });
 
         // Write: system_admin, head_teacher (Full); deputy_head_teacher (Manage).
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
@@ -217,8 +219,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/sponsors', [SponsorController::class, 'index']);
             Route::get('/sponsors/{sponsor}', [SponsorController::class, 'show']);
             Route::get('/sponsorships', [SponsorshipController::class, 'index']);
+            Route::get('/sponsorships/summary', [SponsorshipController::class, 'summary']);
             Route::get('/sponsorships/learners', [SponsorshipController::class, 'learners']);
             Route::get('/sponsorships/{sponsorship}', [SponsorshipController::class, 'show']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}', [SponsorshipController::class, 'learner']);
         });
 
         Route::middleware('role:system_admin,sponsor_coordinator')->group(function () {
@@ -282,10 +286,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/announcements', [AnnouncementController::class, 'index'])
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor,student');
 
-        // Messaging: every role except Student per the User Role Matrix.
-        // Parent sending fails closed until the school approves recipient scope.
+        // Owned message history excludes Student; sends require approved recipient scope.
+        // New Parent and Coordinator sends fail closed pending that policy.
         Route::post('/messages', [MessageController::class, 'store'])
-            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,sponsor');
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher,sponsor');
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor')->group(function () {
             Route::get('/messages', [MessageController::class, 'index']);
             Route::patch('/messages/{message}/read', [MessageController::class, 'markRead']);

@@ -68,6 +68,7 @@ if (user) {
   };
   const canPublish = ANNOUNCEMENT_WRITE_ROLES.includes(user.role);
   const canMessage = MESSAGE_ROLES.includes(user.role);
+  const canSendMessage = canMessage && !['parent_guardian', 'sponsor_coordinator'].includes(user.role);
   const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const audienceLabels = { school_wide: 'School-wide', class: 'Class', parents: 'Parents', sponsors: 'Sponsors', staff: 'Staff' };
   const formatDate = value => {
@@ -93,7 +94,7 @@ if (user) {
       </div>
       <div class="communication-actions">
         ${canPublish ? '<button class="btn btn-primary" id="newAnnouncement"><i data-lucide="megaphone"></i> New Announcement</button>' : ''}
-        ${canMessage ? '<button class="btn btn-secondary" id="newMessage"><i data-lucide="square-pen"></i> New Message</button>' : ''}
+        ${canSendMessage ? '<button class="btn btn-secondary" id="newMessage"><i data-lucide="square-pen"></i> New Message</button>' : ''}
       </div>
     </div>
     <section id="announcementsPanel" role="tabpanel" aria-labelledby="announcementsTab">
@@ -273,6 +274,7 @@ if (user) {
   }
 
   function openMessageForm() {
+    if (!canSendMessage) return;
     showModal('New Message', `
       <div id="messageFormAlert"></div>
       <div class="message-form">
