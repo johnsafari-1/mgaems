@@ -120,6 +120,68 @@ test('portal users land in their own portals and never receive staff navigation 
   }
 });
 
+const roleDestinations = {
+  system_admin: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
+  head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
+  deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'],
+  teacher: ['dashboard', 'students', 'attendance', 'assessment', 'communication'],
+  sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
+  parent_guardian: ['parent-portal'],
+  sponsor: ['sponsor-portal'],
+  student: ['dashboard', 'communication'],
+};
+for (const [role, destinations] of Object.entries(roleDestinations)) {
+  test(`${role} renders exactly its approved existing destinations and highlights the active page`, () => {
+    const h = harness({ role });
+    const active = `/${destinations[0]}.html`;
+    vm.runInContext(`renderAppShell('${active}')`, h.context);
+    const nav = h.shellHTML().match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
+    assert.deepEqual([...nav.matchAll(/href="([^"]+)"/g)].map(match => match[1]), destinations.map(name => `/${name}.html`));
+    assert.match(nav, new RegExp(`href="${active}"[^>]*aria-current="page"`));
+    assert.doesNotMatch(nav, /health|safety|finance|streams/i);
+    for (const name of destinations) {
+      const filename = path.join(root, 'public', `${name}.html`);
+      assert.equal(fs.existsSync(filename), true, `${name} destination exists`);
+      const html = fs.readFileSync(filename, 'utf8');
+      for (const [, src] of html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)(?:[?#][^"]*)?"/g)) {
+        assert.equal(fs.existsSync(path.join(root, 'public', src)), true, `${name} asset ${src} exists`);
+      }
+    }
+  });
+}
+
+test('unknown roles receive no operational links, including inherited object property names', () => {
+  for (const role of ['unrecognized', 'constructor', '__proto__']) {
+    const h = harness({ role }); vm.runInContext("renderAppShell('/dashboard.html')", h.context);
+    assert.match(h.shellHTML(), /<nav aria-label="Main navigation"><\/nav>/);
+  }
+});
+
+test('Student dashboard and Coordinator dashboard make no unauthorized operational requests', async () => {
+  for (const role of ['student', 'sponsor_coordinator']) {
+    const h = harness({ role }); vm.runInContext(script('dashboard.js'), h.context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.requests.some(item => /school-statistics|\/students|assessments|attendance/.test(item.url)), false);
+    assert.equal(h.requests.some(item => item.url.endsWith('/announcements')), true);
+  }
+});
+
+test('existing Communication page keeps Teacher read and messaging but removes unsafe publication', async () => {
+  const html = fs.readFileSync(path.join(root, 'public/communication.html'), 'utf8');
+  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).join('\n');
+  for (const role of ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher', 'student']) {
+    const h = harness({ role, pathname: '/communication.html' });
+    vm.runInContext(inline, h.context);
+    await new Promise(resolve => setImmediate(resolve));
+    const canPublish = !['teacher', 'student'].includes(role);
+    assert.equal(h.elements.has('newAnnouncement'), canPublish, `${role} publish control`);
+    assert.equal(h.elements.has('newMessage'), role !== 'student', `${role} messaging control`);
+    assert.equal(h.requests.some(item => item.url.endsWith('/announcements')), true);
+    assert.equal(h.requests.some(item => item.url.endsWith('/messages')), role !== 'student');
+    assert.equal(h.requests.some(item => (item.options.method || 'GET') !== 'GET'), false);
+  }
+});
+
 test('mobile drawer contains keyboard focus, closes with Escape, and desktop collapse retains controls', () => {
   const h = harness({ mobile: true });
   vm.runInContext("renderAppShell('/dashboard.html')", h.context);

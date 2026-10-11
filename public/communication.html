@@ -51,7 +51,7 @@
 <script src="/assets/nav.js"></script>
 <script>
 const user = MGAEMS.requireAuth();
-const ANNOUNCEMENT_WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher'];
+const ANNOUNCEMENT_WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator'];
 const MESSAGE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher', 'parent_guardian', 'sponsor'];
 
 if (user) {
@@ -251,6 +251,7 @@ if (user) {
   }
 
   function openAnnouncementForm() {
+    if (!canPublish) return;
     showModal('New Announcement', `
       <div id="announcementFormAlert"></div>
       <div class="announcement-form">

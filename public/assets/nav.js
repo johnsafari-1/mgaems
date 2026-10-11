@@ -3,29 +3,42 @@
    authenticated page so the nav is defined once, not copy-pasted.
    ========================================================================== */
 
-const MGAEMS_NAV_ITEMS = [
-  { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Dashboard' },
-  { href: '/students.html', icon: 'users', label: 'Students' },
-  { href: '/guardians.html', icon: 'contact-round', label: 'Parents / Guardians', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
-  { href: '/academic.html', icon: 'book-open', label: 'Academics' },
-  { href: '/attendance.html', icon: 'calendar-check', label: 'Attendance' },
-  { href: '/assessment.html', icon: 'clipboard-check', label: 'Assessment' },
-  { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
-  { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
-  { href: '/communication.html', icon: 'megaphone', label: 'Communication' },
-  { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator'] },
-  { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports', roles: ['system_admin', 'head_teacher', 'deputy_head_teacher'] },
-  { href: '/administration.html', icon: 'settings', label: 'Administration', roles: ['system_admin', 'head_teacher'] },
-];
+const MGAEMS_NAV_ITEMS = {
+  dashboard: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Dashboard' },
+  students: { href: '/students.html', icon: 'users', label: 'Students' },
+  guardians: { href: '/guardians.html', icon: 'contact-round', label: 'Parents / Guardians' },
+  academic: { href: '/academic.html', icon: 'book-open', label: 'Academics' },
+  attendance: { href: '/attendance.html', icon: 'calendar-check', label: 'Attendance' },
+  assessment: { href: '/assessment.html', icon: 'clipboard-check', label: 'Assessment' },
+  sponsorship: { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
+  staff: { href: '/staff.html', icon: 'briefcase', label: 'HR / Staff' },
+  communication: { href: '/communication.html', icon: 'megaphone', label: 'Communication' },
+  visitors: { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors' },
+  reports: { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports' },
+  administration: { href: '/administration.html', icon: 'settings', label: 'Administration' },
+  parent: { href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' },
+  sponsor: { href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' },
+};
+
+// Page visibility follows current APIs. Laravel remains the authorization boundary.
+const MGAEMS_LEADERSHIP_NAV = ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'];
+const MGAEMS_ROLE_NAV = {
+  system_admin: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
+  head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
+  deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV],
+  teacher: ['dashboard', 'students', 'attendance', 'assessment', 'communication'],
+  sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
+  parent_guardian: ['parent'],
+  sponsor: ['sponsor'],
+  // Existing announcements are usable; a Student Portal is not implemented.
+  student: ['dashboard', 'communication'],
+};
 
 function renderAppShell(activeHref, logoUrl) {
   if (document.getElementById('appMain')) return;
   const role = MGAEMS.currentUser()?.role;
-  const portalItems = role === 'parent_guardian'
-    ? [{ href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' }]
-    : [{ href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' }];
-  const items = (['parent_guardian', 'sponsor'].includes(role) ? portalItems : MGAEMS_NAV_ITEMS)
-    .filter(item => !item.roles || item.roles.includes(role));
+  const items = (Object.hasOwn(MGAEMS_ROLE_NAV, role) ? MGAEMS_ROLE_NAV[role] : [])
+    .map(key => MGAEMS_NAV_ITEMS[key]);
   const pageTitle = items.find(item => item.href === activeHref)?.label || 'MGAEMS';
   const esc = MGAEMS.escapeHTML;
   const navLinks = items.map(item => `

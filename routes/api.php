@@ -267,13 +267,14 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Communication (SRS FR-COM-01/02/03) ---
-        // Publish: staff-side roles (Teacher scoped to "own class" — same
-        // tracked simplification noted in AttendanceController/AssessmentController).
-        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher')->group(function () {
+        // Teacher publication fails closed at the route and controller until the schema
+        // can persist a verified class target. No announcement update API exists.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator')->group(function () {
             Route::post('/announcements', [AnnouncementController::class, 'store']);
         });
-        // Receive: every authenticated role (per User Role Matrix — all "R").
-        Route::get('/announcements', [AnnouncementController::class, 'index']);
+        // Receive: canonical roles; Staff-dependent roles require active linkage.
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor,student');
 
         // Messaging: every role except Student per the User Role Matrix.
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor')->group(function () {
