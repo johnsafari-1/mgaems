@@ -45,7 +45,17 @@ Schema::create('users', function (Blueprint $table) {
     $table->id(); $table->string('username')->unique(); $table->string('email')->unique(); $table->string('password_hash');
     $table->foreignId('role_id')->constrained(); $table->string('status'); $table->timestamps();
 });
-Schema::create('classes', function (Blueprint $table) { $table->id(); $table->string('name'); $table->string('level')->default('primary'); });
+Schema::create('classes', function (Blueprint $table) { $table->id(); $table->string('name'); $table->string('level')->default('primary'); $table->foreignId('class_teacher_id')->nullable(); });
+Schema::create('staff', function (Blueprint $table) {
+    $table->id(); $table->foreignId('user_id')->nullable()->unique(); $table->string('status'); $table->string('staff_type')->default('teaching');
+});
+Schema::create('academic_years', function (Blueprint $table) {
+    $table->id(); $table->date('start_date'); $table->date('end_date'); $table->boolean('is_current');
+});
+Schema::create('class_subject_teacher', function (Blueprint $table) {
+    $table->id(); $table->foreignId('class_id'); $table->foreignId('subject_id'); $table->foreignId('staff_id'); $table->foreignId('term_id');
+});
+Schema::create('class_subjects', function (Blueprint $table) { $table->id(); $table->foreignId('class_id'); $table->foreignId('subject_id'); });
 Schema::create('students', function (Blueprint $table) {
     $table->id(); $table->string('admission_no')->unique(); $table->string('first_name'); $table->string('last_name');
     $table->date('date_of_birth'); $table->string('gender'); $table->foreignId('class_id')->constrained('classes');
@@ -57,7 +67,10 @@ Schema::create('guardians', function (Blueprint $table) {
     $table->string('address')->nullable(); $table->boolean('is_primary_contact')->default(false);
 });
 Schema::create('student_medical_info', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained(); $table->string('conditions'); });
-Schema::create('terms', function (Blueprint $table) { $table->id(); $table->string('name'); });
+Schema::create('terms', function (Blueprint $table) {
+    $table->id(); $table->string('name'); $table->foreignId('academic_year_id')->nullable();
+    $table->date('start_date')->nullable(); $table->date('end_date')->nullable(); $table->boolean('is_current')->default(false);
+});
 Schema::create('promotions_transfers', function (Blueprint $table) {
     $table->id(); $table->foreignId('student_id')->constrained(); $table->string('type');
     $table->foreignId('from_class_id')->nullable()->constrained('classes'); $table->foreignId('to_class_id')->nullable()->constrained('classes');
@@ -83,7 +96,7 @@ Schema::create('sponsorship_student', function (Blueprint $table) {
 Schema::create('attendance_students', function (Blueprint $table) {
     $table->id(); $table->foreignId('student_id')->constrained(); $table->date('attendance_date'); $table->string('status');
 });
-Schema::create('subjects', function (Blueprint $table) { $table->id(); $table->string('name'); });
+Schema::create('subjects', function (Blueprint $table) { $table->id(); $table->string('name'); $table->string('status')->default('active'); });
 Schema::create('assessments', function (Blueprint $table) {
     $table->id(); $table->foreignId('student_id')->constrained(); $table->foreignId('subject_id')->constrained(); $table->foreignId('term_id')->constrained();
     $table->string('assessment_type'); $table->integer('score')->nullable(); $table->string('competency_rating')->nullable();
@@ -104,6 +117,8 @@ function userFor(string $role): User {
 $leader = userFor('head_teacher'); $teacher = userFor('teacher');
 $classA = DB::table('classes')->insertGetId(['name' => 'Class A']);
 $classB = DB::table('classes')->insertGetId(['name' => 'Class B']);
+$teacherStaffId = DB::table('staff')->insertGetId(['user_id' => $teacher->id, 'status' => 'active', 'staff_type' => 'teaching']);
+DB::table('classes')->where('id', $classA)->update(['class_teacher_id' => $teacherStaffId]);
 $term = DB::table('terms')->insertGetId(['name' => 'Term']);
 function learner(array $overrides = []): Student {
     global $classA;
@@ -280,9 +295,6 @@ check('Parent Portal retains ownership checks and unlink revokes only the select
 });
 
 check('backend role middleware denies teacher guardian management and parent staff access', function () use ($teacher, $leader) {
-    Schema::create('staff', function (Blueprint $table) {
-        $table->id(); $table->foreignId('user_id')->unique()->constrained('users'); $table->string('status');
-    });
     $middleware = new EnsureRole(); $next = fn () => response()->json(['data' => []]);
     ensure($middleware->handle(requestFor($teacher), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 403, 'Teacher contact denial');
     ensure($middleware->handle(requestFor($leader), $next, 'system_admin', 'head_teacher', 'deputy_head_teacher')->getStatusCode() === 403, 'Unlinked leadership denied');

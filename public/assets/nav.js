@@ -18,6 +18,9 @@ const MGAEMS_NAV_ITEMS = {
   administration: { href: '/administration.html', icon: 'settings', label: 'Administration' },
   parent: { href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' },
   sponsor: { href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' },
+  teacher: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Teacher Workspace' },
+  myLearners: { href: '/students.html', icon: 'users', label: 'My Learners' },
+  myTimetable: { href: '/teacher-timetable.html', icon: 'calendar-days', label: 'My Timetable' },
 };
 
 // Page visibility follows current APIs. Laravel remains the authorization boundary.
@@ -26,7 +29,7 @@ const MGAEMS_ROLE_NAV = {
   system_admin: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
   head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
   deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV],
-  teacher: ['dashboard', 'students', 'attendance', 'assessment', 'communication'],
+  teacher: ['teacher', 'myLearners', 'myTimetable', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
   parent_guardian: ['parent'],
   sponsor: ['sponsor'],

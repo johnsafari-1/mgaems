@@ -124,7 +124,7 @@ const roleDestinations = {
   system_admin: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
   head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
   deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'],
-  teacher: ['dashboard', 'students', 'attendance', 'assessment', 'communication'],
+  teacher: ['dashboard', 'students', 'teacher-timetable', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
   parent_guardian: ['parent-portal'],
   sponsor: ['sponsor-portal'],
@@ -250,7 +250,7 @@ test('dashboard escapes payloads and keeps loaded, empty, denied, error, and ret
   assert.equal(h.elements.get('announcementsCard').attrs.get('aria-busy'), 'false');
   const teacher = harness({ role: 'teacher' });
   vm.runInContext(script('dashboard.js'), teacher.context);
-  assert.match(teacher.elements.get('statsCards').innerHTML, /Access restricted/);
+  assert.equal(teacher.elements.has('statsCards'), false);
   assert.equal(teacher.requests.some(item => item.url.includes('school-statistics')), false);
 });
 

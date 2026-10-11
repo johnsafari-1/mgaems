@@ -150,6 +150,10 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Student Management (SRS FR-STU-01..04) ---
+        Route::prefix('teacher')->middleware('role:teacher')->group(function () {
+            Route::get('/context', [\App\Http\Controllers\Api\TeacherWorkspaceController::class, 'context']);
+            Route::get('/timetable', [\App\Http\Controllers\Api\TeacherWorkspaceController::class, 'timetable']);
+        });
         // Read: system_admin, head_teacher, deputy_head_teacher, teacher, HR/admin (Full/Read per matrix).
         // NOTE: Parent/Sponsor "own-child-only" access is added when the Parent/Sponsor
         // Portal modules land — deliberately not opened here yet to avoid a

@@ -2,6 +2,7 @@
 (() => {
   const user = MGAEMS.requireAuth();
   if (!user || MGAEMS.landingPage(user) !== '/dashboard.html') return;
+  if (user.role === 'teacher') return; // Shared Teacher Workspace renders the scoped reader.
   renderAppShell('/students.html');
   const esc = MGAEMS.escapeHTML;
   const managers = ['system_admin', 'head_teacher', 'deputy_head_teacher'];

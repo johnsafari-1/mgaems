@@ -8,6 +8,7 @@ use App\Http\Resources\StudentResource;
 use App\Http\Resources\StudentSummaryResource;
 use App\Models\Student;
 use App\Services\AuditLogger;
+use App\Services\TeacherWorkspaceAccess;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -21,15 +22,21 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
+        $teacher = $request->user()?->hasRole('teacher');
+        $access = new TeacherWorkspaceAccess();
+        $staff = $teacher ? $access->staff($request->user()) : null;
         $filters = $request->validate([
             'page' => ['sometimes', 'integer', 'min:1', 'max:1000000'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'search' => ['sometimes', 'nullable', 'string', 'max:150'],
-            'class_id' => ['sometimes', 'integer', 'exists:classes,id'],
+            'class_id' => $teacher ? ['sometimes', 'integer', 'min:1'] : ['sometimes', 'integer', 'exists:classes,id'],
             'status' => ['sometimes', Rule::in(self::STATUSES)],
         ]);
+        if ($teacher && isset($filters['class_id']) && ! $access->classes($staff)->whereKey($filters['class_id'])->exists()) {
+            return response()->json(['message' => 'Resource not found.'], 404);
+        }
         $search = trim($filters['search'] ?? '');
-        $students = Student::query()->select('id', 'admission_no', 'first_name', 'last_name', 'class_id', 'status')
+        $students = ($teacher ? $access->learners($staff) : Student::query())->select('id', 'admission_no', 'first_name', 'last_name', 'class_id', 'status')
             ->with('schoolClass:id,name')
             ->when($filters['class_id'] ?? null, fn ($query, $id) => $query->where('class_id', $id))
             ->when($filters['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
@@ -87,8 +94,9 @@ class StudentController extends Controller
         return response()->json(['error' => ['code' => 'ADMISSION_CONFLICT', 'message' => 'Another admission was registered concurrently. Please retry.']], 409);
     }
 
-    public function show(Request $request, Student $student)
+    public function show(Request $request, $student)
     {
+        $student = $this->visibleStudent($request, $student);
         return response()->json(['data' => $this->profileData($request, $student)]);
     }
 
@@ -174,13 +182,18 @@ class StudentController extends Controller
         return response()->json(['data' => $this->historyData($request, $record)], 201);
     }
 
-    public function academicHistory(Request $request, Student $student)
+    public function academicHistory(Request $request, $student)
     {
+        $student = $this->visibleStudent($request, $student);
         $records = $student->promotionsTransfers()->with(['fromClass:id,name', 'toClass:id,name', 'term:id,name'])->orderByDesc('id')->get();
 
         return response()->json(['data' => [
             'student' => (new StudentSummaryResource($student->load('schoolClass:id,name')))->resolve($request),
-            'promotions_transfers' => $records->map(fn ($record) => (new PromotionTransferResource($record))->resolve($request)),
+            'promotions_transfers' => $records->map(function ($record) use ($request) {
+                $data = (new PromotionTransferResource($record))->resolve($request);
+                if ($request->user()?->hasRole('teacher')) unset($data['reason']);
+                return $data;
+            }),
         ]]);
     }
 
@@ -205,11 +218,26 @@ class StudentController extends Controller
     private function profileData(Request $request, Student $student): array
     {
         $student->load('schoolClass:id,name');
+        if ($request->user()?->hasRole('teacher')) {
+            return (new StudentSummaryResource($student))->resolve($request);
+        }
         if (in_array($request->user()?->role?->name, ['system_admin', 'head_teacher', 'deputy_head_teacher'], true)) {
             $student->load('guardians:id,student_id,full_name,relationship,phone,email,is_primary_contact');
         }
 
         return (new StudentResource($student))->resolve($request);
+    }
+
+    private function visibleStudent(Request $request, $student): Student
+    {
+        $id = $student instanceof Student ? $student->id : $student;
+        if (! $request->user()?->hasRole('teacher')) return Student::findOrFail($id);
+        $access = new TeacherWorkspaceAccess();
+        $found = $access->learners($access->staff($request->user()))->whereKey($id)->first();
+        if (! $found) {
+            throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json(['message' => 'Resource not found.'], 404));
+        }
+        return $found;
     }
 
     private function historyData(Request $request, $record): array

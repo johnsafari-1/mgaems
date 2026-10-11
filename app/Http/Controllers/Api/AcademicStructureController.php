@@ -12,6 +12,7 @@ use App\Models\Subject;
 use App\Models\TimetableEntry;
 use App\Services\AcademicIntegrity;
 use App\Services\AuditLogger;
+use App\Services\TeacherWorkspaceAccess;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -23,6 +24,15 @@ class AcademicStructureController extends Controller
 
     public function indexClasses(Request $request)
     {
+        if ($request->user()?->hasRole('teacher')) {
+            $access = new TeacherWorkspaceAccess();
+            return response()->json(['data' => $access->classes($access->staff($request->user()))
+                ->orderBy('sequence')->orderBy('name')->get(['id', 'name', 'level'])]);
+        }
+        if ($request->user()?->hasRole('student')) {
+            // Existing academic reference access does not grant school statistics or HR.
+            return response()->json(['data' => SchoolClass::orderBy('sequence')->orderBy('name')->get(['id', 'name', 'level'])]);
+        }
         $classes = SchoolClass::withCount(['students', 'subjects'])
             ->with('classTeacher:id,first_name,last_name')->orderBy('sequence')->orderBy('name')->get();
 

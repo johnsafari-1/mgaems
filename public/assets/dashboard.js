@@ -2,6 +2,7 @@
 (() => {
   const user = MGAEMS.requireAuth();
   if (!user || MGAEMS.landingPage(user) !== '/dashboard.html') return;
+  if (user.role === 'teacher') return; // Teacher Workspace owns this page.
   renderAppShell('/dashboard.html');
   const esc = MGAEMS.escapeHTML;
   const leadership = ['system_admin', 'head_teacher', 'deputy_head_teacher'].includes(user.role);
