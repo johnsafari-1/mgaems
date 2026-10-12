@@ -66,20 +66,23 @@
   if (!['head_teacher', 'deputy_head_teacher'].includes(user.role)) { window.location.href = MGAEMS.landingPage(user); return; }
   renderAppShell('/health-welfare.html');
   const main = document.getElementById('appMain');
-  const state = { generation: 0, denied: false, rows: [], learner: null, tab: 'profiles', profile: null, incident: null, modal: null, pickerPage: 1, pickerRequest: 0 };
+  const state = { generation: 0, denied: false, rows: [], learner: null, tab: 'profiles', profile: null, incident: null, modal: null, pickerPage: 1, pickerRequest: 0, pickerReady: false };
   const byId = id => document.getElementById(id);
   const button = (text, attr = '', primary = false) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-sm" ${attr}>${text}</button>`;
   const actions = html => `<div class="health-actions">${html}</div>`;
   const validId = id => Number.isSafeInteger(Number(id)) && Number(id) > 0;
   const validRecord = record => record && validId(record.id) && Number.isInteger(record.revision_number) && record.revision_number > 0;
   function clearModal() { if (state.modal) { state.modal.setBusy(false); state.modal.body.innerHTML = ''; state.modal.close(); state.modal = null; } }
-  function clear() { state.generation++; state.pickerRequest++; state.profile = null; state.incident = null; clearModal(); }
+  // Selected Health content and the paged roster have independent request owners.
+  function clear() { state.generation++; state.profile = null; state.incident = null; clearModal(); }
+  function clearWorkspace() { clear(); state.pickerRequest++; state.pickerReady = false; state.rows = []; state.learner = null; }
   function deny() {
-    clear(); state.denied = true; state.rows = []; state.learner = null;
+    clearWorkspace(); state.denied = true;
     main.innerHTML = MGAEMS.emptyStateHTML('Health access unavailable', 'Your session or current Staff authorization no longer permits this workspace. Sign in again with an eligible account.', 'lock');
   }
   async function read(path) { const result = await MGAEMS.get(path); if ([401, 403].includes(result.status)) deny(); return result; }
   const alive = generation => !state.denied && generation === state.generation;
+  byId('shellLogout')?.addEventListener('click', () => { clearWorkspace(); state.denied = true; main.innerHTML = ''; });
   function error(target, result, retry) {
     target.innerHTML = MGAEMS.errorHTML(result.error || 'The information could not be loaded.');
     if (retry && ![401, 403].includes(result.status)) { target.innerHTML += button('Try again', 'data-retry'); target.querySelector('[data-retry]').addEventListener('click', retry); }
@@ -103,7 +106,7 @@
     return `<p class="text-muted">Record #${esc(record.id)} · Revision ${esc(record.revision_number)}</p><dl class="health-details">${rows}</dl>`;
   }
   async function start() {
-    clear(); state.denied = false; state.learner = null; state.rows = [];
+    clearWorkspace(); state.denied = false;
     const generation = state.generation;
     main.innerHTML = MGAEMS.loadingHTML('Checking restricted Health authorization…');
     const result = await read('/api/v1/health/profiles?per_page=1');
@@ -119,12 +122,13 @@
   }
   async function loadLearners() {
     const request = ++state.pickerRequest, target = byId('healthLearners');
-    state.rows = []; target.innerHTML = MGAEMS.loadingHTML('Loading this learner page…'); byId('healthLearnerPages').innerHTML = '';
+    state.pickerReady = false; state.rows = []; target.innerHTML = MGAEMS.loadingHTML('Loading this learner page…'); byId('healthLearnerPages').innerHTML = '';
     const result = await read(`/api/v1/students?page=${state.pickerPage}&per_page=20`);
     if (state.denied || request !== state.pickerRequest) return;
     if (!result.ok) { error(target, result, loadLearners); return; }
     if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || !Number.isInteger(result.meta?.per_page) || result.meta.per_page < 1) { error(target, { error: 'Unexpected learner response.' }, loadLearners); return; }
     state.rows = result.data.filter(row => validId(row.id)).map(row => ({ id: row.id, first_name: row.first_name, last_name: row.last_name, admission_no: row.admission_no }));
+    state.pickerReady = true;
     renderLearnerChoices();
     const pages = Math.max(1, Math.ceil(result.meta.total / result.meta.per_page));
     byId('healthLearnerPages').innerHTML = `<span>Page ${state.pickerPage} of ${pages}</span>${button('Previous', `id="healthLearnerPrev" ${state.pickerPage <= 1 ? 'disabled' : ''}`)}${button('Next', `id="healthLearnerNext" ${state.pickerPage >= pages ? 'disabled' : ''}`)}`;
@@ -132,9 +136,12 @@
     byId('healthLearnerNext').addEventListener('click', () => { if (state.pickerPage < pages) { state.pickerPage++; loadLearners(); } });
   }
   function renderLearnerChoices() {
+    // Filtering is local: only the latest text is applied once a page has loaded.
+    // It must not replace a pending loader or erase a failed request's retry.
+    if (!state.pickerReady) return;
     const query = byId('healthLearnerFilter').value.trim().toLowerCase();
     const rows = state.rows.filter(row => `${row.first_name} ${row.last_name} ${row.admission_no}`.toLowerCase().includes(query));
-    byId('healthLearners').innerHTML = rows.length ? rows.map(row => `<button type="button" class="btn btn-secondary health-choice" data-health-learner="${esc(row.id)}">${esc(row.first_name)} ${esc(row.last_name)}<br><small>${esc(row.admission_no)}</small></button>`).join('') : MGAEMS.emptyStateHTML('No learners on this page match', 'Clear the filter or browse another page.', 'users');
+    byId('healthLearners').innerHTML = rows.length ? rows.map(row => `<button type="button" class="btn btn-secondary health-choice" data-health-learner="${esc(row.id)}">${esc(row.first_name)} ${esc(row.last_name)}<br><small>${esc(row.admission_no)}</small></button>`).join('') : MGAEMS.emptyStateHTML(state.rows.length ? 'No learners on this page match' : 'No learners returned', state.rows.length ? 'Clear the filter or browse another page.' : 'The authorized roster returned no learners on this page.', 'users');
     byId('healthLearners').querySelectorAll('[data-health-learner]').forEach(control => control.addEventListener('click', () => {
       clear(); state.learner = state.rows.find(row => String(row.id) === control.dataset.healthLearner); byId('healthSelected').textContent = learnerTitle(); renderPanel();
     }));
@@ -372,7 +379,7 @@
       clearModal(); MGAEMS.toast('School Health record saved.', 'success'); refresh();
     });
   }
-  window.addEventListener('pagehide', () => { clear(); state.rows = []; state.learner = null; main.innerHTML = ''; });
+  window.addEventListener('pagehide', () => { clearWorkspace(); main.innerHTML = ''; });
   window.addEventListener('pageshow', event => { if (event.persisted) start(); });
   start();
 })();

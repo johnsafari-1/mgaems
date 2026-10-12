@@ -4,9 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const createDOM = require('./helpers/dom.cjs');
 const flush = () => new Promise(resolve => setImmediate(resolve));
+const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const ok = (data, total = data?.length || 0) => ({ ok: true, data, meta: { total, per_page: 20, page: 1 } });
-function harness({ role = 'head_teacher', profile = true, get, write, confirm, normalizeTimes = false } = {}) {
+function harness({ role = 'head_teacher', profile = true, get, write, confirm, normalizeTimes = false, logoutControl = false } = {}) {
   const h = createDOM(role, '/health-welfare.html'), reads = [], writes = [], errors = [], toasts = [];
+  if (logoutControl) new h.Element('button', { id: 'shellLogout' });
   if (normalizeTimes) Object.defineProperty(h.Element.prototype, 'value', { get() { return this._value; }, set(value) { this._value = this.attrs.type === 'datetime-local' ? String(value).replace(/\.(\d{3})\d+$/, '.$1') : value; } });
   const records = {
     profile: { id: 3, student_id: 8, revision_number: 4, allergy_information_state: 'unknown', allergy_information: null, emergency_information: '<Private emergency>', support_information: null, source: 'guardian_report', source_reference: null, recorded_by: 2, recorded_at: '2026-10-11T09:00:00.123456Z', reviewed_at: null, reviewed_by: null, extra_private_field: 'DO-NOT-RENDER' },
@@ -28,6 +30,7 @@ function harness({ role = 'head_teacher', profile = true, get, write, confirm, n
     if (url.startsWith('/api/v1/health/profiles/3/alerts?page=')) return ok([records.alert]);
     if (url === '/api/v1/health/profiles/3/alerts/5') return ok(records.alert);
     if (url.startsWith('/api/v1/health/incidents?student_id=8')) return ok([records.incident]);
+    if (url.startsWith('/api/v1/health/incidents?student_id=9')) return ok([]);
     if (url === '/api/v1/health/incidents/10') return ok(records.incident);
     for (const [group, type] of Object.entries({ actions: 'action', notifications: 'notification', referrals: 'referral' })) {
       if (url.startsWith(`/api/v1/health/incidents/10/${group}?page=`)) return ok([records[type]]);
@@ -182,4 +185,95 @@ test('loading another action page preserves chronological rows and working detai
   const h = harness({ get: (url, records) => url.includes('/actions?page=') ? ok([{ ...records.action, id: url.includes('?page=2&') ? 15 : 19, action_at: url.includes('?page=2&') ? '2026-10-11T09:30:00.654321Z' : '2026-10-11T09:30:00.654322Z' }], 21) : undefined });
   await h.incident(); await h.click('[data-health-more]'); const html = h.ids.get('healthEntryList').innerHTML;
   assert.ok(html.indexOf('Record #15') < html.indexOf('Record #19')); await h.click('[data-health-record="15"]'); assert.match(h.modals.at(-1).body.innerHTML, /&lt;Actual action&gt;/);
+});
+
+for (const tab of ['incidents', 'logs']) for (const returnBeforeResponse of [false, true]) {
+  test(`pending roster survives ${tab} tab and return to Profiles ${returnBeforeResponse ? 'before' : 'after'} completion`, async () => {
+    const roster = deferred(), h = harness({ get: url => url.startsWith('/api/v1/students?') ? roster.promise : undefined }); await flush();
+    assert.match(h.ids.get('healthLearners').innerHTML, /Loading this learner page/);
+    await h.click(`[data-health-tab="${tab}"]`);
+    if (returnBeforeResponse) await h.click('[data-health-tab="profiles"]');
+    roster.resolve(ok([{ id: 8, first_name: 'Fixture', last_name: 'Learner', admission_no: 'FIX8' }])); await flush();
+    if (!returnBeforeResponse) await h.click('[data-health-tab="profiles"]');
+    assert.equal(h.ids.get('healthLearners').querySelectorAll('[data-health-learner]').length, 1);
+    assert.match(h.ids.get('healthLearnerPages').innerHTML, /Page 1 of 1/); await h.choose(8); assert.ok(h.ids.has('healthEditProfile'));
+    assert.equal(h.reads.filter(url => url.startsWith('/api/v1/students?')).length, 1);
+  });
+}
+
+test('rapid Health tab switching preserves the independent roster and ignores an obsolete access-log response', async () => {
+  const roster = deferred(), log = deferred(); const h = harness({ get: url => url.startsWith('/api/v1/students?') ? roster.promise : url.startsWith('/api/v1/health/access-log?') ? log.promise : undefined }); await flush();
+  for (const tab of ['logs', 'incidents', 'profiles', 'incidents', 'profiles']) await h.click(`[data-health-tab="${tab}"]`);
+  roster.resolve(ok([{ id: 8, first_name: 'Fixture', last_name: 'Learner', admission_no: 'FIX8' }])); log.resolve(ok([{ id: 90, actor_id: 2, operation: 'obsolete_log', record_type: 'profile', record_id: 3, recorded_at: '2026-10-11T09:00:00Z' }])); await flush();
+  assert.equal(h.ids.get('healthLearners').querySelectorAll('[data-health-learner]').length, 1); assert.doesNotMatch(h.ids.get('healthPanel').innerHTML, /obsolete log/);
+  await h.choose(8); await h.click('[data-health-record="5"]'); assert.match(h.modals.at(-1).body.innerHTML, /Teacher safety/);
+});
+
+test('a roster failure after tab switching resolves loading, preserves retry while filtering, and retries successfully', async () => {
+  const first = deferred(), retry = deferred(); let attempts = 0;
+  const h = harness({ get: url => url.startsWith('/api/v1/students?') ? (++attempts === 1 ? first.promise : retry.promise) : undefined }); await flush(); await h.click('[data-health-tab="incidents"]');
+  first.resolve({ ok: false, error: 'Fixture network failure' }); await flush(); assert.match(h.ids.get('healthLearners').innerHTML, /Fixture network failure/);
+  h.ids.get('healthLearnerFilter').value = 'Fixture'; h.ids.get('healthLearnerFilter').listeners.input(); assert.ok(h.ids.get('healthLearners').querySelector('[data-retry]'));
+  const retrying = h.click('[data-retry]'); await flush(); assert.match(h.ids.get('healthLearners').innerHTML, /Loading this learner page/);
+  retry.resolve(ok([{ id: 8, first_name: 'Fixture', last_name: 'Learner', admission_no: 'FIX8' }])); await retrying; await h.click('[data-health-tab="profiles"]');
+  assert.equal(attempts, 2); await h.choose(8); assert.ok(h.ids.has('healthEditProfile'));
+});
+
+test('an empty roster after unrelated tab changes resolves to an honest empty state and disabled paging', async () => {
+  const roster = deferred(), h = harness({ get: url => url.startsWith('/api/v1/students?') ? roster.promise : undefined }); await flush(); await h.click('[data-health-tab="logs"]');
+  roster.resolve(ok([])); await flush(); assert.match(h.ids.get('healthLearners').innerHTML, /No learners returned/);
+  assert.doesNotMatch(h.ids.get('healthLearners').innerHTML, /Loading/); assert.equal(h.ids.get('healthLearnerPrev').disabled, true); assert.equal(h.ids.get('healthLearnerNext').disabled, true);
+});
+
+test('newer roster pagination supersedes an older pending page without invalidating the selected profile', async () => {
+  const second = deferred(), third = deferred(); const h = harness({ get: url => {
+    if (!url.startsWith('/api/v1/students?')) return;
+    const page = new URL('https://fixture.invalid' + url).searchParams.get('page');
+    return page === '2' ? second.promise : page === '3' ? third.promise : ok([{ id: 8, first_name: 'Fixture', last_name: 'One', admission_no: 'FIX8' }], 60);
+  } }); await h.choose(8); const next = h.ids.get('healthLearnerNext'); next.listeners.click(); await flush(); next.listeners.click(); await flush();
+  assert.match(h.ids.get('healthPanel').innerHTML, /Private emergency/);
+  third.resolve(ok([{ id: 30, first_name: 'Latest', last_name: 'Page', admission_no: 'FIX30' }], 60)); await flush(); second.resolve(ok([{ id: 20, first_name: 'Obsolete', last_name: 'Page', admission_no: 'FIX20' }], 60)); await flush();
+  assert.match(h.ids.get('healthLearners').innerHTML, /Latest/); assert.doesNotMatch(h.ids.get('healthLearners').innerHTML, /Obsolete/); assert.match(h.ids.get('healthLearnerPages').innerHTML, /Page 3 of 3/);
+  await h.click('healthLearnerPrev'); await h.click('[data-health-tab="incidents"]'); await flush(); assert.match(h.ids.get('healthLearnerPages').innerHTML, /Page 2 of 3/);
+  await h.click('[data-health-record="10"]'); assert.ok(h.ids.has('healthNewEntry'));
+});
+
+test('the latest local search wins while a roster page is pending and preserves its loading state', async () => {
+  const roster = deferred(), h = harness({ get: url => url.startsWith('/api/v1/students?') ? roster.promise : undefined }); await flush();
+  for (const value of ['Old', 'Latest']) { h.ids.get('healthLearnerFilter').value = value; h.ids.get('healthLearnerFilter').listeners.input(); }
+  assert.match(h.ids.get('healthLearners').innerHTML, /Loading this learner page/);
+  roster.resolve(ok([{ id: 8, first_name: 'Old', last_name: 'Learner', admission_no: 'FIX8' }, { id: 9, first_name: 'Latest', last_name: 'Learner', admission_no: 'FIX9' }])); await flush();
+  assert.match(h.ids.get('healthLearners').innerHTML, /Latest/); assert.doesNotMatch(h.ids.get('healthLearners').innerHTML, /Old/);
+  assert.equal(h.reads.filter(url => url.startsWith('/api/v1/students?')).length, 1); assert.ok(h.reads.every(url => !url.includes('Latest') && !url.includes('Old')));
+});
+
+test('authorization loss invalidates an independent pending roster and erases selected Health details', async () => {
+  for (const status of [401, 403]) {
+    const roster = deferred(), logs = deferred(); const h = harness({ get: url => url.includes('/students?page=2&') ? roster.promise : url.startsWith('/api/v1/students?') ? ok([{ id: 8, first_name: 'Fixture', last_name: 'Learner', admission_no: 'FIX8' }], 21) : url.startsWith('/api/v1/health/access-log?') ? logs.promise : undefined });
+    await h.choose(8); await h.click('healthLearnerNext'); await h.click('[data-health-tab="logs"]'); logs.resolve({ ok: false, status }); await flush();
+    roster.resolve(ok([{ id: 9, first_name: 'Late', last_name: 'Learner', admission_no: 'FIX9' }], 21)); await flush();
+    assert.match(h.ids.get('appMain').innerHTML, /Health access unavailable/); assert.doesNotMatch(h.ids.get('appMain').innerHTML, /Private emergency|Late/); assert.equal(h.ids.has('healthLearners'), false);
+  }
+});
+
+test('signing out or departing invalidates pending roster work; history restoration starts a fresh owner', async () => {
+  for (const dispose of ['logout', 'pagehide']) {
+    const old = deferred(), fresh = deferred(); let attempts = 0;
+    const h = harness({ logoutControl: true, get: url => url.startsWith('/api/v1/students?') ? (++attempts === 1 ? old.promise : fresh.promise) : undefined }); await flush();
+    if (dispose === 'logout') await h.click('shellLogout'); else h.events.pagehide.forEach(callback => callback());
+    assert.equal(h.ids.get('appMain').innerHTML, '');
+    if (dispose === 'pagehide') { h.events.pageshow.forEach(callback => callback({ persisted: true })); await flush(); }
+    old.resolve(ok([{ id: 90, first_name: 'Obsolete', last_name: 'Learner', admission_no: 'OLD' }])); await flush(); assert.doesNotMatch(h.ids.get('appMain').innerHTML, /Obsolete/);
+    if (dispose === 'pagehide') { fresh.resolve(ok([{ id: 8, first_name: 'Fresh', last_name: 'Learner', admission_no: 'NEW' }])); await flush(); assert.match(h.ids.get('healthLearners').innerHTML, /Fresh/); }
+  }
+});
+
+test('late incident and child responses cannot replace another learner or another incident record group', async () => {
+  const incident = deferred(), h = harness({ get: url => url === '/api/v1/health/incidents/10' ? incident.promise : undefined });
+  await h.choose(8); await h.click('[data-health-tab="incidents"]'); const loading = h.click('[data-health-record="10"]'); await flush(); await h.choose(9);
+  incident.resolve(ok({ ...h.records.incident, observations: 'Obsolete confidential incident' })); await loading;
+  assert.doesNotMatch(h.ids.get('healthPanel').innerHTML, /Obsolete confidential incident/);
+  const actions = deferred(), current = harness({ get: url => url.includes('/actions?page=') ? actions.promise : undefined }); await current.incident();
+  await current.click('[data-health-group="referrals"]'); actions.resolve(ok([{ ...current.records.action, action_type: 'obsolete_action' }])); await flush();
+  assert.match(current.ids.get('healthEntries').innerHTML, /referrals/); assert.doesNotMatch(current.ids.get('healthEntries').innerHTML, /obsolete action/);
 });
