@@ -90,6 +90,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('role:system_admin')->group(function () {
             Route::get('/roles', [UserController::class, 'roles']);
             Route::get('/users', [UserController::class, 'index']);
+            Route::get('/users/{user}/staff-link', [UserController::class, 'staffLink'])->where('user', '[1-9][0-9]*');
+            Route::patch('/users/{user}/staff-link', [UserController::class, 'changeStaffLink'])->where('user', '[1-9][0-9]*');
             Route::post('/users', [UserController::class, 'store']);
             Route::get('/users/{user}', [UserController::class, 'show']);
             Route::patch('/users/{user}', [UserController::class, 'update']);

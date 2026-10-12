@@ -7,6 +7,7 @@ use App\Models\Staff;
 use App\Models\StaffEmergencyContact;
 use App\Models\StaffQualification;
 use App\Services\AuditLogger;
+use App\Services\StaffAccountLinks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -34,8 +35,8 @@ class StaffController extends Controller
 
     public function store(Request $request, AuditLogger $auditLogger)
     {
+        $this->rejectAccountField($request);
         $validated = $request->validate([
-            'user_id' => ['nullable', 'exists:users,id', 'unique:staff,user_id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'staff_type' => ['required', Rule::in(['teaching', 'non_teaching'])],
             'role_title' => ['required', 'string', 'max:60'],
@@ -81,8 +82,8 @@ class StaffController extends Controller
 
     public function update(Request $request, Staff $staff, AuditLogger $auditLogger)
     {
+        $this->rejectAccountField($request);
         $validated = $request->validate([
-            'user_id' => ['sometimes', 'nullable', 'exists:users,id', Rule::unique('staff', 'user_id')->ignore($staff->id)],
             'department_id' => ['nullable', 'exists:departments,id'],
             'staff_type' => ['sometimes', Rule::in(['teaching', 'non_teaching'])],
             'role_title' => ['sometimes', 'string', 'max:60'],
@@ -94,10 +95,16 @@ class StaffController extends Controller
             'status' => ['sometimes', Rule::in(['active', 'on_leave', 'terminated'])],
         ]);
 
-        $staff->update($validated);
-        $auditLogger->log('UPDATE_STAFF', 'Staff', $staff->id, ['changes' => array_keys($validated)]);
+        $staff = app(StaffAccountLinks::class)->updateEmployment($request, $staff, $validated, $auditLogger);
 
         return response()->json(['data' => $staff->fresh(['department'])]);
+    }
+
+    private function rejectAccountField(Request $request): void
+    {
+        if (array_key_exists('user_id', $request->all())) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['user_id' => 'Manage account links in Administration User Management; HR edits cannot change this relationship.']);
+        }
     }
 
     public function storeQualification(Request $request, Staff $staff, AuditLogger $auditLogger)

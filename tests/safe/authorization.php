@@ -310,9 +310,18 @@ check('Staff status and linkage API changes remove permissions without personal 
     status(callApi('PATCH', 'staff/'.$staff->id, $adminToken, ['status' => 'on_leave', 'phone' => 'fixture-phone']), 200);
     $details = json_decode(DB::table('audit_logs')->where('action', 'UPDATE_STAFF')->latest('id')->value('details'), true);
     ensure($details === ['changes' => ['phone', 'status']], 'Only changed field names audited');
-    status(callApi('GET', 'messages', $issued), 403, 'FORBIDDEN');
-    status(callApi('PATCH', 'staff/'.$staff->id, $adminToken, ['status' => 'active', 'user_id' => null]), 200);
-    status(callApi('GET', 'messages', $issued), 403, 'FORBIDDEN');
+    status(callApi('GET', 'messages', $issued), 401);
+    ensure($user->fresh()->session_version === 1 && $user->tokens()->count() === 0, 'Employment change revokes the linked authorization epoch');
+    status(callApi('GET', 'messages', token($user)), 403, 'FORBIDDEN');
+    status(callApi('PATCH', 'staff/'.$staff->id, $adminToken, ['status' => 'active', 'user_id' => null]), 422);
+    status(callApi('PATCH', 'staff/'.$staff->id, $adminToken, ['status' => 'active']), 200);
+    $context = callApi('GET', 'users/'.$user->id.'/staff-link', $adminToken)['body']['data'];
+    status(callApi('PATCH', 'users/'.$user->id.'/staff-link', $adminToken, [
+        'staff_id' => null, 'expected_staff_id' => $staff->id,
+        'expected_session_version' => $context['account_link']['version'],
+        'staff_revision' => $context['account_link']['staff']['revision'], 'identity_confirmed' => true,
+    ]), 200);
+    status(callApi('GET', 'messages', token($user)), 403, 'FORBIDDEN');
 });
 check('encrypted Sanctum sessions reject inactive accounts and invalidate the requesting session', function () {
     foreach (['inactive', 'locked'] as $state) {
@@ -385,7 +394,7 @@ check('session role changes take effect and session logout preserves bearer toke
 check('the last active administrator remains protected and unauthorized users cannot change accounts', function () use ($admin, $secondAdmin, $adminToken) {
     $third = actor(Role::SYSTEM_ADMIN); $thirdToken = token($third);
     status(callApi('PATCH', 'users/'.$third->id, $adminToken, ['role' => Role::PARENT_GUARDIAN]), 200);
-    status(callApi('GET', 'users', $thirdToken), 403, 'FORBIDDEN');
+    status(callApi('GET', 'users', $thirdToken), 401);
     foreach (User::where('status', 'active')->whereHas('role', fn ($q) => $q->where('name', Role::SYSTEM_ADMIN))->where('id', '!=', $admin->id)->get() as $other) {
         status(callApi('DELETE', 'users/'.$other->id, $adminToken), 200);
     }
@@ -394,8 +403,8 @@ check('the last active administrator remains protected and unauthorized users ca
         status(callApi($method, 'users/'.$admin->id, $adminToken, $data), 409, 'LAST_ADMIN_PROTECTED');
     }
     ensure($admin->fresh()->status === 'active' && $admin->tokens()->count() === $before, 'Protected administrator and tokens unchanged');
-    status(callApi('PATCH', 'users/'.$admin->id, $thirdToken, ['role' => Role::TEACHER]), 403, 'FORBIDDEN');
-    status(callApi('DELETE', 'users/'.$admin->id, $thirdToken), 403, 'FORBIDDEN');
+    status(callApi('PATCH', 'users/'.$admin->id, $thirdToken, ['role' => Role::TEACHER]), 401);
+    status(callApi('DELETE', 'users/'.$admin->id, $thirdToken), 401);
 });
 check('authorization audit details contain no passwords, hashes, tokens, cookies or Staff personal values', function () {
     $details = implode('\n', DB::table('audit_logs')->pluck('details')->filter()->all());

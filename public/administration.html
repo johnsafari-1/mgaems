@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>MGAEMS — Administration</title>
 <script src="/assets/app.js"></script>
+<script src="/assets/account-links.js"></script>
 <link rel="stylesheet" href="/assets/app.css">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
@@ -16,6 +17,10 @@
   .admin-table-wrap { overflow-x: auto; }
   .admin-table { min-width: 720px; }
   .admin-user-name small, .admin-backup-name small { display: block; color: var(--gray-500); }
+  .admin-staff-link small { display: block; color: var(--gray-500); white-space: normal; }
+  .field .admin-link-confirm { display: flex; align-items: flex-start; gap: var(--space-2); }
+  .field .admin-link-confirm input[type="checkbox"] { width: auto; flex-shrink: 0; margin-top: 3px; }
+  .admin-link-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .admin-actions { display: flex; gap: var(--space-2); white-space: nowrap; }
   .admin-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 1px solid var(--gray-300); border-radius: var(--radius); background:var(--surface); color: var(--gray-700); cursor: pointer; }
   .admin-icon-button svg { width: 15px; height: 15px; }
@@ -200,18 +205,20 @@ if (user && ADMIN_ROLES.includes(user.role)) {
       return;
     }
     target.innerHTML = `<div class="admin-table-wrap"><table class="admin-table">
-      <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead>
+      <thead><tr><th>User</th><th>Role</th><th>Status</th><th>Staff eligibility</th><th>Last Login</th><th>Created</th><th>Actions</th></tr></thead>
       <tbody>${users.map(account => `<tr>
         <td class="admin-user-name"><strong>${esc(account.username)}</strong><small>${esc(account.email)}</small></td>
         <td>${esc(prettyRole(account.role))}</td>
         <td><span class="badge ${statusBadge(account.status)}">${esc(account.status)}</span></td>
+        <td class="admin-staff-link">${window.MGAEMSAccountLinks.status(account)}</td>
         <td>${esc(dateTime(account.last_login_at))}</td><td>${esc(dateTime(account.created_at))}</td>
-        <td><div class="admin-actions"><button class="admin-icon-button" type="button" title="View account" aria-label="View ${esc(account.username)}" data-view-user="${account.id}"><i data-lucide="eye"></i></button><button class="admin-icon-button" type="button" title="Edit account" aria-label="Edit ${esc(account.username)}" data-edit-user="${account.id}"><i data-lucide="pencil"></i></button>${account.status === 'active' ? `<button class="admin-icon-button" type="button" title="Deactivate account" aria-label="Deactivate ${esc(account.username)}" data-deactivate-user="${account.id}"><i data-lucide="user-round-x"></i></button>` : ''}</div></td>
+        <td><div class="admin-actions"><button class="admin-icon-button" type="button" title="Manage Staff account link" aria-label="Manage Staff link for ${esc(account.username)}" data-link-user="${account.id}"><i data-lucide="link"></i></button><button class="admin-icon-button" type="button" title="View account" aria-label="View ${esc(account.username)}" data-view-user="${account.id}"><i data-lucide="eye"></i></button><button class="admin-icon-button" type="button" title="Edit account" aria-label="Edit ${esc(account.username)}" data-edit-user="${account.id}"><i data-lucide="pencil"></i></button>${account.status === 'active' ? `<button class="admin-icon-button" type="button" title="Deactivate account" aria-label="Deactivate ${esc(account.username)}" data-deactivate-user="${account.id}"><i data-lucide="user-round-x"></i></button>` : ''}</div></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
     target.querySelectorAll('[data-view-user]').forEach(button => button.addEventListener('click', () => viewUser(button.dataset.viewUser)));
     target.querySelectorAll('[data-edit-user]').forEach(button => button.addEventListener('click', () => editUser(button.dataset.editUser)));
     target.querySelectorAll('[data-deactivate-user]').forEach(button => button.addEventListener('click', () => deactivateUser(button.dataset.deactivateUser)));
+    target.querySelectorAll('[data-link-user]').forEach(button => button.addEventListener('click', () => window.MGAEMSAccountLinks.open(Number(button.dataset.linkUser), loadUsers)));
     MGAEMS.initIcons();
   }
 

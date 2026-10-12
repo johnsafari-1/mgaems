@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\StaffAccountLinks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -27,7 +28,7 @@ class UserController extends Controller
     {
         $perPage = min((int) $request->query('per_page', 15), 100);
 
-        $users = User::with('role')
+        $users = User::with('role', 'staff')
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->query('role'), fn ($q, $roleName) => $q->whereHas('role', fn ($r) => $r->where('name', $roleName)))
             ->orderBy('username')
@@ -72,6 +73,16 @@ class UserController extends Controller
         return response()->json(['data' => $this->transform($user)]);
     }
 
+    public function staffLink(Request $request, $user)
+    {
+        return response()->json(['data' => app(StaffAccountLinks::class)->context($request, (int) $user)])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function changeStaffLink(Request $request, $user, AuditLogger $auditLogger)
+    {
+        return response()->json(['data' => app(StaffAccountLinks::class)->change($request, (int) $user, $auditLogger)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function update(Request $request, User $user, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
@@ -102,17 +113,20 @@ class UserController extends Controller
             }
 
             if (isset($validated['role'])) {
+                if ($staff = $user->staff()->lockForUpdate()->first()) {
+                    app(StaffAccountLinks::class)->assertRoleCompatible($validated['role'], $staff);
+                }
                 $validated['role_id'] = Role::where('name', $validated['role'])->firstOrFail()->id;
                 unset($validated['role']);
             }
 
             // Health sessions cannot regain access after reactivation or a role grant.
-            if (($validated['status'] ?? $user->status) !== 'active'
-                || (isset($validated['role_id']) && (int) $validated['role_id'] !== (int) $user->role_id)) {
+            $roleChanged = isset($validated['role_id']) && (int) $validated['role_id'] !== (int) $user->role_id;
+            if (($validated['status'] ?? $user->status) !== 'active' || $roleChanged) {
                 $user->session_version = (int) $user->session_version + 1;
             }
             $user->update($validated);
-            if ($user->status !== 'active') {
+            if ($user->status !== 'active' || $roleChanged) {
                 $user->tokens()->delete();
             }
             $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
@@ -180,6 +194,7 @@ class UserController extends Controller
             'status' => $user->status,
             'last_login_at' => $user->last_login_at,
             'created_at' => $user->created_at,
+            'account_link' => app(StaffAccountLinks::class)->summary($user),
         ];
     }
 }

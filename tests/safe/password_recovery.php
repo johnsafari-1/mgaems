@@ -153,12 +153,12 @@ check('current-device logout still preserves other devices and recovery audit ex
     }
 });
 
-check('existing role-change epochs now invalidate ordinary cookie sessions without revoking legitimate bearer access', function () use ($adminToken) {
+check('role changes invalidate both ordinary cookie sessions and previously issued bearer tokens', function () use ($adminToken) {
     $user = actor(Role::PARENT_GUARDIAN); $cookie = healthSession($user); $issued = token($user);
     status(ordinarySessionRequest($cookie), 200);
     status(callApi('PATCH', 'users/'.$user->id, $adminToken, ['role' => Role::SPONSOR]), 200);
     status(ordinarySessionRequest($cookie), 401);
-    status(callApi('GET', 'me', $issued), 200);
+    status(callApi('GET', 'me', $issued), 401);
     status(ordinarySessionRequest(healthSession($user->fresh())), 200);
 });
 
