@@ -35,6 +35,7 @@ test('Coordinator dashboard requests real operational summary and no academic HR
   assert.match(h.ids.get('spSummary').innerHTML,/Group memberships \(all statuses\)/);
   assert.match(h.ids.get('spSummary').innerHTML,/relationships, not unique learners/);
   assert.equal(h.ids.has('studentsCard'),false);
+  assert.match(h.ids.get('spSummary').innerHTML,/Sponsorship status|Programme types|Recorded learner relationships/);
   for (const role of ['system_admin','head_teacher','deputy_head_teacher','teacher','student','parent_guardian','sponsor']) {
     const other=harness({role,page:'/dashboard.html'});await flush();assert.equal(other.requests.length,0);
   }

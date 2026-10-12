@@ -42,7 +42,10 @@
     const metrics = [['Sponsors', data.sponsors], ['Sponsorships', data.sponsorships], ...statuses.map(v => [label(v)+' sponsorships', data.by_status[v]]),
       ...types.map(v => [label(v)+' sponsorships', data.by_type[v]]), ['Individual assignments (all statuses)', data.individual_assignments], ['Group memberships (all statuses)', data.group_memberships]];
     if (metrics.some(([,v]) => !Number.isFinite(v))) { failure(element, {}, loadSummary); return; }
-    element.innerHTML = '<div class="stat-cards">'+metrics.map(([name,value]) => `<div class="card stat-card"><div class="num">${esc(value)}</div><div class="label">${esc(name)}</div></div>`).join('')+'</div><p class="text-muted">Counts describe stored records. Group memberships count relationships, not unique learners. School-wide sponsorships do not enumerate learners. No financial totals are recorded here.</p>';
+    const metricCards = rows => '<div class="stat-cards">'+rows.map(([name,value]) => `<div class="card stat-card"><div class="label">${esc(name)}</div><div class="num">${esc(value)}</div></div>`).join('')+'</div>';
+    const summaryList = rows => '<dl class="dashboard-summary-list">'+rows.map(([name,value]) => `<div><dt>${esc(name)}</dt><dd>${esc(value)}</dd></div>`).join('')+'</dl>';
+    element.innerHTML = (dashboard ? metricCards(metrics.slice(0, 3)) + '<div class="dashboard-summary-grid"><section class="card"><h3>Sponsorship status</h3>'+summaryList(statuses.map(value => [label(value), data.by_status[value]]))+'</section><section class="card"><h3>Programme types</h3>'+summaryList(types.map(value => [label(value), data.by_type[value]]))+'</section><section class="card"><h3>Recorded learner relationships</h3>'+summaryList(metrics.slice(-2))+'</section></div>' : metricCards(metrics))
+      + '<p class="text-muted">Counts describe stored records. Group memberships count relationships, not unique learners. School-wide sponsorships do not enumerate learners. No financial totals are recorded here.</p>';
     element.setAttribute('aria-busy', 'false');
   }
   if (dashboard) {

@@ -38,6 +38,7 @@ test('Teacher dashboard separates responsibilities and shows only actual own tim
   assert.doesNotMatch(timetable, /<Subject>/);
   assert.deepEqual(h.requests, ['/api/v1/teacher/context', '/api/v1/teacher/timetable']);
   assert.equal(h.ids.has('statsCards'), false);
+  assert.match(html, /Your current responsibilities/); assert.match(html, /Class Teacher classes/); assert.match(html, /Subject allocations/);
 });
 test('Class Teacher-only dashboard grants attendance entry without subject assessment entry', async () => {
   const context = { current_periods: [], class_teacher_classes: [{ id: 10, name: 'Assigned class', level: 'primary' }], subject_assignments: [], learner_classes: [{ id: 10, name: 'Assigned class' }] };

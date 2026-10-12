@@ -39,24 +39,40 @@ const MGAEMS_ROLE_NAV = {
   student: ['dashboard', 'communication'],
 };
 
+// Group only destinations already present in the explicit role policy.
+const MGAEMS_NAV_GROUPS = [
+  { label: 'Overview', keys: ['dashboard', 'teacher', 'coordinator', 'parent', 'sponsor'] },
+  { label: 'Learners', keys: ['students', 'myLearners', 'guardians'] },
+  { label: 'Academics', keys: ['academic', 'myTimetable', 'attendance', 'assessment'] },
+  { label: 'School Operations', keys: ['sponsorship', 'health', 'staff', 'visitors'] },
+  { label: 'Communication', keys: ['communication'] },
+  { label: 'Reporting', keys: ['reports'] },
+  { label: 'Administration', keys: ['administration'] },
+];
+
 function renderAppShell(activeHref, logoUrl) {
   if (document.getElementById('appMain')) return;
   const role = MGAEMS.currentUser()?.role;
-  const items = (Object.hasOwn(MGAEMS_ROLE_NAV, role) ? MGAEMS_ROLE_NAV[role] : [])
-    .map(key => MGAEMS_NAV_ITEMS[key]);
+  const keys = Object.hasOwn(MGAEMS_ROLE_NAV, role) ? MGAEMS_ROLE_NAV[role] : [];
+  const items = keys.map(key => MGAEMS_NAV_ITEMS[key]);
   const pageTitle = items.find(item => item.href === activeHref)?.label || 'MGAEMS';
+  const location = MGAEMS_NAV_GROUPS.find(group => group.keys.some(key => keys.includes(key) && MGAEMS_NAV_ITEMS[key].href === activeHref))?.label || 'Workspace';
   const esc = MGAEMS.escapeHTML;
-  const navLinks = items.map(item => `
+  const navigationLink = item => `
     <a href="${item.href}" title="${item.label}" class="${item.href === activeHref ? 'active' : ''}" ${item.href === activeHref ? 'aria-current="page"' : ''}>
       <i data-lucide="${item.icon}" aria-hidden="true"></i><span class="sidebar-label">${item.label}</span>
-    </a>`).join('');
+    </a>`;
+  const navLinks = MGAEMS_NAV_GROUPS.map((group, index) => {
+    const permitted = keys.filter(key => group.keys.includes(key));
+    return permitted.length ? `<section class="nav-section" aria-labelledby="navGroup${index}"><div class="nav-section-title" id="navGroup${index}">${esc(group.label)}</div>${permitted.map(key => navigationLink(MGAEMS_NAV_ITEMS[key])).join('')}</section>` : '';
+  }).join('');
 
   document.body.insertAdjacentHTML('afterbegin', `
     <a class="skip-link" href="#appMain">Skip to main content</a>
     <div class="app-shell">
       <aside class="app-sidebar" id="appSidebar" aria-label="School navigation">
         <a class="brand" href="${MGAEMS.landingPage()}" aria-label="MGAEMS home">
-          <img id="appSchoolLogo" src="${esc(logoUrl || '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg')}" alt="" onerror="this.hidden=true">
+          <span class="brand-mark" aria-hidden="true"><span>MG</span><img id="appSchoolLogo" ${logoUrl ? `src="${esc(logoUrl)}"` : 'hidden'} alt=""></span>
           <div class="sidebar-label"><strong>MGAEMS</strong><div id="appSchoolName">School workspace</div><div class="sub" id="appSchoolMotto"></div></div>
         </a>
         <button type="button" class="btn btn-secondary icon-control sidebar-close" id="closeNavigation" aria-label="Close navigation"><i data-lucide="x" aria-hidden="true"></i></button>
@@ -65,10 +81,10 @@ function renderAppShell(activeHref, logoUrl) {
       <header class="app-header">
         <div class="header-context">
           <button type="button" class="btn btn-secondary icon-control" id="navigationToggle" aria-controls="appSidebar" aria-expanded="true" aria-label="Collapse navigation"><i data-lucide="menu" aria-hidden="true"></i></button>
-          <div><strong>${esc(pageTitle)}</strong>${!['parent_guardian', 'sponsor', 'sponsor_coordinator'].includes(role) ? '<div class="sub" id="academicContext" role="status">Loading academic context…</div>' : ''}</div>
+          <div><div class="header-location">${esc(location)}</div><strong class="header-title">${esc(pageTitle)}</strong>${['system_admin', 'head_teacher', 'deputy_head_teacher', 'teacher'].includes(role) ? '<div class="sub" id="academicContext" role="status">Loading academic context…</div>' : ''}</div>
         </div>
         <div class="user">
-          <span id="userInfo"></span>
+          <div class="user-identity"><span id="userInfo"></span><span id="userRole"></span></div>
           <button type="button" class="btn btn-secondary icon-control" data-theme-toggle aria-label="Switch theme"></button>
           <button type="button" class="btn btn-secondary btn-sm" id="shellLogout"><i data-lucide="log-out" aria-hidden="true"></i><span>Log Out</span></button>
         </div>
@@ -78,6 +94,7 @@ function renderAppShell(activeHref, logoUrl) {
     <button type="button" class="sidebar-backdrop" id="sidebarBackdrop" aria-label="Close navigation" tabindex="-1" hidden></button>
   `);
   document.getElementById('shellLogout').addEventListener('click', MGAEMS.logout);
+  document.getElementById('appSchoolLogo').addEventListener('error', event => { event.target.hidden = true; });
   MGAEMS.initSidebar();
   MGAEMS.initThemeControls();
   initAppNavigation();
@@ -161,13 +178,12 @@ async function loadShellContext() {
   });
   const context = document.getElementById('academicContext');
   if (context) {
-    const [years, terms] = await Promise.all([MGAEMS.get('/api/v1/academic-years'), MGAEMS.get('/api/v1/terms')]);
+    const [years, terms] = await MGAEMS.academicContext();
     if (!years.ok || !terms.ok || !Array.isArray(years.data) || !Array.isArray(terms.data)) {
       context.textContent = 'Academic context unavailable';
     } else {
-      const year = years.data.find(item => item.is_current);
-      const term = terms.data.find(item => item.is_current && (!year || item.academic_year_id === year.id));
-      context.textContent = [year?.name, term?.name].filter(Boolean).join(' · ') || 'No current academic year or term';
+      const { year, term } = MGAEMS.academicPeriod(years.data, terms.data);
+      context.textContent = year && term ? `${year.name} · ${term.name}` : 'Academic setup required';
     }
   }
   await schoolRequest;

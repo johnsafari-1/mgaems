@@ -145,7 +145,7 @@ for (const [role, destinations] of Object.entries(roleDestinations)) {
     const active = `/${destinations[0]}.html`;
     vm.runInContext(`renderAppShell('${active}')`, h.context);
     const nav = h.shellHTML().match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
-    assert.deepEqual([...nav.matchAll(/href="([^"]+)"/g)].map(match => match[1]), destinations.map(name => `/${name}.html`));
+    assert.deepEqual([...nav.matchAll(/href="([^"]+)"/g)].map(match => match[1]).sort(), destinations.map(name => `/${name}.html`).sort());
     assert.match(nav, new RegExp(`href="${active}"[^>]*aria-current="page"`));
     assert.doesNotMatch(nav, /finance|streams/i);
     if (!['head_teacher', 'deputy_head_teacher'].includes(role)) assert.doesNotMatch(nav, /health|safety/i);
@@ -278,4 +278,91 @@ test('dashboard displays API zero totals and unrecorded attendance without fabri
   assert.match(stats.innerHTML, /Not recorded/);
   assert.doesNotMatch(stats.innerHTML, /0%/);
   assert.equal(stats.attrs.get('aria-busy'), 'false');
+});
+
+test('sidebar groups contain only permitted destinations, omit empty sections, and preserve active links', () => {
+  const groups = { system_admin: ['Overview', 'Learners', 'Academics', 'School Operations', 'Communication', 'Reporting', 'Administration'], head_teacher: ['Overview', 'Learners', 'Academics', 'School Operations', 'Communication', 'Reporting', 'Administration'], deputy_head_teacher: ['Overview', 'Learners', 'Academics', 'School Operations', 'Communication', 'Reporting'], teacher: ['Overview', 'Learners', 'Academics', 'Communication'], sponsor_coordinator: ['Overview', 'School Operations', 'Communication'], parent_guardian: ['Overview'], sponsor: ['Overview'], student: ['Overview', 'Communication'] };
+  for (const [role, labels] of Object.entries(groups)) {
+    const h = harness({ role }); vm.runInContext(`renderAppShell('${role === 'parent_guardian' ? '/parent-portal.html' : role === 'sponsor' ? '/sponsor-portal.html' : '/dashboard.html'}')`, h.context);
+    const nav = h.shellHTML().match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
+    assert.deepEqual([...nav.matchAll(/class="nav-section-title" id="[^"]+">([^<]+)/g)].map(match => match[1]), labels);
+    for (const section of nav.matchAll(/<section[^>]*>([\s\S]*?)<\/section>/g)) assert.match(section[1], /<a href=/);
+    assert.equal((nav.match(/aria-current="page"/g) || []).length, 1);
+  }
+});
+
+test('header uses only account name and role; configured identity is text and missing logo has a real fallback', async () => {
+  const h = harness(); h.stored.set('mgaems_user', JSON.stringify({ username: '<Account>', role: 'head_teacher', email: 'DO-NOT-DISPLAY' }));
+  h.app.get = async url => ({ ok: true, data: url.endsWith('/school') ? { school_name: '<School>', motto: '<Motto>', logo_path: 'school/fixture-logo.png' } : [] });
+  vm.runInContext("renderAppShell('/dashboard.html')", h.context); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.elements.get('userInfo').textContent, '<Account>'); assert.equal(h.elements.get('userRole').textContent, 'head teacher');
+  assert.equal(h.elements.get('appSchoolName').textContent, '<School>'); assert.equal(h.elements.get('appSchoolLogo').src, '/storage/school/fixture-logo.png');
+  assert.doesNotMatch(h.shellHTML(), /DO-NOT-DISPLAY|DsN4QKTH|notification|type="search"/);
+  assert.match(h.shellHTML(), /brand-mark.*<span>MG<\/span>/);
+  const logo = h.elements.get('appSchoolLogo'); logo.listeners.error({ target: logo }); assert.equal(logo.hidden, true);
+});
+
+test('academic period display respects Nairobi dates, valid ranges, matching year and ambiguous current records', () => {
+  const h = harness(); const year = { id: 1, name: 'Fixture year', is_current: true, start_date: '2025-12-31T21:00:00Z', end_date: '2026-12-30T21:00:00Z' };
+  const term = { id: 2, academic_year_id: 1, is_current: true, start_date: '2026-09-30T21:00:00Z', end_date: '2026-12-14T21:00:00Z' };
+  assert.equal(h.app.schoolDate(year.start_date), '2026-01-01'); assert.equal(h.app.schoolDate('2026-10-12'), '2026-10-12');
+  assert.equal(h.app.academicPeriod([year], [term], '2026-10-12').term.id, 2);
+  assert.equal(h.app.academicPeriod([year], [{ ...term, academic_year_id: 9 }], '2026-10-12').term, null);
+  assert.equal(h.app.academicPeriod([year], [term], '2027-01-01').year, null);
+  assert.equal(h.app.academicPeriod([year, { ...year, id: 3 }], [term], '2026-10-12').year, null);
+});
+
+test('leadership dashboard shows setup required, independent calendar retry and no Health API or invented counts', async () => {
+  const h = harness(); let failure = true;
+  h.app.get = async url => {
+    h.requests.push({ url });
+    if (url.endsWith('/academic-years')) return failure ? { ok: false, status: 503, error: '<Calendar unavailable>' } : { ok: true, data: [] };
+    if (url.includes('school-statistics')) return { ok: true, data: { students: { total: 7, by_status: { active: 5 } }, staff: { total: 3 }, active_sponsorships: 2, attendance_today: { date: '2026-10-12', rate: null } } };
+    return { ok: true, data: [] };
+  };
+  vm.runInContext(script('dashboard.js'), h.context); await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.elements.get('dashboardPeriod').innerHTML, /&lt;Calendar unavailable&gt;/); assert.match(h.elements.get('statsCards').innerHTML, /Active learners/);
+  assert.match(h.elements.get('statsCards').innerHTML, /class="num">5</); assert.doesNotMatch(h.elements.get('statsCards').innerHTML, /0%/);
+  failure = false; h.elements.get('dashboardPeriod').retry(); await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.elements.get('dashboardPeriod').innerHTML, /Academic setup required/); assert.equal(h.elements.get('dashboardPeriod').attrs.get('aria-busy'), 'false');
+  assert.equal(h.requests.some(request => request.url.includes('/health/')), false);
+});
+
+test('shell and dashboard share concurrent calendar requests and unauthorized roles receive no academic panel', async () => {
+  const h = harness(); let releaseYears, releaseTerms;
+  h.context.fetch = async url => { h.requests.push({ url }); const data = url.endsWith('/academic-years') ? await new Promise(resolve => { releaseYears = resolve; }) : url.endsWith('/terms') ? await new Promise(resolve => { releaseTerms = resolve; }) : []; return { ok: true, status: 200, json: async () => ({ data }) }; };
+  vm.runInContext(script('dashboard.js'), h.context);
+  assert.equal(h.requests.filter(request => request.url.endsWith('/academic-years')).length, 1); assert.equal(h.requests.filter(request => request.url.endsWith('/terms')).length, 1);
+  releaseYears([]); releaseTerms([]); await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.elements.get('dashboardPeriod').innerHTML, /Academic setup required/);
+  for (const role of ['parent_guardian', 'sponsor', 'sponsor_coordinator', 'student', 'unrecognized']) {
+    const other = harness({ role }); vm.runInContext(script('dashboard.js'), other.context); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(other.elements.has('dashboardPeriod'), false); assert.equal(other.requests.some(request => request.url.endsWith('/academic-years') || request.url.endsWith('/terms')), false);
+    if (role === 'unrecognized') assert.doesNotMatch(other.elements.get('appMain').innerHTML, /href="\/communication.html"/);
+  }
+});
+
+test('dashboard quick actions follow role navigation and never expose Administrator Health access', () => {
+  for (const role of ['system_admin', 'head_teacher', 'deputy_head_teacher']) {
+    const h = harness({ role }); vm.runInContext(script('dashboard.js'), h.context);
+    const html = h.elements.get('appMain').innerHTML; assert.match(html, /Common school operations/);
+    assert.equal(html.includes('href="/health-welfare.html"'), role !== 'system_admin');
+    assert.equal(html.includes('href="/administration.html"'), role !== 'deputy_head_teacher');
+    assert.equal(h.requests.some(request => request.url.includes('/health/')), false);
+  }
+});
+
+test('dashboard renders only current returned calendar names and rejects invalid statistical values', async () => {
+  const h = harness(); h.app.get = async url => ({ ok: true, data: url.endsWith('/academic-years') ? [{ id: 1, name: '<Year>', is_current: true, start_date: '1000-01-01', end_date: '9999-12-31' }]
+    : url.endsWith('/terms') ? [{ academic_year_id: 1, name: '<Term>', is_current: true, start_date: '1000-01-01', end_date: '9999-12-31' }]
+      : url.includes('school-statistics') ? { students: { total: -1 }, staff: { total: 2 }, active_sponsorships: 0, attendance_today: { rate: 101, date: '2026-10-12' } } : [] });
+  vm.runInContext(script('dashboard.js'), h.context); await new Promise(resolve => setImmediate(resolve));
+  assert.match(h.elements.get('dashboardPeriod').innerHTML, /&lt;Year&gt;|&lt;Term&gt;/); assert.doesNotMatch(h.elements.get('dashboardPeriod').innerHTML, /<Year>|<Term>/);
+  assert.match(h.elements.get('statsCards').innerHTML, /unexpected response/); assert.doesNotMatch(h.elements.get('statsCards').innerHTML, /class="num">-1|101%/);
+});
+
+test('shared skeleton loading retains an escaped status label and hides placeholders from assistive technology', () => {
+  const h = harness(), markup = h.app.loadingHTML('<Loading records>', true);
+  assert.match(markup, /role="status"/); assert.match(markup, /loading-skeleton" aria-hidden="true"/); assert.match(markup, /&lt;Loading records&gt;/);
+  assert.doesNotMatch(markup, /<Loading records>/); assert.match(h.app.loadingHTML(), /spinner/);
 });

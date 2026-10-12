@@ -52,8 +52,8 @@
     state.context = context;
     target.hidden = true; target.setAttribute('aria-busy', 'false'); byId('teacherContent').hidden = false;
     const periods = context.current_periods.map(period).join(', ');
-    byId('teacherContent').innerHTML = `<p class="text-muted">${periods ? 'Current academic context: ' + esc(periods) : 'No eligible current academic term. Current class supervision remains available; subject assignments and timetable entries are unavailable.'}</p>
-      <button type="button" class="btn btn-secondary btn-sm" id="refreshTeacher">Refresh responsibilities</button><div id="teacherView"></div>`;
+    byId('teacherContent').innerHTML = `<div class="context-banner"><p>${periods ? 'Current academic context: ' + esc(periods) : 'No eligible current academic term. Current class supervision remains available; subject assignments and timetable entries are unavailable.'}</p>
+      <button type="button" class="btn btn-secondary btn-sm" id="refreshTeacher">Refresh responsibilities</button></div><div id="teacherView"></div>`;
     byId('refreshTeacher').addEventListener('click', setup);
     if (learnersPage) renderLearners();
     else if (timetablePage) renderTimetable();
@@ -62,7 +62,7 @@
 
   function renderOverview() {
     const classes = state.context.class_teacher_classes, subjects = state.context.subject_assignments;
-    byId('teacherView').innerHTML = `<div class="overview-grid">
+    byId('teacherView').innerHTML = `<div class="stat-cards" aria-label="Your current responsibilities">${[['Class Teacher classes', classes.length], ['Subject allocations', subjects.length], ['Scoped learner classes', state.context.learner_classes.length]].map(([title, value]) => `<div class="card stat-card"><div class="label">${title}</div><div class="num">${value}</div><div class="detail">From your authorized responsibilities</div></div>`).join('')}</div><div class="overview-grid">
       <section class="section" aria-labelledby="classTeacherHeading"><h2 id="classTeacherHeading">Class Teacher responsibilities</h2><p>Daily attendance belongs to your Class Teacher classes.</p>
         <div class="card">${classes.length ? classes.map(item => `<article class="record-item"><div><strong>${esc(item.name)}</strong><div class="text-meta">${esc(item.level)}</div></div></article>`).join('') : MGAEMS.emptyStateHTML('No Class Teacher classes', 'Subject assignments alone do not grant daily attendance management.', 'users')}</div>
         ${classes.length ? `<div class="form-actions">${link('/attendance.html', 'Manage class attendance')}${link('/students.html', 'My Learners')}</div>` : ''}</section>

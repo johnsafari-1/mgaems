@@ -125,6 +125,26 @@ const MGAEMS = (() => {
   const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
   const del = (path) => api(path, { method: 'DELETE' });
 
+  // Share concurrent shell/dashboard reads; retain no academic response cache.
+  let academicRequest = null;
+  function academicContext() {
+    if (!academicRequest) academicRequest = Promise.all([MGAEMS.get('/api/v1/academic-years'), MGAEMS.get('/api/v1/terms')]).finally(() => { academicRequest = null; });
+    return academicRequest;
+  }
+  function schoolDate(value = new Date()) {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (value == null || !Number.isFinite(new Date(value).getTime())) return null;
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Nairobi', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(value)).map(part => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+  function academicPeriod(years, terms, today = schoolDate()) {
+    const eligible = row => row?.is_current === true && schoolDate(row.start_date) && schoolDate(row.end_date)
+      && schoolDate(row.start_date) <= today && schoolDate(row.end_date) >= today;
+    const current = years.filter(eligible), year = current.length === 1 ? current[0] : null;
+    const matching = year ? terms.filter(term => term?.academic_year_id === year.id && eligible(term)) : [];
+    return { year, term: matching.length === 1 ? matching[0] : null };
+  }
+
   async function download(path, filename) {
     try {
       const res = await fetch(path, { headers: { Accept: 'application/pdf', Authorization: 'Bearer ' + token() } });
@@ -158,8 +178,9 @@ const MGAEMS = (() => {
     setTimeout(() => el.remove(), 4000);
   }
 
-  function loadingHTML(label = 'Loading…') {
-    return `<div class="loading-state" role="status"><div class="spinner" aria-hidden="true"></div>${escapeHTML(label)}</div>`;
+  function loadingHTML(label = 'Loading…', skeleton = false) {
+    const indicator = skeleton ? '<div class="loading-skeleton" aria-hidden="true"><span></span><span></span><span></span></div>' : '<div class="spinner" aria-hidden="true"></div>';
+    return `<div class="loading-state" role="status">${indicator}${escapeHTML(label)}</div>`;
   }
 
   function emptyStateHTML(title, desc = '', icon = 'inbox') {
@@ -291,8 +312,10 @@ const MGAEMS = (() => {
       else a.removeAttribute('aria-current');
     });
     const el = document.getElementById('userInfo');
-    if (el) el.textContent = `${user.username} — ${String(user.role || '').replace(/_/g, ' ')}`;
+    if (el) el.textContent = user.username || 'Account';
+    const role = document.getElementById('userRole');
+    if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, patch, del, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, patch, del, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, setTheme, initThemeControls };
 })();
