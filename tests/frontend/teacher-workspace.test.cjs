@@ -19,6 +19,7 @@ function harness({ role = 'teacher', page = '/dashboard.html', context, get } = 
     if (url.startsWith('/api/v1/students?')) return { ok: true, data: [{ id: 8, admission_no: '<A8>', first_name: '<Learner>', last_name: 'Name', school_class: { name: '<Class>' } }], meta: { total: 16, per_page: 15, page: 1 } };
     if (url === '/api/v1/students/8') return { ok: true, data: { id: 8, admission_no: '<A8>', first_name: '<Learner>', last_name: 'Name', status: 'active', school_class: { name: '<Class>' },
       guardians: [{ phone: 'private-sentinel' }], medical_info: { conditions: 'private-sentinel' } } };
+    if (url === '/api/v1/health/safety/learners/8') return { ok: true, data: { student_id: 8, alerts: [] } };
     throw new Error('Unexpected API '+url);
   };
   h.app.post = () => { throw new Error('Read-only Workspace attempted a write'); };
@@ -68,7 +69,7 @@ test('My Learners filters use only authorized class choices and preserve scoped 
 test('My Learner details display only educational fields and no private payload extras', async () => {
   const h = harness({ page: '/students.html' }); await flush();
   h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush();
-  assert.equal(h.requests.at(-1), '/api/v1/students/8');
+  assert.deepEqual(h.requests.slice(-2), ['/api/v1/students/8', '/api/v1/health/safety/learners/8']);
   assert.match(h.modals[0].body.innerHTML, /&lt;Learner&gt;/);
   assert.doesNotMatch(h.modals[0].body.innerHTML, /private-sentinel|medical|guardian|sponsorship/i);
 });
@@ -77,6 +78,38 @@ test('changed assignment detail failure shows unavailable learner without retain
   h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush();
   assert.match(h.modals[0].body.innerHTML, /Learner unavailable/);
   assert.doesNotMatch(h.modals[0].body.innerHTML, /<Learner>|&lt;Learner&gt;/);
+});
+
+test('Teacher safety view requests only the scoped projection and escapes its actionable narratives', async () => {
+  const h = harness({ page: '/students.html', get: async url => url === '/api/v1/health/safety/learners/8' ? { ok: true, data: { student_id: 8, alerts: [{ id: 3, alert_type: 'activity_precaution', description: '<Actionable safety>', emergency_instructions: '<School action>', source_reference: 'hidden-source' }], medical_info: 'hidden-medical', incidents: 'hidden-narrative' } } : undefined }); await flush();
+  h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush();
+  const html = h.ids.get('teacherSafetyResult').innerHTML; assert.match(html, /&lt;Actionable safety&gt;|&lt;School action&gt;/); assert.doesNotMatch(html, /<Actionable|hidden-source|hidden-medical|hidden-narrative/);
+  assert.deepEqual(h.requests.filter(url => url.includes('/health/')), ['/api/v1/health/safety/learners/8']);
+});
+test('empty Teacher alerts never imply no allergies and do not fetch complete Health records', async () => {
+  const h = harness({ page: '/students.html' }); await flush(); h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush();
+  assert.match(h.ids.get('teacherSafetyResult').innerHTML, /No current published safety alerts/); assert.match(h.ids.get('teacherSafetyResult').innerHTML, /does not confirm an absence of allergies/);
+  assert.equal(h.requests.some(url => /health\/(?:profiles|incidents|access-log)/.test(url)), false);
+});
+test('Teacher safety denial and revoked sessions erase learner detail rather than retaining private content', async () => {
+  for (const status of [401, 403]) {
+    const h = harness({ page: '/students.html', get: async url => url === '/api/v1/health/safety/learners/8' ? { ok: false, status } : undefined }); await flush(); h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush();
+    assert.match(h.modals[0].body.innerHTML, /Safety view unavailable/); assert.doesNotMatch(h.modals[0].body.innerHTML, /Learner&gt;|private-sentinel/); assert.equal(h.ids.has('teacherSafetyResult'), false);
+  }
+});
+test('late Teacher safety response cannot populate a dismissed or different learner dialog', async () => {
+  let release; const h = harness({ page: '/students.html', get: url => url === '/api/v1/health/safety/learners/8' ? new Promise(resolve => { release = resolve; }) : undefined }); await flush(); h.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush(); h.modals[0].close();
+  release({ ok: true, data: { student_id: 8, alerts: [{ id: 3, alert_type: 'allergy', description: 'late-sensitive', emergency_instructions: null }] } }); await flush(); assert.equal(h.modals[0].body.innerHTML, '');
+});
+test('Teacher refuses a safety response for another learner and offers safe network retry', async () => {
+  const wrong = harness({ page: '/students.html', get: async url => url === '/api/v1/health/safety/learners/8' ? { ok: true, data: { student_id: 9, alerts: [{ id: 4, alert_type: 'allergy', description: 'foreign-health' }] } } : undefined }); await flush(); wrong.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush(); assert.match(wrong.ids.get('teacherSafetyResult').innerHTML, /unexpected safety identity/); assert.doesNotMatch(wrong.ids.get('teacherSafetyResult').innerHTML, /foreign-health/);
+  let attempts = 0; const retry = harness({ page: '/students.html', get: async url => url === '/api/v1/health/safety/learners/8' && ++attempts === 1 ? { ok: false, status: 503, error: '<Unavailable>' } : undefined }); await flush(); retry.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush(); assert.match(retry.ids.get('teacherSafetyResult').innerHTML, /&lt;Unavailable&gt;/); retry.ids.get('teacherSafetyResult').querySelector('[data-safety-retry]').listeners.click(); await flush(); assert.match(retry.ids.get('teacherSafetyResult').innerHTML, /No current published safety alerts/);
+});
+test('missing current period or scoped learners creates no dummy safety requests, and departure clears dialogs', async () => {
+  const h = harness({ page: '/students.html', context: { current_periods: [], class_teacher_classes: [], subject_assignments: [], learner_classes: [] }, get: async url => url.startsWith('/api/v1/students?') ? { ok: true, data: [], meta: { total: 0, per_page: 15, page: 1 } } : undefined }); await flush(); assert.match(h.ids.get('myLearnerResults').innerHTML, /No assigned learners/); assert.equal(h.requests.some(url => url.includes('/health/')), false);
+  const open = harness({ page: '/students.html' }); await flush(); open.ids.get('myLearnerResults').querySelector('[data-learner]').listeners.click(); await flush(); open.events.pagehide.forEach(callback => callback()); assert.equal(open.modals[0].body.innerHTML, '');
+  const previousReads = open.requests.length; open.events.pageshow.forEach(callback => callback({ persisted: true })); await flush();
+  assert.equal(open.requests[previousReads], '/api/v1/teacher/context'); assert.equal(open.modals[0].body.innerHTML, '');
 });
 test('out-of-order learner response cannot replace the newly selected class results', async () => {
   let release;

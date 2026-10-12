@@ -8,7 +8,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
   class Element {
     constructor(tag = 'div', attrs = {}) {
       this.tag = tag; this.attrs = attrs; this.children = []; this.listeners = {}; this.dataset = {}; this.value = attrs.value || ''; this.name = attrs.name || '';
-      this.disabled = 'disabled' in attrs; this.required = 'required' in attrs; this.hidden = 'hidden' in attrs; this.classList = { toggle() {} };
+      this.disabled = 'disabled' in attrs; this.required = 'required' in attrs; this.hidden = 'hidden' in attrs; this.checked = 'checked' in attrs; this.classList = { toggle() {} };
       for (const [key, value] of Object.entries(attrs)) if (key.startsWith('data-')) this.dataset[key.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase())] = value;
       if (attrs.id) ids.set(attrs.id, this);
     }
@@ -46,10 +46,17 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
         if (!['input', 'br', 'hr', 'meta', 'link', 'img'].includes(tag)) stack.push(node);
       }
       for (const control of this.descendants().filter(node => node.tag === 'select')) { const choices = control.children.filter(node => node.tag === 'option'); control.value = (choices.find(node => 'selected' in node.attrs) || choices[0])?.attrs.value || ''; }
+      const decode = value => value.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" })[entity]);
+      for (const control of this.descendants().filter(node => node.tag === 'textarea')) {
+        const match = [...html.matchAll(/<textarea([^>]*)>([\s\S]*?)<\/textarea>/g)].find(match => match[1].includes(`id="${control.attrs.id}"`));
+        control.value = decode(match?.[2] || '');
+      }
+      for (const control of this.descendants().filter(node => node.tag === 'input')) control.value = decode(control.value);
     }
   }
   document.documentElement = new Element('html');
-  const window = { location: { pathname, href: pathname }, addEventListener() {}, matchMedia: () => ({ matches: false, addEventListener() {} }) };
+  const events = {};
+  const window = { location: { pathname, href: pathname }, crypto: require('node:crypto').webcrypto, addEventListener(name, callback) { (events[name] ||= []).push(callback); }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
   const context = vm.createContext({ document, window, URLSearchParams, setTimeout,
     localStorage: { getItem: key => key === 'mgaems_token' ? 'memory-session' : key === 'mgaems_user' ? JSON.stringify({ username: 'test-user', role }) : null },
     renderAppShell() { new Element('main', { id: 'appMain' }); } });
@@ -58,8 +65,8 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
   app.openModal = definition => {
     const overlay = new Element(), body = new Element(); overlay.appendChild(body); body.innerHTML = definition.body;
     const footer = new Element(); overlay.appendChild(footer); footer.innerHTML = definition.footer || '';
-    const modal = { ...definition, overlay, body, closed: false, setBusy(value) { this.busy = value; overlay.querySelectorAll('button').forEach(button => { button.disabled = value; }); }, close() { this.closed = true; } };
+    const modal = { ...definition, overlay, body, closed: false, setBusy(value) { this.busy = value; overlay.querySelectorAll('button').forEach(button => { button.disabled = value; }); }, close() { if (this.busy) return; this.closed = true; definition.onClose?.(); } };
     modals.push(modal); return modal;
   };
-  return { app, context, document, ids, modals, run, Element };
+  return { app, context, document, ids, modals, events, run, Element };
 };

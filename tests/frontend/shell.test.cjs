@@ -120,10 +120,19 @@ test('portal users land in their own portals and never receive staff navigation 
   }
 });
 
+test('Health API reads and writes explicitly bypass the browser cache', async () => {
+  const h = harness();
+  await h.app.get('/api/v1/health/profiles');
+  await h.app.post('/api/v1/health/incidents', { student_id: 8 });
+  await h.app.patch('/api/v1/health/profiles/3', { expected_revision: 1 });
+  assert.ok(h.requests.slice(-3).every(request => request.options.cache === 'no-store'));
+  await h.app.get('/api/v1/academic-years'); assert.equal(h.requests.at(-1).options.cache, undefined);
+});
+
 const roleDestinations = {
   system_admin: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
-  head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
-  deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'],
+  head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare', 'administration'],
+  deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare'],
   teacher: ['dashboard', 'students', 'teacher-timetable', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
   parent_guardian: ['parent-portal'],
@@ -138,7 +147,8 @@ for (const [role, destinations] of Object.entries(roleDestinations)) {
     const nav = h.shellHTML().match(/<nav aria-label="Main navigation">([\s\S]*?)<\/nav>/)[1];
     assert.deepEqual([...nav.matchAll(/href="([^"]+)"/g)].map(match => match[1]), destinations.map(name => `/${name}.html`));
     assert.match(nav, new RegExp(`href="${active}"[^>]*aria-current="page"`));
-    assert.doesNotMatch(nav, /health|safety|finance|streams/i);
+    assert.doesNotMatch(nav, /finance|streams/i);
+    if (!['head_teacher', 'deputy_head_teacher'].includes(role)) assert.doesNotMatch(nav, /health|safety/i);
     for (const name of destinations) {
       const filename = path.join(root, 'public', `${name}.html`);
       assert.equal(fs.existsSync(filename), true, `${name} destination exists`);

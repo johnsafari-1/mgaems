@@ -22,14 +22,15 @@ const MGAEMS_NAV_ITEMS = {
   coordinator: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Sponsor Coordinator Workspace' },
   myLearners: { href: '/students.html', icon: 'users', label: 'My Learners' },
   myTimetable: { href: '/teacher-timetable.html', icon: 'calendar-days', label: 'My Timetable' },
+  health: { href: '/health-welfare.html', icon: 'shield-check', label: 'Health & Safety' },
 };
 
 // Page visibility follows current APIs. Laravel remains the authorization boundary.
 const MGAEMS_LEADERSHIP_NAV = ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'];
 const MGAEMS_ROLE_NAV = {
   system_admin: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
-  head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'administration'],
-  deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV],
+  head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'health', 'administration'],
+  deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'health'],
   teacher: ['teacher', 'myLearners', 'myTimetable', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'coordinator', 'communication', 'visitors'],
   parent_guardian: ['parent'],

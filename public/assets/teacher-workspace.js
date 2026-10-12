@@ -11,7 +11,11 @@
   renderAppShell(page);
   const main = document.getElementById('appMain'), esc = MGAEMS.escapeHTML;
   const learnersPage = page === '/students.html', timetablePage = page === '/teacher-timetable.html';
-  const state = { context: null, page: 1, pages: 1, request: 0, setupRequest: 0, timetableRequest: 0, search: '', classId: '' };
+  const state = { context: null, page: 1, pages: 1, request: 0, setupRequest: 0, timetableRequest: 0, search: '', classId: '', learnerModal: null, safetyRequest: 0 };
+  function clearLearner() {
+    state.safetyRequest++;
+    if (state.learnerModal) { state.learnerModal.body.innerHTML = ''; state.learnerModal.close(); state.learnerModal = null; }
+  }
   const byId = id => document.getElementById(id);
   const table = (headings, rows) => `<div class="table-scroll"><table><thead><tr>${headings.map(title => `<th scope="col">${title}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   const period = item => [item.academic_year?.name, item.name].filter(Boolean).join(' · ');
@@ -32,6 +36,7 @@
     <div id="teacherContent" hidden></div>`;
 
   async function setup() {
+    clearLearner();
     const sequence = ++state.setupRequest;
     state.request++; state.timetableRequest++;
     state.context = null; byId('teacherContent').hidden = true; byId('teacherContent').innerHTML = '';
@@ -65,6 +70,7 @@
         <div class="card">${subjects.length ? subjects.map(item => `<article class="record-item"><div><strong>${esc(item.subject.name)}</strong><div class="text-meta">${esc(item.school_class.name)} · ${esc(period(item.term))}</div></div></article>`).join('') : MGAEMS.emptyStateHTML('No eligible subject assignments', 'Class Teacher ownership alone does not grant subject assessment entry.', 'book-open')}</div>
         ${subjects.length ? `<div class="form-actions">${link('/assessment.html', 'Enter assigned assessments')}${link('/students.html', 'My Learners')}${link('/teacher-timetable.html', 'My Timetable')}</div>` : ''}</section></div>
       <section class="section" aria-labelledby="teacherTimetableHeading"><h2 id="teacherTimetableHeading">My Timetable</h2><div id="teacherTimetable" aria-busy="true"></div></section>
+      <section class="section" aria-labelledby="teacherSafetyHeading"><h2 id="teacherSafetyHeading">Learner safety information</h2><p>Open an authorized learner in My Learners to see published actionable safety instructions. Current assignment scope remains required.</p>${link('/students.html', 'Open My Learners')}</section>
       <div class="form-actions">${link('/communication.html', 'School announcements and messages')}</div>`;
     loadTimetable(); MGAEMS.initIcons();
   }
@@ -104,6 +110,7 @@
     loadLearners();
   }
   async function loadLearners() {
+    clearLearner();
     const request = ++state.request, target = byId('myLearnerResults');
     byId('myLearnerPagination').innerHTML = ''; target.setAttribute('aria-busy', 'true');
     target.innerHTML = MGAEMS.loadingHTML('Loading your assigned learners…');
@@ -130,14 +137,39 @@
     byId('myLearnerNext').addEventListener('click', () => { if (state.page < state.pages) { state.page++; loadLearners(); } });
   }
   async function openLearner(id, trigger) {
-    const modal = MGAEMS.openModal({ title: 'Assigned learner', body: MGAEMS.loadingHTML('Loading learner…'), trigger });
+    clearLearner();
+    const modal = MGAEMS.openModal({ title: 'Assigned learner', body: MGAEMS.loadingHTML('Loading learner…'), trigger, onClose: () => { modal.body.innerHTML = ''; if (state.learnerModal === modal) { state.learnerModal = null; state.safetyRequest++; } } });
+    state.learnerModal = modal;
     const result = await MGAEMS.get('/api/v1/students/' + encodeURIComponent(id));
     if (modal.closed) return;
     if (!result.ok) { show(modal.body, result.status === 404 ? MGAEMS.emptyStateHTML('Learner unavailable', 'This learner is no longer available within your current assignment scope.', 'users') : MGAEMS.errorHTML(result.error || 'Learner details could not be loaded.')); return; }
     const learner = result.data;
-    if (!learner || !Number.isInteger(learner.id)) { show(modal.body, MGAEMS.errorHTML('The server returned an unexpected learner response.')); return; }
+    if (!learner || !Number.isInteger(learner.id) || learner.id !== Number(id)) { show(modal.body, MGAEMS.errorHTML('The server returned an unexpected learner response.')); return; }
     show(modal.body, `<dl class="admin-detail-grid"><div><dt>Admission no.</dt><dd>${esc(learner.admission_no)}</dd></div>
-      <div><dt>Name</dt><dd>${esc(learner.first_name)} ${esc(learner.last_name)}</dd></div><div><dt>Class</dt><dd>${esc(learner.school_class?.name)}</dd></div><div><dt>Enrollment</dt><dd>${esc(learner.status)}</dd></div></dl>`);
+      <div><dt>Name</dt><dd>${esc(learner.first_name)} ${esc(learner.last_name)}</dd></div><div><dt>Class</dt><dd>${esc(learner.school_class?.name)}</dd></div><div><dt>Enrollment</dt><dd>${esc(learner.status)}</dd></div></dl><section class="health-safety" aria-label="Actionable learner safety information"><h2>Actionable safety information</h2><div id="teacherSafetyResult" role="status"></div></section>`);
+    loadSafety(modal, learner.id);
   }
+  async function loadSafety(modal, id) {
+    const request = ++state.safetyRequest, target = modal.body.querySelector('#teacherSafetyResult');
+    if (!target || modal.closed) return;
+    target.innerHTML = MGAEMS.loadingHTML('Checking current safety scope…');
+    // This endpoint is the complete allowed projection. Never fetch a full profile.
+    const result = await MGAEMS.get('/api/v1/health/safety/learners/' + id);
+    if ([401, 403].includes(result.status)) {
+      state.safetyRequest++;
+      if (state.learnerModal) show(state.learnerModal.body, MGAEMS.emptyStateHTML('Safety view unavailable', 'Refresh responsibilities or sign in again. This learner is no longer available under the current authorization.', 'lock'));
+      return;
+    }
+    if (modal.closed || request !== state.safetyRequest || state.learnerModal !== modal) return;
+    if (!result.ok) {
+      show(target, MGAEMS.errorHTML(result.error || 'Safety information could not be loaded.') + '<button type="button" class="btn btn-secondary btn-sm" data-safety-retry>Try again</button>');
+      target.querySelector('[data-safety-retry]').addEventListener('click', () => loadSafety(modal, id)); return;
+    }
+    if (result.data?.student_id !== id || !Array.isArray(result.data.alerts) || result.data.alerts.some(alert => !Number.isSafeInteger(alert.id) || typeof alert.alert_type !== 'string' || typeof alert.description !== 'string' || (alert.emergency_instructions != null && typeof alert.emergency_instructions !== 'string'))) { show(target, MGAEMS.errorHTML('The server returned an unexpected safety identity.')); return; }
+    show(target, result.data.alerts.length ? result.data.alerts.map(alert => `<article class="health-record"><h3>${esc(String(alert.alert_type || '').replace(/_/g, ' '))}</h3><p class="health-copy">${esc(alert.description)}</p>${alert.emergency_instructions ? `<p class="health-copy"><strong>Action instructions:</strong> ${esc(alert.emergency_instructions)}</p>` : ''}</article>`).join('')
+      : MGAEMS.emptyStateHTML('No current published safety alerts', 'This does not confirm an absence of allergies or other health concerns.', 'shield-check'));
+  }
+  window.addEventListener('pagehide', () => { clearLearner(); state.context = null; state.request++; state.setupRequest++; state.timetableRequest++; });
+  window.addEventListener('pageshow', event => { if (event.persisted) setup(); });
   setup();
 })();

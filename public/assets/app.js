@@ -92,6 +92,7 @@ const MGAEMS = (() => {
   async function api(path, options = {}) {
     try {
       const res = await fetch(path, {
+        ...(path.startsWith('/api/v1/health/') ? { cache: 'no-store' } : {}),
         ...options,
         headers: {
           Accept: 'application/json',

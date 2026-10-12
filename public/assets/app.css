@@ -255,6 +255,29 @@ input:disabled, select:disabled, textarea:disabled { opacity: .65; }
 .field .field-error { font-size: var(--text-xs); color: var(--red); margin-top: var(--space-1); }
 .field input.invalid { border-color: var(--red); }
 
+/* Restricted school Health workspace: shared surfaces and responsive dialogs. */
+.health-layout { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.health-picker, .health-panel { min-width: 0; }
+.health-tabs, .health-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
+.health-tabs button[aria-pressed="true"] { border-color: var(--navy-light); font-weight: 700; }
+.health-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.health-details div { border-bottom: 1px solid var(--gray-200); padding: var(--space-2) 0; min-width: 0; }
+.health-details dt { color: var(--gray-500); font-size: var(--text-xs); }
+.health-details dd { margin: var(--space-1) 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.health-note { padding: var(--space-3); border-left: 3px solid var(--navy-light); background: var(--gray-50); font-size: var(--text-sm); margin: var(--space-3) 0; }
+.health-selected { overflow-wrap: anywhere; font-weight: 600; }
+.health-choice { display: block; width: 100%; text-align: left; margin: var(--space-2) 0; white-space: normal; }
+.health-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 var(--space-4); }
+.health-form-grid .health-wide { grid-column: 1 / -1; }
+.field .health-checkbox { display: flex; gap: var(--space-2); align-items: flex-start; }
+.field .health-checkbox input { width: auto; flex-shrink: 0; margin-top: 3px; }
+.health-record { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-3); margin: var(--space-3) 0; }
+.health-record h3 { margin: 0; font-size: var(--text-sm); }
+.health-safety { margin-top: var(--space-4); }
+.health-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .health-layout { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .health-details, .health-form-grid { grid-template-columns: 1fr; } .health-actions > .btn { flex: 1 1 auto; } }
+
 /* ---------- Tables ---------- */
 table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 th, td { text-align: left; padding: var(--space-3); border-bottom: 1px solid var(--gray-200); }
