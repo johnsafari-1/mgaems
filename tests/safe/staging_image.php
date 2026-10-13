@@ -3,6 +3,10 @@
 declare(strict_types=1);
 function ensure(bool $ok, string $label): void { if (!$ok) throw new RuntimeException($label); echo 'PASS '.$label.PHP_EOL; }
 require '/var/www/html/vendor/autoload.php';
+foreach (['laravel/framework' => '13.35.0', 'laravel/sanctum' => '4.3.3', 'barryvdh/laravel-dompdf' => '3.1.2',
+    'dompdf/dompdf' => '3.1.6', 'league/commonmark' => '2.10.3', 'league/flysystem' => '3.36.0', 'maatwebsite/excel' => '3.1.70'] as $package => $floor) {
+    ensure(version_compare(ltrim(Composer\InstalledVersions::getPrettyVersion($package), 'v'), $floor, '>='), 'reviewed dependency floor '.$package);
+}
 ensure(PHP_VERSION_ID >= 80300 && PHP_VERSION_ID < 80400, 'supported PHP 8.3 runtime');
 foreach (['pdo_mysql', 'pdo_sqlite', 'mbstring', 'dom', 'xml', 'xmlreader', 'xmlwriter', 'simplexml', 'gd', 'zip', 'intl', 'bcmath', 'fileinfo', 'openssl', 'curl', 'Zend OPcache'] as $extension) ensure(extension_loaded($extension), 'runtime extension '.$extension);
 ensure(!Composer\InstalledVersions::isInstalled('phpunit/phpunit', false) && !Composer\InstalledVersions::isInstalled('fakerphp/faker', false) && !Composer\InstalledVersions::isInstalled('mockery/mockery', false), 'production dependencies only');

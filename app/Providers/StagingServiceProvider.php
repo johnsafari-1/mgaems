@@ -8,6 +8,15 @@ use Illuminate\Support\ServiceProvider;
 
 class StagingServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        if (!config('staging.enabled')) return;
+        // Laravel 11+ merges framework defaults into nested configuration.
+        // Enforce the sink after that merge, including explicit named mailers.
+        config(['mail.default' => 'array', 'mail.mailers' => ['array' => ['transport' => 'array']],
+            'database.connections.mysql.url' => null]);
+    }
+
     public function boot(): void
     {
         if (!config('staging.enabled')) return;

@@ -1,9 +1,18 @@
 # Railway demonstration staging preparation
 
+**Current update — Checkpoint 2B:** the repository now targets Laravel 13.35.0
+with an audited PHP 8.3 dependency graph. Production and full Composer audits
+return zero advisories. See [the upgrade report](security-checkpoint-2b.md) for
+exact versions, migrations, tests and the controlled local-runtime procedure.
+The Laravel 10 findings/counts below are the historical preparation baseline.
+Deployment still requires review and actual Railway/supported-MySQL acceptance;
+no resources were provisioned. Staging uses encrypted JSON sessions and its
+provider enforces the sole in-memory mailer after framework configuration merging.
+
 Prepared 2026-10-13 from `feature/production-ui`, starting commit
 `7ef7edd2650e864de389f5e6668a5bd19aeca49a`. The starting tree was clean.
 
-**Recommendation: NO-GO for public deployment.** Local packaging and fresh
+**Historical recommendation before 2B: NO-GO for public deployment.** Local packaging and fresh
 installation work, but the locked dependencies have security advisories and
 Laravel 10 is outside security support. No Railway resources were created, no
 changes were pushed, and the development database was not connected to, reset,

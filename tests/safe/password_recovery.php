@@ -126,6 +126,40 @@ check('reset failure rolls back password epoch tokens single-use link and succes
     status(callApi('GET', 'me', $old), 200); status(recoveryCall('reset', $link), 200);
 });
 
+check('reset deadline is exact and independent of the clock timezone', function () {
+    foreach ([3599 => 200, 3600 => 422, 3601 => 422, -1 => 422] as $age => $expected) {
+        Carbon::setTestNow(Carbon::parse('2026-10-13T12:00:00+03:00'));
+        $user = actor(Role::PARENT_GUARDIAN); $old = token($user); $cookie = healthSession($user);
+        $link = recoveryLink($user);
+        // The existing database convention is an offset-free school-local timestamp.
+        DB::table('password_reset_tokens')->where('email', $user->email)->update([
+            'created_at' => Carbon::now('Africa/Nairobi')->subSeconds($age)->format('Y-m-d H:i:s'),
+        ]);
+        // Same instant supplied by a UTC clock must make the same decision.
+        Carbon::setTestNow(Carbon::parse('2026-10-13T09:00:00Z'));
+        status(recoveryCall('reset', $link), $expected, $expected === 422 ? 'EXPIRED_TOKEN' : null);
+        if ($expected === 200) {
+            status(callApi('GET', 'me', $old), 401); status(ordinarySessionRequest($cookie), 401);
+            status(recoveryCall('reset', $link), 422, 'INVALID_TOKEN');
+            ensure(Hash::check($link['password'], $user->fresh()->password_hash), 'Successful reset hash');
+        } else {
+            ensure((int) $user->fresh()->session_version === 0 && $user->tokens()->count() === 1, 'Invalid chronology cannot revoke or change credentials');
+            ensure(! DB::table('password_reset_tokens')->where('email', $user->email)->exists(), 'Rejected timestamp consumes unusable link');
+            status(callApi('GET', 'me', $old), 200); status(ordinarySessionRequest($cookie), 200);
+        }
+    }
+    Carbon::setTestNow(Carbon::parse('2026-10-10T12:00:00+03:00'));
+});
+
+check('null and malformed reset issuance times fail closed without credential changes', function () {
+    foreach ([null, 'invalid-time', '2026-02-30 12:00:00'] as $createdAt) {
+        $user = actor(Role::SPONSOR); $link = recoveryLink($user); $before = $user->fresh()->getAttributes();
+        DB::table('password_reset_tokens')->where('email', $user->email)->update(['created_at' => $createdAt]);
+        status(recoveryCall('reset', $link), 422, 'EXPIRED_TOKEN');
+        ensure($user->fresh()->getAttributes() === $before, 'Invalid time cannot modify identity');
+    }
+});
+
 check('a login using a password replaced between initial verification and locked token issuance is rejected', function () {
     $user = actor(Role::PARENT_GUARDIAN); $replace = true;
     $replacement = Hash::make('RAM-raced-new-password');

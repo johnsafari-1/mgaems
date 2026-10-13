@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Support\Carbon;
 
 /**
  * Implements SRS FR-AUTH-03 and UC-AUTH-02 (Recover Password):
@@ -86,7 +87,12 @@ class PasswordResetController extends Controller
                 ], 422);
             }
 
-            $isExpired = now()->diffInMinutes($record->created_at) > self::TOKEN_EXPIRY_MINUTES;
+            // Existing offset-free database timestamps use the school timezone.
+            // Compare instants in UTC; Carbon 3's signed diffInMinutes is unsuitable.
+            $issuedAt = $this->issuedAt($record->created_at);
+            $instant = now('UTC');
+            $isExpired = ! $issuedAt || $issuedAt->greaterThan($instant)
+                || $issuedAt->copy()->addMinutes(self::TOKEN_EXPIRY_MINUTES)->lessThanOrEqualTo($instant);
 
             if ($isExpired) {
                 DB::table('password_reset_tokens')->where('email', $validated['email'])->delete();
@@ -109,5 +115,18 @@ class PasswordResetController extends Controller
 
             return response()->json(['data' => ['message' => 'Password updated. You can now log in.']]);
         });
+    }
+
+    private function issuedAt($value): ?Carbon
+    {
+        if (! is_string($value) || ! preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/D', $value)) return null;
+        try {
+            $date = Carbon::parse($value, config('app.timezone'));
+            // Reject normalised invalid dates instead of extending their lifetime.
+            if ($date->format('Y-m-d H:i:s') !== substr($value, 0, 19)) return null;
+            return $date->utc();
+        } catch (\Throwable $exception) {
+            return null;
+        }
     }
 }

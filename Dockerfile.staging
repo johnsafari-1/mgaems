@@ -1,5 +1,5 @@
-# PHP 8.3 is supported and within Laravel 10's documented PHP range.
-# The current lock has advisories: see docs/railway-staging.md before deployment.
+# PHP 8.3 supports the reviewed Laravel 13 dependency graph.
+# See docs/security-checkpoint-2b.md for upgrade verification and deployment limits.
 FROM php:8.3-apache-bookworm AS runtime-base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

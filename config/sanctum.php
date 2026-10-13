@@ -17,6 +17,10 @@ return [
     'expiration' => null,
 
     'middleware' => [
+        'authenticate_session' => version_compare(Composer\InstalledVersions::getVersion('laravel/sanctum'), '4.0.0', '>=')
+            ? Laravel\Sanctum\Http\Middleware\AuthenticateSession::class : null,
+        'validate_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
+        // Keep the live Sanctum 3 runtime protected until its controlled transition.
         'verify_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
         'encrypt_cookies' => App\Http\Middleware\EncryptCookies::class,
     ],

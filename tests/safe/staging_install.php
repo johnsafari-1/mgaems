@@ -1,10 +1,10 @@
 <?php
 // Runs only in the staging image against an owned, empty, network-isolated fixture.
 declare(strict_types=1);
-function ensure(bool $ok, string $label): void { if (!$ok) throw new RuntimeException($label); }
+function ensure(bool $ok, string $label): void { if (!$ok) { fwrite(STDERR, 'FAIL '.$label.PHP_EOL); exit(1); } }
 function pass(string $label): void { echo 'PASS '.$label.PHP_EOL; }
 $mode = $argv[1] ?? '';
-ensure(in_array($mode, ['setup', 'http', 'persist'], true), 'Explicit test mode required');
+ensure(in_array($mode, ['setup', 'http', 'persist', 'exports'], true), 'Explicit test mode required');
 ensure(getenv('MGAEMS_DISPOSABLE_STAGING') === 'fresh-mysql-fixture', 'Fixture marker required');
 ensure((bool) preg_match('/^mgaems_stage_test_[a-f0-9]{8}$/', getenv('DB_DATABASE') ?: ''), 'Fixture database name required');
 ensure(getenv('DB_HOST') === '127.0.0.1' && getenv('DB_PORT') === '3306', 'Fixture loopback only');
@@ -12,6 +12,7 @@ ensure(!is_file('/var/www/html/.env'), 'Image must contain no dotenv file');
 require '/var/www/html/vendor/autoload.php';
 $app = require '/var/www/html/bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap();
+set_exception_handler(static function (Throwable $exception): void { fwrite(STDERR, 'Fixture failed: '.get_class($exception).PHP_EOL); exit(1); });
 $db = Illuminate\Support\Facades\DB::connection();
 ensure($db->getDriverName() === 'mysql' && $db->getDatabaseName() === getenv('DB_DATABASE'), 'Explicit fixture connection required');
 ensure(config('staging.enabled') && config('app.env') === 'production', 'Staging production config required');
@@ -90,6 +91,47 @@ function requestFixture(string $method, string $path, ?array $body = null, ?stri
     $response = curl_exec($handle); ensure(is_string($response), 'HTTP fixture response');
     $status = curl_getinfo($handle, CURLINFO_HTTP_CODE); $size = curl_getinfo($handle, CURLINFO_HEADER_SIZE); curl_close($handle);
     return [$status, substr($response, $size), substr($response, 0, $size)];
+}
+if ($mode === 'exports') {
+    $year = $db->table('academic_years')->insertGetId(['name' => 'Export fixture', 'start_date' => '2030-01-01', 'end_date' => '2030-12-31', 'is_current' => false]);
+    $term = $db->table('terms')->insertGetId(['academic_year_id' => $year, 'name' => 'Fixture term', 'start_date' => '2030-01-01', 'end_date' => '2030-04-30', 'is_current' => false]);
+    $class = $db->table('classes')->insertGetId(['name' => 'Fixture class', 'level' => 'primary', 'sequence' => 1]);
+    $subject = $db->table('subjects')->insertGetId(['name' => 'Fixture subject', 'code' => 'FX83', 'status' => 'active']);
+    $student = $db->table('students')->insertGetId(['admission_no' => 'DISPOSABLE-83', 'first_name' => 'Fixture', 'last_name' => 'Learner',
+        'gender' => 'female', 'date_of_birth' => '2018-01-02', 'admission_date' => '2026-01-03', 'class_id' => $class, 'status' => 'active']);
+    $admin = App\Models\User::where('username', 'demo-admin')->firstOrFail();
+    $db->table('assessments')->insert(['student_id' => $student, 'subject_id' => $subject, 'term_id' => $term, 'recorded_by' => $admin->id,
+        'assessment_type' => 'continuous', 'score' => 76, 'recorded_at' => now()]);
+    [$status, $body] = requestFixture('POST', '/api/v1/auth/login', ['username' => 'demo-admin', 'password' => $password]);
+    ensure($status === 200, 'Export fixture login'); $token = json_decode($body, true)['data']['token'];
+    [$status] = requestFixture('POST', '/api/v1/students/'.$student.'/report-cards/generate', ['term_id' => $term, 'overall_remark' => 'Fixture Unicode: café; <script>literal remark</script>'], $token);
+    ensure($status === 201, 'Actual PDF publication');
+    $revision = App\Models\ReportCardRevision::firstOrFail();
+    $bytes = Illuminate\Support\Facades\Storage::disk('private')->get($revision->artifact_path);
+    ensure(str_starts_with($bytes, '%PDF-') && hash('sha256', $bytes) === $revision->artifact_sha256, 'Published PDF integrity');
+    pass('real report publication writes a verified PDF using upgraded production dependencies');
+    [$status, $download] = requestFixture('GET', '/api/v1/report-cards/'.$revision->report_card_id.'/download', null, $token);
+    ensure($status === 200 && hash('sha256', $download) === $revision->artifact_sha256, 'Authorized retained download');
+    [$status] = requestFixture('GET', '/api/v1/report-cards/'.$revision->report_card_id.'/download'); ensure($status === 401, 'Anonymous PDF denial');
+    pass('authorized PDF download retains exact bytes and anonymous download is denied');
+    [$status] = requestFixture('POST', '/api/v1/students/'.$student.'/report-cards/generate', ['term_id' => $term, 'overall_remark' => 'Second disposable revision'], $token);
+    ensure($status === 201 && App\Models\ReportCardRevision::count() === 2, 'Revision continuity');
+    ensure(hash('sha256', Illuminate\Support\Facades\Storage::disk('private')->get($revision->artifact_path)) === $revision->artifact_sha256, 'Earlier artifact preserved');
+    pass('new PDF publication retains the previous immutable artifact');
+    [$status, $xlsx] = requestFixture('GET', '/api/v1/reports/students/export?class_id='.$class.'&status=active', null, $token);
+    ensure($status === 200 && str_starts_with($xlsx, 'PK'), 'Authorized XLSX download');
+    $file = tempnam('/tmp', 'fixture-xlsx-'); file_put_contents($file, $xlsx);
+    try {
+        $sheet = PhpOffice\PhpSpreadsheet\IOFactory::load($file)->getActiveSheet();
+        ensure($sheet->getCell('A1')->getValue() === 'Admission No' && $sheet->getCell('A2')->getValue() === 'DISPOSABLE-83'
+            && $sheet->getCell('B2')->getValue() === 'Fixture' && $sheet->getCell('E2')->getValue() === '2018-01-02' && $sheet->getHighestRow() === 2, 'Export headings, dates and filters');
+    } finally { unlink($file); }
+    pass('production XLSX export retains headings, dates, row filters and learner values');
+    [$status] = requestFixture('GET', '/api/v1/reports/students/export'); ensure($status === 401, 'Anonymous export denial');
+    pass('anonymous XLSX export is denied');
+    ensure(config('dompdf.options.enable_remote') === false && config('dompdf.options.enable_php') === false, 'Renderer does not fetch remote resources or execute PHP');
+    pass('renderer remote fetching and embedded PHP remain disabled');
+    exit;
 }
 [$status, $body] = requestFixture('GET', '/healthz'); ensure($status === 200 && json_decode($body, true) === ['status' => 'ready'], 'Runtime readiness');
 pass('Apache and Laravel readiness on configured PORT');

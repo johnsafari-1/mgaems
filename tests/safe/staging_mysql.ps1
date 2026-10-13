@@ -60,7 +60,7 @@ try {
     $setup=Run-Docker ($base+@('--read-only','--tmpfs','/tmp:rw,noexec,nosuid,size=64m','--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
         '--tmpfs','/var/www/html/storage:rw,noexec,nosuid,size=64m','--entrypoint','php',$stagingImage,'-d','zend.exception_ignore_args=1','/tests/staging_install.php','setup')) $true
     [IO.File]::WriteAllText((Join-Path $evidencePath 'setup.txt'),$setup.Output+$setup.Diagnostics,$utf8)
-    if($setup.ExitCode-ne0){throw 'Fresh installation failed; see protected setup evidence'}
+    if($setup.ExitCode-ne0-or-not$setup.Output.Contains('PASS setup complete;')){throw 'Fresh installation failed; see protected setup evidence'}
     Write-Output $setup.Output
     Run-Docker @('volume','create','--label',"mgaems.staging-test=$runId",$fileVolume)|Out-Null;$volumeCreated=$true
     $webArgs=@('run','-d','--pull','never','--name',$webName,'--label',"mgaems.staging-test=$runId",'--network',"container:$testId",'--volume',"${fileVolume}:/var/www/html/storage")+$environment+@($stagingImage)
@@ -78,14 +78,19 @@ try {
     $http=Run-Docker ($base+@('--volume',"${fileVolume}:/var/www/html/storage",'--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
         '--entrypoint','php',$stagingImage,'-d','zend.exception_ignore_args=1','/tests/staging_install.php','http')) $true
     [IO.File]::WriteAllText((Join-Path $evidencePath 'http.txt'),$http.Output+$http.Diagnostics,$utf8)
-    if($http.ExitCode-ne0){throw 'Staging HTTP checks failed; protected evidence retained'}
+    if($http.ExitCode-ne0-or-not$http.Output.Contains('PASS logout invalidates the fixture token')){throw 'Staging HTTP checks failed; protected evidence retained'}
     Write-Output $http.Output
+    $exports=Run-Docker ($base+@('--volume',"${fileVolume}:/var/www/html/storage",'--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
+        '--entrypoint','php',$stagingImage,'-d','zend.exception_ignore_args=1','/tests/staging_install.php','exports')) $true
+    [IO.File]::WriteAllText((Join-Path $evidencePath 'exports.txt'),$exports.Output+$exports.Diagnostics,$utf8)
+    if($exports.ExitCode-ne0-or-not$exports.Output.Contains('PASS renderer remote fetching and embedded PHP remain disabled')){throw 'Staging PDF/XLSX checks failed; protected evidence retained'}
+    Write-Output $exports.Output
     Remove-OwnedContainer $webId $webName;$webId=$null
     $webId=(Run-Docker $webArgs).Output.Trim()
     $persist=Run-Docker ($base+@('--volume',"${fileVolume}:/var/www/html/storage",'--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
         '--entrypoint','php',$stagingImage,'/tests/staging_install.php','persist')) $true
     [IO.File]::WriteAllText((Join-Path $evidencePath 'persistence.txt'),$persist.Output+$persist.Diagnostics,$utf8)
-    if($persist.ExitCode-ne0){throw 'Persistence check failed'}
+    if($persist.ExitCode-ne0-or-not$persist.Output.Contains('PASS private volume survives container replacement')){throw 'Persistence check failed'}
     Write-Output $persist.Output
     Write-Output "PASS isolated staging verification; evidence: $evidencePath"
 } finally {

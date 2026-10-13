@@ -72,6 +72,12 @@ class AuthController extends Controller
                 ], 403);
             }
 
+            // Rehash only the verified current password, inside the issuance lock.
+            // This changes the work factor, not the credential or revocation epoch.
+            if (version_compare(app()->version(), '11.0.0', '>=') && config('hashing.rehash_on_login', true)
+                && Hash::needsRehash($user->password_hash)) {
+                $user->forceFill(['password_hash' => Hash::make($credentials['password'])])->save();
+            }
             RateLimiter::clear($throttleKey);
 
             $token = $user->createToken('mgaems-web')->plainTextToken;
