@@ -1,6 +1,6 @@
 # Attendance productionization
 
-This work extends the authoritative `D:/mgaems` workspace on
+This work extends the authoritative `<repository>` workspace on
 `feature/production-ui` from checkpoint `2841ed5`. It changes daily Attendance
 only, retaining the existing Students/Academics/Assessment/portal business
 logic, shared shell, dialogs, responsive styles, and Light/Dark theme.

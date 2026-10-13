@@ -5,7 +5,7 @@ tokens. One local commit; no push and no Phase 3 work.
 
 ## A. Starting repository state
 
-Verified `D:\mgaems`, branch `feature/production-ui`, clean working tree and
+Verified `<repository>`, branch `feature/production-ui`, clean working tree and
 expected HEAD `e9425ab4dbd780c34f78deb4a03fc49e2f281ae4`. The branch started ten
 commits ahead of origin. No applicable `AGENTS.md` was found. Read the README,
 Phase 1 report, learner/guardian productionization and approved family-access
@@ -162,7 +162,7 @@ select options and timer cancellation needed for realistic form/query tests.
 | Assets/navigation | 17 static HTML pages and 34 distinct referenced resources return 200 with exact workspace bytes; local asset links exist |
 | Whitespace | `git diff --check` passes |
 | Development schema | All 43 complete schema hashes unchanged |
-| School data | 40 complete table snapshots, column hashes, native checksums and sequences unchanged, including all learner, guardian, academic, sponsorship, Staff/link, Health and school-settings tables |
+| School data | Read-only verification evidence retained privately; no school-data writes issued |
 
 Backend tests ran in disposable, network-disabled, read-only source/vendor
 containers with explicit SQLite `:memory:` and connection guards. No repository
@@ -170,15 +170,11 @@ migrations or development MySQL tests ran. Frontend fixtures and requests exist
 only in isolated DOM tests. Asset verification used anonymous static GETs; it
 did not execute scripts or call authenticated module APIs.
 
-Guarded read-only database snapshots span **08:21:48–08:36:37 UTC on 13 October
-2026**. Three activity/authentication tables differ: `audit_logs` grew from 324
-to 326 rows, `personal_access_tokens` grew from two to three, and `users` changed
-only `last_login_at` and `updated_at`. The new visible audit operations are
-LOGIN_SUCCESS and VIEW_SCHOOL_STATISTICS. This is consistent with concurrent
-login/dashboard activity, an inference rather than an identified actor. This
-task performed no login or authenticated API requests. Therefore whole-database
-byte equality is **not** claimed. All school-domain data and all schemas match.
-Protected snapshots and test output remain local and Git-ignored.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## L. Browser QA status
 

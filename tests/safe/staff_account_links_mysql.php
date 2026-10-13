@@ -49,7 +49,8 @@ function assertFixture(bool $condition, string $message): void { if (! $conditio
 $db = DB::connection();
 assertFixture($db->getDriverName() === 'mysql' && $db->getDatabaseName() === 'mgaems_staff_link_tests'
     && $db->getConfig('host') === '127.0.0.1' && array_keys(config('database.connections')) === ['link_fixtures'], 'Unexpected connection');
-assertFixture(DB::selectOne('SELECT @@server_uuid AS uuid')->uuid !== '08778507-b858-11f1-a705-a6d841c8094c', 'Refusing development server');
+assertFixture((bool) preg_match('/^[a-f0-9-]{36}$/D', getenv('MGAEMS_TEST_MYSQL_UUID') ?: '')
+    && DB::selectOne('SELECT @@server_uuid AS uuid')->uuid === getenv('MGAEMS_TEST_MYSQL_UUID'), 'Owned fixture MySQL identity required');
 DB::statement('SET SESSION innodb_lock_wait_timeout = 12');
 DB::listen(function ($query) { assertFixture($query->connection->getDatabaseName() === 'mgaems_staff_link_tests', 'Unexpected query'); });
 

@@ -17,7 +17,9 @@ try {
         Start-Sleep -Seconds 2
     }
     if (-not $ready) { throw 'Disposable MySQL readiness failed.' }
-    docker run --pull never --rm --network "container:$fixtureId" --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --mount 'type=bind,source=D:\mgaems,target=/var/www/html,readonly' --mount type=volume,source=mgaems_mgaems_vendor,target=/var/www/html/vendor,readonly -w /var/www/html -e MGAEMS_DISPOSABLE_MYSQL=staff-account-links -e "MGAEMS_TEST_MYSQL_PASSWORD=$fixturePassword" --entrypoint php $phpImage -d zend.exception_ignore_args=1 tests/safe/staff_account_links_mysql.php
+    $fixtureUuid = ('SELECT @@server_uuid;' | docker exec -i $fixtureId sh -c 'MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysql --protocol=TCP -h127.0.0.1 -uroot --silent').Trim()
+    if ($LASTEXITCODE -ne 0 -or $fixtureUuid -notmatch '^[a-f0-9-]{36}$') { throw 'Invalid owned fixture UUID.' }
+    docker run --pull never --rm --network "container:$fixtureId" --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --mount 'type=bind,source=D:\mgaems,target=/var/www/html,readonly' --mount type=volume,source=mgaems_mgaems_vendor,target=/var/www/html/vendor,readonly -w /var/www/html -e "MGAEMS_TEST_MYSQL_UUID=$fixtureUuid" -e MGAEMS_DISPOSABLE_MYSQL=staff-account-links -e "MGAEMS_TEST_MYSQL_PASSWORD=$fixturePassword" --entrypoint php $phpImage -d zend.exception_ignore_args=1 tests/safe/staff_account_links_mysql.php
     if ($LASTEXITCODE -ne 0) { throw 'Isolated MySQL account-link checks failed.' }
 } finally {
     if ($fixtureId) {

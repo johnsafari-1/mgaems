@@ -1,4 +1,4 @@
-param([string]$Image='mgaems-staging:review')
+param([string]$Image='mgaems-staging:security2b')
 $ErrorActionPreference='Stop'
 $sourceRoot=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 if($sourceRoot-ne'D:\mgaems'){throw 'Unexpected source workspace'}
@@ -53,10 +53,20 @@ try {
         if($probe.ExitCode-eq0){$ready=$true;break};Start-Sleep -Seconds 1
     }
     if(-not$ready){throw 'Disposable MySQL did not become ready'}
-    $environment=@('-e','MGAEMS_DISPOSABLE_STAGING=fresh-mysql-fixture','-e',"DB_DATABASE=$databaseName",'-e','DB_HOST=127.0.0.1','-e','DB_PORT=3306',
+    $fixtureUuid=(Run-Docker @('exec','-e',"MYSQL_PWD=$databasePassword",$testId,'mysql','--protocol=TCP','-h','127.0.0.1','-uroot','-N','-e','SELECT @@server_uuid')).Output.Trim()
+    if($fixtureUuid-notmatch'^[a-f0-9-]{36}$'){throw 'Invalid owned fixture UUID'}
+    $environment=@('-e',"MGAEMS_TEST_MYSQL_UUID=$fixtureUuid",'-e','MGAEMS_DISPOSABLE_STAGING=fresh-mysql-fixture','-e',"DB_DATABASE=$databaseName",'-e','DB_HOST=127.0.0.1','-e','DB_PORT=3306',
         '-e','DB_CONNECTION=mysql','-e','DB_USERNAME=root','-e',"DB_PASSWORD=$databasePassword",'-e',"APP_KEY=$appKey",'-e','APP_URL=https://demo.invalid',
         '-e',"MGAEMS_TEST_ADMIN_PASSWORD=$adminPassword",'-e','PORT=8087')
     $base=@('run','--rm','--pull','never','--network',"container:$testId",'--mount',$testMount)+$environment
+    foreach($badUuid in @('', '00000000-0000-0000-0000-000000000000')){
+        $denied=Run-Docker ($base+@('-e',"MGAEMS_TEST_MYSQL_UUID=$badUuid",'--read-only','--tmpfs','/tmp:rw,noexec,nosuid,size=64m','--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
+            '--tmpfs','/var/www/html/storage:rw,noexec,nosuid,size=64m','--entrypoint','php',$stagingImage,'-d','zend.exception_ignore_args=1','/tests/staging_install.php','setup')) $true
+        if($denied.ExitCode-eq0-or-not$denied.Diagnostics.Contains('Owned fixture MySQL identity required')){throw 'Missing/wrong fixture identity was not refused'}
+        $empty=Run-Docker @('exec','-e',"MYSQL_PWD=$databasePassword",$testId,'mysql','--protocol=TCP','-h','127.0.0.1','-uroot','-N',$databaseName,'-e','SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()')
+        if($empty.Output.Trim()-ne'0'){throw 'Refused identity must leave fixture schema empty'}
+        Write-Output 'PASS missing/wrong fixture UUID rejected before migration'
+    }
     $setup=Run-Docker ($base+@('--read-only','--tmpfs','/tmp:rw,noexec,nosuid,size=64m','--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=8m',
         '--tmpfs','/var/www/html/storage:rw,noexec,nosuid,size=64m','--entrypoint','php',$stagingImage,'-d','zend.exception_ignore_args=1','/tests/staging_install.php','setup')) $true
     [IO.File]::WriteAllText((Join-Path $evidencePath 'setup.txt'),$setup.Output+$setup.Diagnostics,$utf8)

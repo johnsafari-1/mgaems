@@ -5,7 +5,7 @@ it does not deploy, push, migrate development MySQL or activate the new local ru
 
 ## A. Starting state and isolation
 
-Repository `D:\mgaems`, branch `feature/production-ui`, expected and verified HEAD
+Repository `<repository>`, branch `feature/production-ui`, expected and verified HEAD
 `970059389647ec8bc3a111279f58327f552fe1c4`, clean working tree, two local commits
 ahead of the remote-tracking reference. Reviewed the 2A plan, staging report,
 Composer files, traditional bootstrap/kernels, authentication, middleware,
@@ -181,11 +181,11 @@ refuses an upgraded baseline. The prior image ID is
 Do not overwrite it before retaining the baseline. The scripts mount only their
 fixture PHP files and newly owned storage, not the repository's private files.
 Backend orchestration and complete captured output are retained locally under
-Git-ignored `storage/app/private/security-checkpoint-2b-20261013/`.
+Git-ignored `storage/app/private/<operator-evidence>/`.
 
 Final repository image: `mgaems-staging:security2b`, inspected ID
 `sha256:a87afcedcb977173b693a7b92e13c192b4f0045d79c4b24530a6e143beb20591`.
-Final fresh evidence: `storage/app/private/staging-check-a991dcd7/`; final
+Final fresh evidence: `storage/app/private/<operator-evidence>/`; final
 existing-schema evidence is under `storage/app/private/schema-check-<run-id>/`.
 Owned fixture containers/file volumes and the separate candidate dependency
 volume were removed after verification. Production images and local evidence
@@ -199,51 +199,12 @@ runtime parity. Compose, MySQL configuration, local volumes and the local
 not rebuilt, replaced or updated. **Do not install this lock in the current
 PHP 8.2 container.** Do not mount its dependency volume into upgrade tests.
 
-After review, coordinate an operator maintenance window:
-
-1. Record the current app image/container identity and lockfile; retain the old
-   image and an isolated backup of the old dependency volume. Confirm normal
-   database/file backups and the actual token-table schema/ledger using read-only
-   checks. If the original migration identity is missing or schema differs from
-   the tested baseline, stop for a specific plan; do not force a migration.
-2. Stop **only the application**; keep MySQL and its data volume intact. Build
-   the prepared app image without bringing Compose services up automatically.
-3. Run one-off PHP 8.3 containers against the normal development mounts only in
-   this reviewed transition. Verify PHP. Clear configuration/routes/views using
-   the compatible old vendor before installing the new lock, preventing old
-   cached provider/configuration manifests from being reused.
-4. Install the exact lock in the development dependency volume. Validate Composer
-   consistency/platform requirements and rerun the current production audit.
-   Discovery/caches are filesystem operations; do not invoke migrations or seeding.
-5. Clear/rebuild appropriate runtime caches and start only the application service.
-   Preserve `APP_KEY`, school timezone, database references, cookie identity and
-   nonstaging PHP session format. Confirm login/read-only role workflows and
-   credential/session behavior. Do not invent school records for smoke tests.
-
-Example commands for that **future reviewed window**, not this checkpoint:
-
-```powershell
-docker compose stop app
-docker compose build app
-docker compose run --rm --no-deps app php -v
-docker compose run --rm --no-deps app php artisan config:clear
-docker compose run --rm --no-deps app php artisan route:clear
-docker compose run --rm --no-deps app php artisan view:clear
-docker compose run --rm --no-deps app composer install --prefer-dist --no-interaction --no-progress
-docker compose run --rm --no-deps app composer validate --strict
-docker compose run --rm --no-deps app composer check-platform-reqs
-docker compose run --rm --no-deps app composer audit --locked --no-dev
-docker compose run --rm --no-deps app php artisan config:clear
-docker compose up -d --no-deps app
-```
-
-Never run `docker compose down -v`, `migrate:fresh`, `db:wipe`, general seeders or
-automatic real-database migrations. No schema migration is needed for a runtime
-transition matching the verified existing ledger/schema. A rollback restores
-the previous app source/image/vendor together, leaving MySQL/file volumes and
-`APP_KEY` intact; do not reinstall the old framework into the new vendor blindly.
-Do not use old test wrappers' hardcoded PHP 8.2/development vendor defaults with
-the new lock; recreate sanitized PHP 8.3 fixtures as described in the 2A strategy.
+The original vendor-overwrite example is superseded by the reviewed
+[release security runbook](release-security-3a.md). Use a separate fresh PHP 8.3
+vendor volume, preserve the old image/vendor for rollback, and always pass the
+ignored Docker environment file explicitly. Do not execute replacement,
+credential rotation, binding changes or Windows ACL changes before the next
+approved checkpoint. No database migration is needed for a matching ledger.
 
 ## N–R. Changed files, limitations and recommendation
 

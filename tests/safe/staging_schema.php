@@ -14,7 +14,9 @@ $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 set_exception_handler(static function (Throwable $exception): void { fwrite(STDERR, 'Fixture failed: '.get_class($exception).PHP_EOL); exit(1); });
 $db = Illuminate\Support\Facades\DB::connection();
 $identity = $db->selectOne('SELECT DATABASE() AS db, @@server_uuid AS uuid');
-ensure($db->getDriverName() === 'mysql' && $identity->db === getenv('DB_DATABASE') && $identity->uuid !== '08778507-b858-11f1-a705-a6d841c8094c', 'Verified disposable MySQL identity');
+ensure((bool) preg_match('/^[a-f0-9-]{36}$/D', getenv('MGAEMS_TEST_MYSQL_UUID') ?: '')
+    && $db->getDriverName() === 'mysql' && $identity->db === getenv('DB_DATABASE')
+    && $identity->uuid === getenv('MGAEMS_TEST_MYSQL_UUID'), 'Verified disposable MySQL identity');
 function schemaSnapshot($db): array {
     return [
         'columns' => $db->select('SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, EXTRA, CHARACTER_SET_NAME, COLLATION_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME, ORDINAL_POSITION'),

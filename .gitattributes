@@ -2,3 +2,5 @@
 Dockerfile.staging text eol=lf
 .dockerignore text eol=lf
 docker/staging/* text eol=lf
+compose.yaml text eol=lf
+.env*.example text eol=lf

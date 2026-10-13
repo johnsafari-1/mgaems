@@ -1,6 +1,6 @@
 # Assessment and report-card history hardening (Option A)
 
-This work extends `D:/mgaems`, branch `feature/production-ui`, from checkpoint
+This work extends `<repository>`, branch `feature/production-ui`, from checkpoint
 `2360338`. It preserves the current learner + subject + term + assessment-type
 result model. Types remain `continuous` and `end_term`; the existing unique key
 is unchanged. No assessment events or curriculum/evidence engine is introduced.

@@ -2,7 +2,7 @@
 
 ## A. Verified checkout
 
-Authoritative root `D:\mgaems`, branch `feature/production-ui`, initial commit
+Authoritative root `<repository>`, branch `feature/production-ui`, initial commit
 `1e3bcb5fdbd72ea236c7230cbf66f2768aa55b08`, initially clean and one commit ahead
 of the locally recorded origin branch. No push, frontend change, backup creation,
 ordinary migration, development data mutation or unrelated service restart was
@@ -152,7 +152,7 @@ and an omitted isolated array-cache definition. These were corrected; the final
 MySQL run passed all four checks and cleanup. No application defect remained
 from those harness failures.
 
-Safe commands, run from `D:\mgaems`:
+Safe commands, run from `<repository>`:
 
 ```powershell
 & D:\xampp\php\php.exe tests/safe/health_timestamps.php

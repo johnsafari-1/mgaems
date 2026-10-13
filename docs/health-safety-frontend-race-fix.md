@@ -7,7 +7,7 @@ verification checkpoint. The existing
 
 ## Repository and original reproduction
 
-Initial repository: `D:\mgaems`, `feature/production-ui`, clean working tree,
+Initial repository: `<repository>`, `feature/production-ui`, clean working tree,
 HEAD `20e943385127d3bfa36e3608e740dd96eb82fe36`, eight ahead of origin.
 No applicable `AGENTS.md` was found.
 
@@ -105,14 +105,11 @@ No confidential browser storage, URL payload, console output, raw narrative
 interpolation or new persistent state was introduced. Teacher, Parent and Sponsor
 application source is unchanged.
 
-Guarded read-only captures span `2026-10-12T17:40:33Z` to
-`2026-10-12T17:47:10Z`. All **43 complete table snapshots and schemas match**,
-including content/column hashes, native checksums and metadata/sequences.
-Legacy medical records, Staff/User links, academics and authentication/audit
-tables are unchanged. All eight Health tables remain empty. Migrations 000036
-and 000037 remain applied; no rerun, real Health writes or fabricated records.
-Protected evidence is retained outside tracked source in the ignored private
-evidence directory. Credentials and real confidential content are not published.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## Scope, limitations and disposition
 
@@ -124,9 +121,7 @@ response. No push or subsequent module work is performed.
 The automated correction is ready for browser acceptance testing. Actual browser
 acceptance remains **PENDING**, including desktop/mobile rendering, Light/Dark
 contrast, learner/tab loading and retry, keyboard navigation and accessible
-focus. DOM tests do not establish visual acceptance. The development environment
-still has no Health records or scoped Teacher learners; no populated real-record
-workflow was exercised. No real Health write smoke test was performed.
+focus. DOM tests do not establish visual acceptance. No populated real-record workflow was exercised. No real Health write smoke test was performed.
 
 Recommendation: **GO to perform browser acceptance testing; NO-GO for final
 browser acceptance sign-off until the pending checks pass.**

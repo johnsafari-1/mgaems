@@ -1,6 +1,6 @@
 # Role navigation and announcement authorization
 
-Initial checkout: `D:/mgaems`, `feature/production-ui`, clean working tree,
+Initial checkout: `<repository>`, `feature/production-ui`, clean working tree,
 HEAD `e5d6869e5b38cd3bad2f2e6c9dde63dfd2633ec5`, two commits ahead of origin.
 The existing role matrix and SRS FR-AUTH-04 / FR-COM-01 were compared with
 current routes, authentication, Staff linkage, page guards and publication

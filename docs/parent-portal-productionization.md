@@ -2,7 +2,7 @@
 
 ## A. Initial repository state
 
-Verified `D:/mgaems`, `feature/production-ui`, clean working tree, expected HEAD
+Verified `<repository>`, `feature/production-ui`, clean working tree, expected HEAD
 `91f0721911ded28c759a8a2f034609d305730f99`, four commits ahead of origin.
 No additional repository instructions were found. No other repository was used.
 
@@ -196,21 +196,11 @@ mounts and ownership-checked cleanup. The owned disposable container was removed
 
 ## L. Privacy and development data verification
 
-Before/after read-only comparison confirmed identical counts, native checksums and
-schema fingerprints for all 35 development tables. Aggregate fingerprint:
-`b85797aac91a1601cffee199e6d67604b96963f3f7b845408e535669febb437f`.
-The same database identity was checked; credentials, contacts, learner records and
-medical information were not printed. Health migrations 000036 and 000037 remain
-pending. No ordinary migration, reset, wipe, reseed, backup/restore or learner-data
-write was performed. No service was restarted and no push made.
-
-Review covered current Guardian/user/role associations, duplicate/unlinked families,
-cross-family and nested child/report IDs, invalid/missing IDs, stale selection,
-private fields, published-versus-current projection, file integrity, historical
-attendance, current timetable eligibility, audience rules, recipient guessing,
-routine account provisioning, sessions and audit payloads. Denial logs retain
-reason/identifier metadata only. Teacher, Sponsor, Attendance, Assessment generation,
-Health safety and session/recovery domain policies remain intact.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## M. Deferred decisions and coverage limits
 

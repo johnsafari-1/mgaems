@@ -17,7 +17,8 @@ $db = Illuminate\Support\Facades\DB::connection();
 ensure($db->getDriverName() === 'mysql' && $db->getDatabaseName() === getenv('DB_DATABASE'), 'Explicit fixture connection required');
 ensure(config('staging.enabled') && config('app.env') === 'production', 'Staging production config required');
 $identity = $db->selectOne('SELECT DATABASE() AS db, @@server_uuid AS uuid');
-ensure($identity->db === getenv('DB_DATABASE') && $identity->uuid !== '08778507-b858-11f1-a705-a6d841c8094c', 'Development MySQL is forbidden');
+ensure((bool) preg_match('/^[a-f0-9-]{36}$/D', getenv('MGAEMS_TEST_MYSQL_UUID') ?: '')
+    && $identity->db === getenv('DB_DATABASE') && $identity->uuid === getenv('MGAEMS_TEST_MYSQL_UUID'), 'Owned fixture MySQL identity required');
 $password = getenv('MGAEMS_TEST_ADMIN_PASSWORD') ?: ''; ensure(strlen($password) >= 16, 'Test-only credential required');
 
 if ($mode === 'setup') {

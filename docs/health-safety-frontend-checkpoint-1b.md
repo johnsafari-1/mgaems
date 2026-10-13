@@ -6,7 +6,7 @@ Staff/User-linking or academic implementation changes.
 
 ## A. Initial repository state
 
-Verified repository `D:\mgaems`, branch `feature/production-ui`, clean working
+Verified repository `<repository>`, branch `feature/production-ui`, clean working
 tree, HEAD `a41489400aacc54ecf32ac56f36ded3823542861`, seven commits ahead of
 `origin/feature/production-ui`. No applicable `AGENTS.md` was found.
 Existing backend checkpoint and corrective-fix documentation and implementation
@@ -106,9 +106,9 @@ Empty alerts explicitly do not confirm absence of allergies.
 Missing-current-period/empty-scope behavior remains intact. No fabricated
 academic or safety records populate an empty workspace. The backend retains its
 existing Class Teacher ownership branch and valid-current-subject-assignment
-branch; the frontend does not weaken either. The read-only development snapshot
-has no valid current academic period and both Teachers have zero scoped active
-learners. No live Teacher alert data can therefore be exercised there currently.
+branch; the frontend does not weaken either. Populated Teacher safety behavior
+was exercised only with isolated synthetic fixtures; no live alert workflow was
+used as a write test.
 
 ## J. Navigation, responsive layout and accessibility
 
@@ -146,27 +146,11 @@ read-only SQL session/transaction with a SELECT/SHOW/CHECKSUM guard. Evidence is
 retained in the existing protected, Git-ignored private evidence directory;
 no credentials, real contact details or medical narratives are published.
 
-Initial and reporting captures span `2026-10-12T16:14:28Z` through
-`2026-10-12T16:57:02Z`. All **43
-canonical schemas** match. **40 complete table snapshots** match, including
-content/column hashes, native checksums and metadata/sequences for all school,
-legacy medical, Staff-linking, academic and eight Health tables. Each Health
-table still has zero rows, including revisions/access logs. Migrations 000036
-(batch 3) and 000037 (batch 4) remain applied.
-
-Three tables changed during intervening application activity: `audit_logs`
-256→259 rows; `personal_access_tokens` remains 3 rows with token/usage lifecycle
-changes; `users` remains 8 rows, with only `last_login_at` and `updated_at`
-column hashes changed. Latest audit operation names are LOGOUT, LOGIN_SUCCESS
-and VIEW_SCHOOL_STATISTICS. This is consistent with intervening application
-use; these checks issued no authentication or statistics HTTP calls. The report
-does **not** claim the whole development database was byte-for-byte unchanged.
-Staff/User identity links, account roles/status/session versions and operational
-school/Health data remain unchanged from this task's starting snapshot.
-
-Read-only policy checks still authorize Head/Deputy Health management, deny
-System Administrator and Teachers management, and enforce Teacher learner scope.
-All four employment-dependent accounts remain eligible; no conflicting links.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## L. Tests and results
 
@@ -182,7 +166,7 @@ All four employment-dependent accounts remain eligible; no conflicting links.
 | JavaScript syntax | All four changed public JS files and four changed frontend test/helper files pass `node --check` |
 | PHP test syntax | New contract test passes `php -l` |
 | Assets, role navigation, diff whitespace | Covered by shell suite and final `git diff --check` |
-| Development preservation | 43 schemas/40 full table snapshots unchanged; explained authentication/usage differences above |
+| Development preservation | Read-only evidence retained privately; no school writes issued |
 
 Backend invocations: authorization, staff_account_links, health_safety,
 health_timestamps, health_frontend_contract, password_recovery, attendance,
@@ -199,7 +183,7 @@ enter development records. No backend application code changed.
   because no browser surface was connected.
 - Real learner Health write smoke tests were intentionally not performed; safe
   real-controller fixture tests validate request/response integration instead.
-- Development currently has no Health records or scoped Teacher learners, so
+- Only isolated fixtures were used for populated Health and Teacher scenarios, so
   populated workflows are validated through isolated fixtures.
 - Learner filtering applies to the explicitly loaded authorized page. There is
   no invented Health-specific global search or extra actor-directory permission.

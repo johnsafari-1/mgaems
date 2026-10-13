@@ -40,6 +40,15 @@ tracked exclusively through the Sponsorship & Partnership module.
 
 ## Getting started (once Composer/PHP dependencies are installed locally)
 
+Laravel 13 requires PHP 8.3. For local Docker, copy `.env.docker.example` to
+ignored `.env.docker.local`, protect its permissions, then supply verified
+credentials. Always pass `--env-file .env.docker.local` to Compose. Blank required
+passwords fail configuration validation. Existing MySQL volumes keep their
+account passwords; changing initialization variables does not rotate them.
+Do not run initial-install migrations or seeders on an existing school database.
+See [the release security runbook](docs/release-security-3a.md) before changing
+an existing runtime, credentials, port binding or Windows permissions.
+
 ```bash
 composer install
 cp .env.example .env

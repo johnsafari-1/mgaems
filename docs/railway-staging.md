@@ -92,6 +92,11 @@ alerts. This work did not estimate a guaranteed monthly cost.
 
 ## Required Railway configuration
 
+Checkpoint 3A adds [release security gates](release-security-3a.md). Provisioning,
+public access and GitHub synchronization still require separate approval. Use
+the separate `mgaems-staging` project, private database DNS, no TCP proxy and
+disabled GitHub autodeploy. Do not import workstation secrets or school data.
+
 The examples below are references or non-secret settings, not credentials.
 Adjust the reference namespace if the database service is not named `MySQL`.
 Never import the workstation `.env`, a database dump, school records, real family
@@ -111,8 +116,8 @@ email addresses or local private storage.
 | `APP_URL` | Exact future public HTTPS origin, without a path, query or credentials |
 | `PORT` | Railway's configured/injected HTTP port; image defaults to `8080`. Domain target port must match. |
 | `DB_CONNECTION` | `mysql` |
-| `DB_HOST` | `${{MySQL.MYSQLHOST}}`, private hostname of the new service |
-| `DB_PORT` | `${{MySQL.MYSQLPORT}}` |
+| `DB_HOST` | `${{MySQL.RAILWAY_PRIVATE_DOMAIN}}`, private DNS of the new service |
+| `DB_PORT` | `3306`, verified internal MySQL port; never the public TCP proxy port |
 | `DB_DATABASE` | `${{MySQL.MYSQLDATABASE}}`; choose a fresh name distinct from development `mgaems` |
 | `DB_USERNAME` | `${{MySQL.MYSQLUSER}}` |
 | `DB_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}`, stored only as a Railway secret/reference |
@@ -219,11 +224,7 @@ the school's branding assets were not modified or copied from private storage.
 
 ## Local verification and results
 
-```powershell
-docker build -f Dockerfile.staging -t mgaems-staging:review .
-docker run --rm --network none --read-only --mount type=bind,source=D:\mgaems\tests\safe\staging_image.php,target=/tests/staging_image.php,readonly --entrypoint php mgaems-staging:review /tests/staging_image.php
-powershell -NoProfile -File tests/safe/staging_mysql.ps1
-```
+```powershell docker build -f Dockerfile.staging -t mgaems-staging:release3a . powershell -NoProfile -File tests/safe/staging_mysql.ps1 -Image mgaems-staging:release3a powershell -NoProfile -File tests/safe/staging_recovery_mysql.ps1 -Image mgaems-staging:release3a ```
 
 The fixture runner owns randomly named, labeled containers; MySQL has network
 `none`, no published ports, no development mounts and RAM-only data. Application
@@ -257,7 +258,7 @@ no network access. An initial read-only cache error in the authorization wrapper
 was fixed by providing a disposable writable cache; all suites then passed.
 
 Full audit/build/regression evidence is local and intentionally uncommitted under
-`storage/app/private/railway-preparation-20261013/`; fresh fixture evidence is
+`storage/app/private/<operator-evidence>/`; fresh fixture evidence is
 under `storage/app/private/staging-check-<random-id>/`. Tests and documentation
 are excluded from the production image. No package-level OS vulnerability scan,
 load test, external penetration test or real report-card publication was claimed.

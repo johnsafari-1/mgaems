@@ -5,7 +5,7 @@ interfaces, using static HTML, vanilla JavaScript and the Phase 1 navy/teal toke
 
 ## Starting state and review
 
-Verified `D:\mgaems`, branch `feature/production-ui`, clean working tree and
+Verified `<repository>`, branch `feature/production-ui`, clean working tree and
 expected HEAD `076428754100730aa3bbfe03f89e6c3b6dd7517c`. The branch was aligned
 with origin at the start. No applicable `AGENTS.md` was found.
 
@@ -174,35 +174,13 @@ type-change allocation, duplicate status updates and responsive/token contracts.
 Existing cross-role, session, ownership, unlink, private-field, Health-race and
 shell tests remain passing.
 
-## Development preservation exception
+## Development preservation
 
-Guarded read-only snapshots span **09:38:36–09:57:52 UTC on 13 October 2026**.
-All 43 schemas and 36 complete table contents/column hashes/checksums/sequences
-match. Seven tables differ during concurrent application activity:
-
-| Table | Initial rows | Final rows |
-| --- | ---: | ---: |
-| students | 5 | 6 |
-| guardians | 2 | 4 |
-| attendance_students | 19 | 25 |
-| sponsors | 2 | 3 |
-| users | 11 | 12 |
-| audit_logs | 328 | 343 |
-| personal_access_tokens | 4 | 4 |
-
-Additional SELECT-only inspection compared baseline primary-key-bounded column
-hashes. All pre-existing learner, guardian, attendance, sponsor and audit rows
-remain unchanged. Original User differences are confined to last_login_at and
-updated_at; Staff/User links, original account roles/statuses and credentials match.
-Audit action metadata includes CREATE_STUDENT, CREATE_GUARDIAN,
-LINK_GUARDIAN_STUDENTS, RECORD_ATTENDANCE, CREATE_SPONSOR and login/dashboard
-activity. The activity is consistent with concurrent app use; no actor identity
-is inferred or exposed. This task's network-isolated RAM tests and static GETs
-cannot produce those school-record writes. No records were restored or altered
-to force a baseline match. Whole-database equality is **not certified**.
-
-Snapshots, aggregate comparisons, audit action metadata and regression output
-remain local and Git-ignored. No names, contact contents or credentials are printed.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## Browser QA and remaining limitations
 

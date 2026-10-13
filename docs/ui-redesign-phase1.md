@@ -6,7 +6,7 @@ dependency, backend/API or database change.
 
 ## A. Starting repository
 
-Verified `D:\mgaems`, `feature/production-ui`, clean working tree, expected HEAD
+Verified `<repository>`, `feature/production-ui`, clean working tree, expected HEAD
 `c9e8d86f5844da034569d0ab7e55ac91bd320f93`, nine commits ahead of origin.
 No applicable `AGENTS.md` was found. Recent Teacher, Parent, Sponsor Coordinator
 and Health UI documentation, shared components, API sources and tests were read.
@@ -192,13 +192,11 @@ remain server-enforced. No medical narratives enter shared dashboards, storage,
 URLs, logs or notifications. No live authenticated module API call was used for
 verification; static HTML GETs do not execute browser scripts.
 
-Guarded read-only snapshots span `2026-10-12T19:01:48Z` through
-`2026-10-12T19:21:55Z`. All content/column hashes, schema definitions, native
-checksums and metadata/sequences match for all 43 tables. This includes Staff
-links, academic assignments, legacy medical, authentication/audits and Health.
-The six pre-existing Health access-log rows remain unchanged; all seven other
-Health tables remain empty. No migration, reset, reseed, fabricated record or
-production database access occurred. Protected evidence remains Git-ignored.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## L. Browser QA
 

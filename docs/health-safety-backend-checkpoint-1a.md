@@ -4,7 +4,7 @@
 
 Verified before changes with the requested Git commands:
 
-* Root: `D:/mgaems`.
+* Root: `<repository>`.
 * Branch: `feature/production-ui`.
 * Clean working tree.
 * HEAD: `b92951d9d0f4fdf50cade003d3a26a40d7b74a58`, authorization foundation.

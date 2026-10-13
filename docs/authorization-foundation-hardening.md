@@ -1,6 +1,6 @@
 # Authorization foundation security hardening
 
-Workspace: `D:/mgaems`; branch: `feature/production-ui`; baseline:
+Workspace: `<repository>`; branch: `feature/production-ui`; baseline:
 `d067689fb7c228b6ca0d4e96059551d040f4ca2f`.
 
 The initial verification found six modified application files and an untracked
@@ -73,7 +73,7 @@ found in the reviewed application API paths.
 
 ## Isolated validation
 
-Run from `D:/mgaems`:
+Run from `<repository>`:
 
 ```powershell
 php tests/safe/authorization.php

@@ -26,6 +26,10 @@
 .env
 .env.backup
 .env.production
+# Only non-sensitive dotenv templates may be tracked.
+.env.*
+!.env.example
+!.env.docker.example
 .phpunit.result.cache
 Homestead.json
 Homestead.yaml
@@ -42,3 +46,9 @@ yarn-error.log
 *.xls
 ~$*
 *.sql
+*.sql.*
+*.dump
+*.backup
+*.bak
+*.pem
+*.key

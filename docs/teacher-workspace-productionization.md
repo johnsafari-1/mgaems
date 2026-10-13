@@ -2,7 +2,7 @@
 
 ## A. Verified starting state
 
-Authoritative root `D:/mgaems`, branch `feature/production-ui`, clean working
+Authoritative root `<repository>`, branch `feature/production-ui`, clean working
 tree, HEAD `768be958026ecc41e5cb31f3b4f875f8a1932ed4`, three commits ahead of
 origin. No additional repository instructions were found. Existing academic,
 learner, authorization, Attendance, Assessment and Health documentation and
@@ -196,12 +196,11 @@ ownership-checked cleanup. The owned disposable container was removed.
 
 ## L. Development data and security review
 
-Read-only before/after probes verified the same development database identity
-and identical row counts, native table checksums and schema fingerprints for all
-35 tables. Aggregate fingerprint:
-`b85797aac91a1601cffee199e6d67604b96963f3f7b845408e535669febb437f`.
-Health migrations 000036 and 000037 remain pending. No credentials or learner
-records were displayed by the probes. No database records or schema were changed.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 Review covered role/account changes, current Staff linkage/status/type, query
 identity spoofing, unrelated/nonexistent class/learner IDs, ownership reassignment,

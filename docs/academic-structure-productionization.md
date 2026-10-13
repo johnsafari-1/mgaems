@@ -1,6 +1,6 @@
 # Academic Structure productionization
 
-This work extends the authoritative `D:/mgaems` workspace on
+This work extends the authoritative `<repository>` workspace on
 `feature/production-ui`, starting from learner/guardian checkpoint `0904df3`.
 It reuses the shared shell, dialogs, design tokens, and Light/Dark theme.
 There are no schema changes, migrations, development-data repairs, or changes

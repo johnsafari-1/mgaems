@@ -4,9 +4,11 @@ Date: 2026-10-12. Scope: existing Administration User Management and Staff assoc
 
 ## A. Initial repository state
 
-Verified repository `D:\mgaems`, branch `feature/production-ui`, clean working tree and HEAD `6ed7861d16523e4c2c4aac3f66dfd8cfe1fc4930`. The branch was six commits ahead of `origin/feature/production-ui`, with none behind. No applicable `AGENTS.md` was found.
+Verified repository `<repository>`, branch `feature/production-ui`, clean working tree and HEAD `6ed7861d16523e4c2c4aac3f66dfd8cfe1fc4930`. The branch was six commits ahead of `origin/feature/production-ui`, with none behind. No applicable `AGENTS.md` was found.
 
-Development MySQL was `8.0.46`, database `mgaems`, server UUID `08778507-b858-11f1-a705-a6d841c8094c`. Migrations `2026_10_10_000036_add_user_session_version` and `2026_10_10_000037_create_school_health_records` were already applied. The database had 43 tables and 39 migration-ledger entries. Neither migration was rerun.
+Read-only inspection verified the expected MySQL schema and previously applied
+session-version/Health migrations. No migration was rerun. Installation-specific
+server identity and operational evidence are held privately.
 
 ## B. Existing architecture
 
@@ -106,7 +108,7 @@ Reproduction from the repository root:
 
 ```powershell
 D:\xampp\php\php.exe tests\safe\staff_account_links.php
-powershell -NoProfile -File tests\safe\staff_account_links_mysql.ps1
+# Historical PHP 8.2/development-vendor launcher: do not run on the upgraded source.
 node --test tests/frontend/*.test.cjs
 ```
 
@@ -118,9 +120,11 @@ None. The existing nullable unique foreign key and already-applied session-versi
 
 ## K. Development preservation
 
-Before/after read-only snapshots covered all 43 tables: schema definitions, indexes/FKs/checks, row counts, ordered row and per-column fingerprints, native MySQL checksums, table metadata/sequences, migration ledger and aggregate linkage counts. The two complete snapshot files were **byte-identical**, SHA-256 `8D66517552B12177FCE859E24B77475D69032D678DA840246E56AC040C1B6C4E`.
-
-All live school, Staff/User, learner, Guardian, academic, sponsorship and Health data remained unchanged. There are still six active unlinked Staff and four ineligible active employment accounts. No live identities were created and no relationship was modified. Source migrations remain applied exactly once. Protected inspection/test evidence stays in ignored `storage/app/private/staff-user-linking-20261012T083252Z-3e92b7a1/`; it is not committed.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.
 
 ## L. Required human verification
 

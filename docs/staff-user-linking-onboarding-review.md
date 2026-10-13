@@ -1,14 +1,14 @@
 # Staff/User onboarding review — human action pending
 
-Read-only checkpoint: 2026-10-12, development database `mgaems`.
+Account onboarding requires private school verification; this public guide contains no live inventory.
 
 | Population | Review status |
 | --- | --- |
-| Six active Staff records | All currently unlinked; school must verify which people own accounts, if any |
-| Four active employment-dependent User accounts | All lack eligible Staff relationships and remain denied employment permissions |
-| Inactive Staff, broken references or duplicate claims | None found |
+| Staff records | Verify current employment and account ownership privately |
+| Employment-dependent accounts | Verify an eligible Staff relationship before granting operational access |
+| Inactive Staff, broken references or duplicate claims | Review current state privately before linking |
 
-This document intentionally contains no private Staff inventory or proposed identity pairs. No match has been inferred from names, emails or role titles. Six Staff and four accounts do not imply a particular mapping or a need to create more accounts.
+This document intentionally contains no private Staff inventory or proposed identity pairs. No match has been inferred from names, emails or role titles. Population size does not establish identity or justify creating accounts.
 
 The System Administrator should carry out this process with authorized school leadership before using the new capability:
 
@@ -20,4 +20,4 @@ The System Administrator should carry out this process with authorized school le
 6. If the interface reports a conflict or changed record, reload and repeat identity verification. Do not bypass a claim or retry using an old selection. Replacing a genuine existing relationship requires a separately reviewed unlink before a new link can be confirmed.
 7. After a school-approved link, have the affected person sign in again. Previous sessions and tokens are revoked. Check their intended workspace and actual academic assignments; a Staff link supplies no class assignment, additional role, learner ownership or administrator Health access.
 
-Unlinking or changing employment status/type also invalidates the affected account's authorization. Retain the existing audit trail. All four current account mappings remain unresolved until these human checks are completed.
+Unlinking or changing employment status/type also invalidates the affected account's authorization. Retain the existing audit trail. Account mappings require these human checks before any live action.

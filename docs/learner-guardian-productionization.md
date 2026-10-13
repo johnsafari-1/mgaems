@@ -1,6 +1,6 @@
 # Learner and guardian productionization
 
-This work extends the authoritative `D:/mgaems` workspace on
+This work extends the authoritative `<repository>` workspace on
 `feature/production-ui`, starting from shell checkpoint `2e1279a`.
 The shared sidebar, header, theme architecture, authentication middleware,
 and other domain workflows remain unchanged.

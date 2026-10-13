@@ -2,7 +2,7 @@
 
 ## Verification and existing domain
 
-Work began in D:\mgaems on feature/production-ui at
+Work began in <repository> on feature/production-ui at
 43e59615f6c6a8a09f667e224deba845ae61caee, with a clean working tree five commits ahead of origin.
 
 The existing Sponsor/Sponsorship controllers already supported sponsor categories,
@@ -155,7 +155,7 @@ or screen-reader review; no real Coordinator account was modified for a live sig
 
 ## Limitations and remaining policy decisions
 
-- Current development Coordinator has no active Staff link. Review legitimate employment
+- Coordinator access requires an active Staff link. Review legitimate employment
   linkage through the authorized account/HR process; never bypass the Staff requirement.
 - Group membership is selected at creation and reviewed thereafter. Editing/removal,
   reassignment and cancellation policies need approval before extending the current API.
@@ -177,20 +177,8 @@ or screen-reader review; no real Coordinator account was modified for a live sig
   reset, account status/role changes and session-version invalidation depend on its rollout.
   This checkpoint neither applies migrations nor changes authentication code.
 
-The development baseline has 35 tables and aggregate schema/data fingerprint
-b85797aac91a1601cffee199e6d67604b96963f3f7b845408e535669febb437f.
-The final aggregate fingerprint is
-43ed40cfe25a8b5486e8e71780a6cabdaae62c69207e3691ca49572c98922a29,
-stable across repeat checks. Both Health migrations remain pending and there are still
-35 tables. The live database was used concurrently: since the task began, audit actions
-include four LOGIN_SUCCESS, two LOGOUT, one LOGIN_FAILED and three VIEW_SCHOOL_STATISTICS
-entries. Recent timestamp changes are confined to users, personal_access_tokens and
-audit_logs; no business-table creation/update timestamps changed during this task.
-The isolated fixtures and this task's read-only development probes cannot produce those
-live sign-in/dashboard events. Their timing is consistent with external application use.
-The user was asked whether they were using MGAEMS concurrently. A byte-for-byte unchanged
-live database cannot be certified; this deviation is reported rather than restoring or
-rewriting authentication/audit records to match the baseline. This work issued no development
-database writes, migrations, reseeding or medical-record changes. No historical migrations
-or database volumes were modified. No Finance, Streams, Student Portal, unrelated module
-or push is included.
+Development checks used read-only metadata/data comparisons. This checkpoint
+issued no school-data writes or migrations. Any concurrent application activity
+limits whole-database equality claims; no records were altered to force a match.
+Detailed population counts, activity metadata, timestamps and fingerprints are
+retained in operator-controlled private audit evidence rather than public source.

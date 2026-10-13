@@ -52,10 +52,12 @@ try{
   if($probe.ExitCode-eq0){$ready=$true;break};Start-Sleep -Seconds 1
  }
  if(-not$ready){throw 'Fixture MySQL unavailable'}
+ $fixtureUuid=(Run-Docker @('exec','-e',"MYSQL_PWD=$databasePassword",$testId,'mysql','--protocol=TCP','-h','127.0.0.1','-uroot','-N','-e','SELECT @@server_uuid')).Output.Trim()
+ if($fixtureUuid-notmatch'^[a-f0-9-]{36}$'){throw 'Invalid owned fixture UUID'}
  Run-Docker @('volume','create','--label',"mgaems.staging-test=$runId",$fileVolume)|Out-Null;$volumeCreated=$true
  $argumentsBase=@('run','--rm','--pull','never','--network',"container:$testId",'--mount',"type=bind,source=$testScript,target=/tests/staging_schema.php,readonly",
   '--volume',"${fileVolume}:/var/www/html/storage",'--tmpfs','/var/www/html/bootstrap/cache:rw,noexec,nosuid,size=16m','--tmpfs','/tmp:rw,noexec,nosuid,size=64m',
-  '-e','MGAEMS_DISPOSABLE_STAGING=fresh-mysql-fixture','-e',"DB_DATABASE=$databaseName",'-e','DB_HOST=127.0.0.1','-e','DB_PORT=3306','-e','DB_CONNECTION=mysql',
+  '-e',"MGAEMS_TEST_MYSQL_UUID=$fixtureUuid",'-e','MGAEMS_DISPOSABLE_STAGING=fresh-mysql-fixture','-e',"DB_DATABASE=$databaseName",'-e','DB_HOST=127.0.0.1','-e','DB_PORT=3306','-e','DB_CONNECTION=mysql',
   '-e','DB_USERNAME=root','-e',"DB_PASSWORD=$databasePassword",'-e',"APP_KEY=$appKey",'-e','APP_URL=https://demo.invalid','-e',"MGAEMS_TEST_ADMIN_PASSWORD=$adminPassword",'--entrypoint','php')
  foreach($mode in @('baseline','upgrade')){
   $stageImage=if($mode-eq'baseline'){$legacyId}else{$currentId}
