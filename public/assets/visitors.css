@@ -1,0 +1,66 @@
+/* Visitor register uses the shared theme tokens, including dark mode. */
+.visitor-workspace { min-width: 0; }
+.visitor-heading { align-items: flex-start; gap: var(--space-3); }
+.visitor-heading h1 { font-size: var(--text-2xl); line-height: 1.3; }
+.visitor-heading p { margin: var(--space-2) 0 0; color: var(--gray-500); max-width: 76ch; }
+.visitor-workspace .btn, .visitor-dialog .btn { min-height: var(--touch-target); }
+.visitor-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+.visitor-summary .stat-card { padding: var(--space-4); border-top: 3px solid var(--teal); min-width: 0; }
+.visitor-summary .num { font-variant-numeric: tabular-nums; }
+.visitor-summary .label { color: var(--gray-500); }
+.visitor-note { padding: var(--space-3) var(--space-4); background: var(--gray-50); border-left: 3px solid var(--teal); color: var(--gray-700); margin-bottom: var(--space-4); overflow-wrap: anywhere; }
+.visitor-register { padding: var(--space-4); min-width: 0; }
+.visitor-register h2 { font-size: var(--text-xl); margin-bottom: var(--space-3); }
+.visitor-toolbar { display: grid; grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(135px, 1fr)) auto; gap: var(--space-3); align-items: end; padding-bottom: var(--space-4); border-bottom: 1px solid var(--gray-200); }
+.visitor-toolbar .field { margin: 0; min-width: 0; }
+.visitor-toolbar input, .visitor-toolbar select, .visitor-dialog input, .visitor-dialog select { min-height: var(--touch-target); }
+.visitor-filter-feedback { margin-top: var(--space-3); }
+.visitor-result-count { color: var(--gray-500); margin: var(--space-3) 0; font-size: var(--text-sm); }
+.visitor-table-wrap { overflow-x: auto; }
+.visitor-table { width: 100%; }
+.visitor-table th { white-space: nowrap; }
+.visitor-table td { vertical-align: top; }
+.visitor-table td strong { display: block; color: var(--gray-900); }
+.visitor-table td small { display: block; color: var(--gray-500); margin-top: var(--space-1); }
+.visitor-table .visitor-purpose { max-width: 320px; overflow-wrap: anywhere; }
+.visitor-table .visitor-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.visitor-table .btn { white-space: nowrap; }
+.visitor-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; }
+.visitor-detail-grid > div { border-bottom: 1px solid var(--gray-200); padding-bottom: var(--space-3); min-width: 0; }
+.visitor-detail-grid dt { color: var(--gray-500); font-size: var(--text-sm); }
+.visitor-detail-grid dd { margin: var(--space-1) 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.visitor-detail-grid .full { grid-column: 1 / -1; }
+.visitor-notes { white-space: pre-wrap; overflow-wrap: anywhere; }
+.visitor-dialog .modal-header h2 { overflow-wrap: anywhere; }
+.visitor-dialog .modal-close { flex-shrink: 0; min-height: var(--touch-target); min-width: var(--touch-target); }
+.visitor-dialog .modal-footer { flex-wrap: wrap; }
+.visitor-form-group { min-width: 0; margin: 0 0 var(--space-4); padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.visitor-form-group legend { padding: 0 var(--space-2); color: var(--navy); font-weight: 700; }
+.visitor-form-group .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.visitor-form-group .field:last-child { margin-bottom: 0; }
+.visitor-form-note { font-size: var(--text-sm); color: var(--gray-500); margin: 0 0 var(--space-4); overflow-wrap: anywhere; }
+.visitor-dialog [aria-invalid="true"] { border-color: var(--red); }
+.visitor-workspace .state-panel, .visitor-workspace .empty-state { overflow-wrap: anywhere; }
+@media (max-width: 1100px) {
+  .visitor-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .visitor-toolbar > .field:first-child { grid-column: 1 / -1; }
+  .visitor-table { min-width: 760px; }
+}
+@media (max-width: 640px) {
+  .visitor-heading { flex-direction: column; align-items: stretch; }
+  .visitor-heading > .btn { align-self: flex-start; }
+  .visitor-summary, .visitor-toolbar, .visitor-detail-grid, .visitor-form-group .form-grid { grid-template-columns: 1fr; }
+  .visitor-summary { gap: var(--space-3); }
+  .visitor-register, .visitor-form-group { padding: var(--space-3); }
+  .visitor-toolbar > .field:first-child, .visitor-detail-grid .full { grid-column: auto; }
+  .visitor-table { min-width: 0; border-collapse: separate; border-spacing: 0 var(--space-3); }
+  .visitor-table thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  .visitor-table, .visitor-table tbody, .visitor-table tr, .visitor-table td { display: block; width: 100%; }
+  .visitor-table tr { border: 1px solid var(--gray-200); border-radius: var(--radius); margin-bottom: var(--space-3); }
+  .visitor-table td { padding: var(--space-3); border: 0; }
+  .visitor-table td + td { padding-top: 0; }
+  .visitor-table td[data-label]::before { content: attr(data-label); display: block; color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+  .visitor-table .visitor-purpose { max-width: none; }
+  .visitor-table .visitor-date { white-space: normal; }
+  .visitor-table .btn, .visitor-dialog .modal-footer .btn { width: 100%; }
+}

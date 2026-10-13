@@ -178,10 +178,10 @@ test('Student dashboard makes no unauthorized operational requests', async () =>
 
 test('existing Communication page keeps Teacher read and messaging but removes unsafe publication', async () => {
   const html = fs.readFileSync(path.join(root, 'public/communication.html'), 'utf8');
-  const inline = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]).join('\n');
+  assert.match(html, /src="\/assets\/communication\.js"/);
   for (const role of ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher', 'student']) {
     const h = harness({ role, pathname: '/communication.html' });
-    vm.runInContext(inline, h.context);
+    vm.runInContext(script('communication.js'), h.context);
     await new Promise(resolve => setImmediate(resolve));
     const canPublish = !['teacher', 'student'].includes(role);
     assert.equal(h.elements.has('newAnnouncement'), canPublish, `${role} publish control`);
