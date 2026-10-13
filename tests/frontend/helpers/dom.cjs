@@ -19,7 +19,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
     focus() { document.activeElement = this; }
     appendChild(child) { this.children.push(child); child.parentElement = this; }
     descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
-    get elements() { const controls = this.descendants().filter(child => ['input', 'select', 'button', 'textarea'].includes(child.tag)); for (const control of controls) if (control.name) controls[control.name] = control; return controls; }
+    get elements() { const controls = this.descendants().filter(child => ['input', 'select', 'button', 'textarea'].includes(child.tag)); for (const control of controls) if (control.name) controls[control.name] = control; controls.namedItem = name => controls.find(control => control.name === name) || null; return controls; }
     reportValidity() { return this.elements.every(control => control.disabled || !control.required || control.value !== ''); }
     querySelectorAll(selector) {
       const matches = (node, part) => {
@@ -45,7 +45,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
         const node = new Element(tag, attrs); stack.at(-1).appendChild(node);
         if (!['input', 'br', 'hr', 'meta', 'link', 'img'].includes(tag)) stack.push(node);
       }
-      for (const control of this.descendants().filter(node => node.tag === 'select')) { const choices = control.children.filter(node => node.tag === 'option'); control.value = (choices.find(node => 'selected' in node.attrs) || choices[0])?.attrs.value || ''; }
+      for (const control of [this, ...this.descendants()].filter(node => node.tag === 'select')) { const choices = control.children.filter(node => node.tag === 'option'); control.value = (choices.find(node => 'selected' in node.attrs) || choices[0])?.attrs.value || ''; }
       const decode = value => value.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" })[entity]);
       for (const control of this.descendants().filter(node => node.tag === 'textarea')) {
         const match = [...html.matchAll(/<textarea([^>]*)>([\s\S]*?)<\/textarea>/g)].find(match => match[1].includes(`id="${control.attrs.id}"`));
@@ -57,7 +57,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
   document.documentElement = new Element('html');
   const events = {};
   const window = { location: { pathname, href: pathname }, crypto: require('node:crypto').webcrypto, addEventListener(name, callback) { (events[name] ||= []).push(callback); }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
-  const context = vm.createContext({ document, window, URLSearchParams, setTimeout,
+  const context = vm.createContext({ document, window, URLSearchParams, setTimeout, clearTimeout,
     localStorage: { getItem: key => key === 'mgaems_token' ? 'memory-session' : key === 'mgaems_user' ? JSON.stringify({ username: 'test-user', role }) : null },
     renderAppShell() { new Element('main', { id: 'appMain' }); } });
   const run = name => vm.runInContext(fs.readFileSync(path.resolve(__dirname, '../../../public/assets', name), 'utf8'), context);

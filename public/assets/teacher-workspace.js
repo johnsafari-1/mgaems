@@ -96,10 +96,10 @@
   function renderLearners() {
     const classes = state.context.learner_classes;
     if (!classes.some(item => String(item.id) === state.classId)) state.classId = '';
-    byId('teacherView').innerHTML = `<div class="card"><form id="myLearnerFilter"><div class="toolbar">
-      <div class="search-input"><label class="sr-only" for="myLearnerSearch">Name or admission number</label><input type="search" id="myLearnerSearch" maxlength="150" value="${esc(state.search)}" placeholder="Name or admission number"></div>
-      <label class="sr-only" for="myLearnerClass">Assigned class</label><select id="myLearnerClass"><option value="">All my assigned classes</option>${classes.map(item => `<option value="${esc(item.id)}" ${String(item.id) === state.classId ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select>
-      <button type="submit" class="btn btn-secondary">Search</button></div></form>
+    byId('teacherView').innerHTML = `<div class="card directory-card"><form id="myLearnerFilter"><div class="directory-filters">
+      <div class="field"><label for="myLearnerSearch">Search assigned learners</label><input type="search" id="myLearnerSearch" maxlength="150" value="${esc(state.search)}" placeholder="Name or admission number"></div>
+      <div class="field"><label for="myLearnerClass">Assigned class</label><select id="myLearnerClass"><option value="">All my assigned classes</option>${classes.map(item => `<option value="${esc(item.id)}" ${String(item.id) === state.classId ? 'selected' : ''}>${esc(item.name)}</option>`).join('')}</select></div>
+      <div class="field"><span class="text-meta">Enrollment scope</span><p>Active learners only</p></div><button type="submit" class="btn btn-secondary">Search</button></div></form>
       <div id="myLearnerResults" aria-live="polite" aria-busy="true"></div><div class="pagination" id="myLearnerPagination"></div></div>`;
     byId('myLearnerFilter').addEventListener('submit', event => {
       event.preventDefault(); state.search = byId('myLearnerSearch').value.trim(); state.classId = byId('myLearnerClass').value; state.page = 1; loadLearners();
@@ -126,8 +126,8 @@
     state.pages = Math.max(1, Math.ceil(result.meta.total / result.meta.per_page));
     if (state.page > state.pages) { state.page = state.pages; loadLearners(); return; }
     if (!result.data.length) show(target, MGAEMS.emptyStateHTML('No assigned learners match', 'Only active learners within your current authorized assignments are available.', 'users'));
-    else show(target, table(['Admission no.', 'Learner', 'Class', 'Action'], result.data.map(item => `<tr><td>${esc(item.admission_no)}</td>
-      <td>${esc(item.first_name)} ${esc(item.last_name)}</td><td>${esc(item.school_class?.name)}</td><td><button type="button" class="btn btn-secondary btn-sm" data-learner="${esc(item.id)}">View learner</button></td></tr>`)));
+    else show(target, `<div class="table-scroll" role="region" aria-label="Assigned learner directory" tabindex="0"><table class="directory-table"><caption class="sr-only">Active learners in your authorized assignments</caption><thead><tr>${['Admission no.', 'Learner', 'Class', 'Enrollment', 'Action'].map(title => `<th scope="col">${title}</th>`).join('')}</tr></thead><tbody>${result.data.map(item => `<tr><td>${esc(item.admission_no)}</td>
+      <td><span class="directory-name">${esc(item.first_name)} ${esc(item.last_name)}</span></td><td>${esc(item.school_class?.name)}</td><td><span class="badge badge-green">Active</span></td><td><button type="button" class="btn btn-secondary btn-sm" data-learner="${esc(item.id)}" aria-label="View ${esc(item.first_name)} ${esc(item.last_name)}">View learner</button></td></tr>`).join('')}</tbody></table></div>`);
     target.querySelectorAll('[data-learner]').forEach(button => button.addEventListener('click', () => openLearner(button.dataset.learner, button)));
     const pagination = byId('myLearnerPagination');
     pagination.innerHTML = `<span role="status">Page ${state.page} of ${state.pages} · ${result.meta.total} assigned learners</span>

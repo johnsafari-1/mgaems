@@ -8,15 +8,23 @@
   const main = document.getElementById('appMain');
   const linkedId = new URLSearchParams(window.location.search).get('student_id');
   const state = { page: 1, request: 0, search: '', timer: null, studentId: /^\d+$/.test(linkedId || '') && Number(linkedId) > 0 ? linkedId : null };
-  main.innerHTML = `<div class="section-header"><div><h1>Parents / Guardians</h1><p class="text-muted">Manage contact records, learner links, and optional Parent Portal access.</p></div><button type="button" class="btn btn-primary" id="addGuardianBtn"><i data-lucide="user-round-plus" aria-hidden="true"></i> Add guardian</button></div>
-    ${state.studentId ? '<div class="selection-summary" id="guardianFilter">Showing guardians linked to the selected learner. <button type="button" class="btn btn-secondary btn-sm" id="clearLearnerFilter">Show all guardians</button></div>' : ''}
-    <div class="card"><div class="toolbar"><div class="search-input"><label class="sr-only" for="guardianSearch">Search guardians</label><i data-lucide="search" aria-hidden="true"></i><input type="search" id="guardianSearch" maxlength="150" placeholder="Guardian, contact, learner, or admission number"></div></div><div id="guardiansTable" aria-busy="true">${MGAEMS.loadingHTML('Loading guardians…')}</div><div class="pagination" id="guardianPagination" hidden></div></div>`;
+  const targetStudentId = state.studentId;
+  const validPage = result => Array.isArray(result.data) && Number.isInteger(result.meta?.total) && result.meta.total >= 0 && Number.isInteger(result.meta?.per_page) && result.meta.per_page > 0;
+  main.innerHTML = `<div class="section-header"><div><h1>Parents / Guardians</h1><p class="text-muted">Manage family contacts, learner relationships and optional Parent Portal access.</p></div><button type="button" class="btn btn-primary" id="addGuardianBtn"><i data-lucide="user-round-plus" aria-hidden="true"></i> Add guardian</button></div>
+    ${state.studentId ? `<div class="guardian-context" id="guardianFilter"><p>Showing guardians linked to the selected learner. To link an existing contact, show all guardians, find their record and choose Link learner.</p><a class="btn btn-secondary btn-sm" href="/students.html?student_id=${encodeURIComponent(state.studentId)}">Return to learner</a><button type="button" class="btn btn-secondary btn-sm" id="clearLearnerFilter">Find existing guardian</button></div>` : ''}
+    <div class="card directory-card"><div class="directory-filters guardian-filters" role="search" aria-label="Filter guardians"><div class="field"><label for="guardianSearch">Search guardians</label><input type="search" id="guardianSearch" maxlength="150" placeholder="Guardian, contact, learner or admission number" aria-controls="guardiansTable"></div><button type="button" class="btn btn-secondary" id="clearGuardianSearch">Clear search</button></div><div class="directory-summary"><span id="guardianResultsSummary" role="status" aria-live="polite">Loading guardians…</span><span class="text-meta">Search existing contacts before adding a new guardian.</span></div><div id="guardiansTable" aria-busy="true">${MGAEMS.loadingHTML('Loading guardians…')}</div><div class="pagination" id="guardianPagination" hidden></div></div>`;
   document.getElementById('addGuardianBtn').addEventListener('click', event => openGuardianForm(null, event.currentTarget));
   document.getElementById('guardianSearch').addEventListener('input', event => {
     state.page = 1; state.search = event.target.value.trim(); state.request++; clearTimeout(state.timer);
     state.timer = setTimeout(loadGuardians, 300);
   });
-  document.getElementById('clearLearnerFilter')?.addEventListener('click', () => { state.studentId = null; state.page = 1; document.getElementById('guardianFilter').remove(); window.history.replaceState(null, '', '/guardians.html'); loadGuardians(); });
+  document.getElementById('clearLearnerFilter')?.addEventListener('click', event => {
+    state.studentId = null; state.page = 1;
+    document.getElementById('guardianFilter').querySelector('p').textContent = 'Showing all guardians. Find an existing contact and choose Link learner. The selected learner will be included in the linking form.';
+    event.currentTarget.hidden = true;
+    loadGuardians(); document.getElementById('guardianSearch').focus();
+  });
+  document.getElementById('clearGuardianSearch').addEventListener('click', () => { clearTimeout(state.timer); state.search = ''; state.page = 1; document.getElementById('guardianSearch').value = ''; loadGuardians(); document.getElementById('guardianSearch').focus(); });
 
   function pagination(target, meta, change) {
     const pages = Math.max(1, Math.ceil(meta.total / meta.per_page));
@@ -29,6 +37,7 @@
     const sequence = ++state.request;
     const wrap = document.getElementById('guardiansTable');
     const pages = document.getElementById('guardianPagination');
+    const summary = document.getElementById('guardianResultsSummary'); summary.textContent = 'Loading guardians…';
     wrap.setAttribute('aria-busy', 'true'); pages.hidden = true; wrap.innerHTML = MGAEMS.loadingHTML('Loading guardians…');
     const params = new URLSearchParams({ page: state.page, per_page: 20 });
     if (state.search) params.set('search', state.search);
@@ -36,15 +45,19 @@
     const result = await MGAEMS.get('/api/v1/guardians?' + params);
     if (sequence !== state.request) return;
     wrap.setAttribute('aria-busy', 'false');
-    if (!result.ok) {
+    if (!result.ok || !validPage(result)) {
+      summary.textContent = 'Guardians could not be loaded.';
+      if (result.ok) result.error = 'The server returned an unexpected guardian response.';
       wrap.innerHTML = MGAEMS.errorHTML(result.error) + '<button type="button" class="btn btn-secondary btn-sm">Try again</button>';
       wrap.querySelector('button').addEventListener('click', loadGuardians);
     } else {
       const totalPages = Math.max(1, Math.ceil(result.meta.total / result.meta.per_page));
       if (state.page > totalPages) { state.page = totalPages; loadGuardians(); return; }
+      const first = result.data.length ? (state.page - 1) * result.meta.per_page + 1 : 0;
+      summary.textContent = `Showing ${first}–${first ? first + result.data.length - 1 : 0} of ${result.meta.total} guardian contacts${state.search || state.studentId ? ' matching filters' : ''}`;
       if (!result.data.length) wrap.innerHTML = MGAEMS.emptyStateHTML(state.search || state.studentId ? 'No matching guardians' : 'No guardian contacts recorded', 'Add a contact and explicitly link one or more learners.', 'contact-round');
       else {
-        wrap.innerHTML = `<div class="table-scroll"><table><caption class="sr-only">Guardian contacts and learner relationships</caption><thead><tr><th scope="col">Contact</th><th scope="col">Linked learners</th><th scope="col">Portal access</th><th scope="col">Actions</th></tr></thead><tbody>${result.data.map(guardian => `<tr><td><strong>${esc(guardian.full_name)}</strong><span class="text-meta">${esc(guardian.relationship)}</span><span class="text-meta">${esc(guardian.phone)}${guardian.email ? ' · ' + esc(guardian.email) : ''}</span></td><td>${guardian.students.map(student => `<div class="record-item"><div><a href="/students.html?student_id=${encodeURIComponent(student.id)}">${esc(student.name)}</a><span class="text-meta">${esc(student.admission_no)} · ${esc(student.class || 'No class')}</span><span class="text-meta">${esc(student.relationship)}${student.is_primary_contact ? ' · Primary contact' : ''}</span></div><button type="button" class="btn btn-secondary icon-control" data-unlink="${esc(guardian.id)}" data-student="${esc(student.id)}" aria-label="Unlink ${esc(student.name)}"><i data-lucide="unlink" aria-hidden="true"></i></button></div>`).join('')}${guardian.students_truncated ? `<p class="text-muted">Showing the first 100 of ${esc(guardian.students_count)} links. Search by learner to find a particular relationship.</p>` : ''}</td><td><span class="badge ${guardian.access_status === 'active' ? 'badge-green' : guardian.access_status === 'no_account' ? 'badge-gray' : 'badge-amber'}">${esc(guardian.access_status === 'no_account' ? 'No portal account' : guardian.access_status.replace(/_/g, ' '))}</span>${guardian.account ? `<span class="text-meta">${esc(guardian.account.username)}</span>` : ''}</td><td><div class="actions"><button type="button" class="btn btn-secondary btn-sm" data-edit="${esc(guardian.id)}">Edit</button><button type="button" class="btn btn-secondary btn-sm" data-link="${esc(guardian.id)}">Link learner</button></div></td></tr>`).join('')}</tbody></table></div>`;
+        wrap.innerHTML = `<div class="table-scroll" role="region" aria-label="Guardian directory table" tabindex="0"><table class="guardian-table"><caption class="sr-only">Guardian contacts and learner relationships</caption><thead><tr><th scope="col">Contact</th><th scope="col">Linked learners</th><th scope="col">Parent Portal</th><th scope="col">Actions</th></tr></thead><tbody>${result.data.map(guardian => `<tr><td><strong class="directory-name">${esc(guardian.full_name)}</strong><span class="text-meta">${esc(guardian.phone)}${guardian.email ? ' · ' + esc(guardian.email) : ''}</span></td><td>${guardian.students.map(student => `<div class="record-item"><div><a href="/students.html?student_id=${encodeURIComponent(student.id)}">${esc(student.name)}</a><span class="text-meta">${esc(student.admission_no)} · ${esc(student.class || 'No class')}</span><span class="text-meta">${esc(student.relationship)}</span>${student.is_primary_contact ? '<span class="badge badge-navy">Primary contact</span>' : ''}</div><button type="button" class="btn btn-secondary icon-control" data-unlink="${esc(guardian.id)}" data-student="${esc(student.id)}" aria-label="Unlink ${esc(student.name)} from ${esc(guardian.full_name)}"><i data-lucide="unlink" aria-hidden="true"></i></button></div>`).join('')}${guardian.students_truncated ? `<p class="text-muted">Showing up to 100 of ${esc(guardian.students_count)} links. Search by learner to find a particular relationship.</p>` : ''}</td><td><span class="badge ${guardian.access_status === 'active' ? 'badge-green' : guardian.access_status === 'no_account' ? 'badge-gray' : 'badge-amber'}">${esc(guardian.access_status === 'no_account' ? 'No portal account' : guardian.access_status === 'active' ? 'Active account' : guardian.access_status.replace(/_/g, ' '))}</span>${guardian.account ? `<span class="text-meta">${esc(guardian.account.username)}</span>` : ''}</td><td><div class="actions"><button type="button" class="btn btn-secondary btn-sm" data-edit="${esc(guardian.id)}" aria-label="Edit ${esc(guardian.full_name)}">Edit</button><button type="button" class="btn btn-secondary btn-sm" data-link="${esc(guardian.id)}" aria-label="Link learner to ${esc(guardian.full_name)}">Link learner</button></div></td></tr>`).join('')}</tbody></table></div>`;
         const find = id => result.data.find(guardian => String(guardian.id) === id);
         wrap.querySelectorAll('[data-edit]').forEach(button => button.addEventListener('click', () => openGuardianForm(find(button.dataset.edit), button)));
         wrap.querySelectorAll('[data-link]').forEach(button => button.addEventListener('click', () => openLinkForm(find(button.dataset.link), button)));
@@ -83,7 +96,8 @@
       const result = await MGAEMS.get('/api/v1/students?' + params);
       if (sequence !== request || modal.closed) return;
       choices.setAttribute('aria-busy', 'false');
-      if (!result.ok) {
+      if (!result.ok || !validPage(result)) {
+        if (result.ok) result.error = 'The server returned unexpected learner choices.';
         choices.innerHTML = MGAEMS.errorHTML(result.error) + '<button type="button" class="btn btn-secondary btn-sm">Retry learner choices</button>';
         choices.querySelector('button').addEventListener('click', load); return;
       }
@@ -99,16 +113,24 @@
     }
     searchControl.addEventListener('input', event => { page = 1; search = event.target.value.trim(); request++; clearTimeout(timer); timer = setTimeout(load, 250); });
     selection(); load();
+    if (targetStudentId && !excluded.has(targetStudentId)) {
+      MGAEMS.get(`/api/v1/students/${encodeURIComponent(targetStudentId)}`).then(result => {
+        if (modal.closed || !result.ok || selected.size >= 100 || String(result.data?.id) !== targetStudentId) return;
+        selected.set(targetStudentId, result.data); selection();
+        choices.querySelectorAll('[data-choice]').forEach(control => { if (control.dataset.choice === targetStudentId) control.checked = true; });
+      });
+    }
     return selected;
   }
 
   function openGuardianForm(guardian, trigger) {
     const initialMode = guardian?.account ? 'existing' : 'none';
-    const modal = MGAEMS.openModal({ title: guardian ? 'Edit guardian' : 'Add guardian', trigger, body: `<form id="guardianForm"><div data-form-error></div><p class="text-muted">A guardian contact does not automatically grant Parent Portal access. Account creation and association are optional.</p><div class="form-grid">${input('full_name', 'Full name', 'text', guardian?.full_name, true)}${input('relationship', 'Relationship', 'text', guardian?.relationship, true, 30)}${input('phone', 'Phone', 'tel', guardian?.phone, true, 20)}${input('email', 'Contact email', 'email', guardian?.email)}${input('address', 'Address', 'text', guardian?.address, false, 255)}</div>
-      <label class="flex gap-2"><input type="checkbox" name="is_primary_contact" ${guardian?.is_primary_contact ? 'checked' : ''}> Primary contact for linked learners</label><p class="text-meta">Primary status can differ by learner. Changing this checkbox applies your choice to all linked learners. Selecting primary replaces their previous primary contact.</p>
-      <div class="field profile-subsection"><label for="accountMode">Parent Portal account</label><select id="accountMode"><option value="none" ${initialMode === 'none' ? 'selected' : ''}>No portal account</option><option value="existing" ${initialMode === 'existing' ? 'selected' : ''}>Associate existing parent account</option><option value="create">Create parent account</option></select></div>
+    const modal = MGAEMS.openModal({ title: guardian ? 'Edit guardian' : 'Add guardian', trigger, body: `<form id="guardianForm" class="workflow-form"><div data-form-error></div><p class="text-muted">Search existing contacts before adding a new guardian. One contact and Parent Portal account can be linked to several children.</p><p class="form-hint">Fields marked * are required. Account creation and association are optional.</p><fieldset><legend>Contact & relationship</legend><div class="form-grid">${input('full_name', 'Full name', 'text', guardian?.full_name, true)}${input('relationship', 'Relationship', 'text', guardian?.relationship, true, 30)}${input('phone', 'Phone', 'tel', guardian?.phone, true, 20)}${input('email', 'Contact email', 'email', guardian?.email)}${input('address', 'Address', 'text', guardian?.address, false, 255)}</div>
+      <label class="check-label"><input type="checkbox" name="is_primary_contact" ${guardian?.is_primary_contact ? 'checked' : ''}> Primary contact for linked learners</label><p class="form-hint">Primary status can differ by learner. Changing this checkbox applies your choice to all linked learners. Selecting primary replaces their previous primary contact.${guardian ? ' Contact edits apply to this contact group. Changing Relationship applies it to every linked learner.' : ''}</p></fieldset>
+      <fieldset><legend>Parent Portal association</legend><p class="text-muted">A contact record alone does not grant portal access. Use an existing account where possible.</p><div class="field"><label for="accountMode">Parent Portal account</label><select id="accountMode"><option value="none" ${initialMode === 'none' ? 'selected' : ''}>No portal account</option><option value="existing" ${initialMode === 'existing' ? 'selected' : ''}>Associate existing parent account</option><option value="create">Create parent account</option></select></div>
       <div id="existingAccountFields" hidden><div class="field"><label for="accountSearch">Search parent accounts</label><input id="accountSearch" type="search" maxlength="150" placeholder="Username or login email"></div><div class="field"><label for="guardianAccount">Parent account *</label><select id="guardianAccount" name="user_id"><option value="">Select account…</option></select></div><div id="accountError"></div><div class="pagination" id="accountPagination" hidden></div></div>
-      <div id="newAccountFields" hidden><div class="form-grid">${input('account.username', 'Username', 'text', '', false, 100)}${input('account.email', 'Login email', 'email', '', false)}${input('account.password', 'Temporary password', 'password', '', false, 200)}</div><p class="text-meta">Use at least 10 characters. Share the password securely; it will not be shown again.</p></div>${guardian ? '' : pickerHTML()}</form>`, footer: '<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="submit" form="guardianForm" class="btn btn-primary" data-submit>Save guardian</button>' });
+      <div id="newAccountFields" hidden><div class="form-grid">${input('account.username', 'Username *', 'text', '', false, 100)}${input('account.email', 'Login email *', 'email', '', false)}${input('account.password', 'Temporary password *', 'password', '', false, 200)}</div><p class="form-hint">Use at least 10 characters. Share the password securely; it will not be shown again.</p></div></fieldset>${guardian ? '' : `<fieldset><legend>Linked learners</legend>${pickerHTML()}</fieldset>`}</form>`, footer: '<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="submit" form="guardianForm" class="btn btn-primary" data-submit>Save guardian</button>' });
+    modal.overlay.className = 'modal-overlay guardian-workspace';
     const form = modal.body.querySelector('form');
     let primaryChanged = false;
     form.elements.is_primary_contact.addEventListener('change', () => { primaryChanged = true; });
@@ -129,7 +151,8 @@
       const params = new URLSearchParams({ page: accountPage, per_page: 20 }); if (accountSearch) params.set('search', accountSearch);
       const result = await MGAEMS.get('/api/v1/guardians/accounts?' + params);
       if (sequence !== accountRequest || modal.closed) return;
-      if (!result.ok) {
+      if (!result.ok || !validPage(result)) {
+        if (result.ok) result.error = 'The server returned unexpected parent accounts.';
         errors.innerHTML = MGAEMS.errorHTML(result.error) + '<button type="button" class="btn btn-secondary btn-sm">Retry parent accounts</button>';
         errors.querySelector('button').addEventListener('click', loadAccounts);
       } else {
@@ -181,7 +204,8 @@
   }
 
   function openLinkForm(guardian, trigger) {
-    const modal = MGAEMS.openModal({ title: `Link learners to ${guardian.full_name}`, trigger, body: `<form id="guardianLinkForm"><div data-form-error></div><p class="text-muted">Linking a learner to a contact with a Parent Portal account grants that account access to the learner’s portal records.</p><label class="flex gap-2"><input type="checkbox" name="is_primary_contact"> Make this contact primary for the selected learners</label>${pickerHTML()}</form>`, footer: '<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="submit" form="guardianLinkForm" class="btn btn-primary" data-submit>Link learners</button>' });
+    const modal = MGAEMS.openModal({ title: `Link learners to ${guardian.full_name}`, trigger, body: `<form id="guardianLinkForm" class="workflow-form"><div data-form-error></div><p class="text-muted">Linking a learner to a contact with a Parent Portal account grants that account access to the learner’s portal records. Existing linked learners are excluded from the choices.</p><fieldset><legend>Learner relationships</legend><label class="check-label"><input type="checkbox" name="is_primary_contact"> Make this contact primary for the selected learners</label><p class="form-hint">Selecting primary replaces each selected learner's previous primary contact.</p>${pickerHTML()}</fieldset></form>`, footer: '<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="submit" form="guardianLinkForm" class="btn btn-primary" data-submit>Link learners</button>' });
+    modal.overlay.className = 'modal-overlay guardian-workspace';
     const selected = learnerPicker(modal, new Set(guardian.students.map(student => String(student.id))));
     const form = modal.body.querySelector('form');
     let submitting = false;

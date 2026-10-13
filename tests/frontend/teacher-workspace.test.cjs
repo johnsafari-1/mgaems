@@ -57,6 +57,9 @@ test('Subject Teacher-only dashboard offers assessment without daily attendance 
 test('My Learners filters use only authorized class choices and preserve scoped pagination', async () => {
   const h = harness({ page: '/students.html' }); await flush();
   assert.match(h.ids.get('teacherView').innerHTML, /&lt;Subject class&gt;/);
+  assert.match(h.ids.get('teacherView').innerHTML, /Search assigned learners|Active learners only/);
+  assert.match(h.ids.get('myLearnerResults').innerHTML, /role="region"[^>]*tabindex="0"|badge-green">Active/);
+  assert.doesNotMatch(h.ids.get('teacherView').innerHTML, /Add learner|data-edit|statusFilter/);
   assert.deepEqual(h.ids.get('myLearnerClass').children.map(item => item.attrs.value), ['', '10', '20']);
   assert.match(h.ids.get('myLearnerResults').innerHTML, /&lt;Learner&gt;/);
   h.ids.get('myLearnerNext').listeners.click(); await flush();
