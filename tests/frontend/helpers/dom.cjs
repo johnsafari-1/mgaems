@@ -45,8 +45,8 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
         const node = new Element(tag, attrs); stack.at(-1).appendChild(node);
         if (!['input', 'br', 'hr', 'meta', 'link', 'img'].includes(tag)) stack.push(node);
       }
-      for (const control of [this, ...this.descendants()].filter(node => node.tag === 'select')) { const choices = control.children.filter(node => node.tag === 'option'); control.value = (choices.find(node => 'selected' in node.attrs) || choices[0])?.attrs.value || ''; }
       const decode = value => value.replace(/&(?:amp|lt|gt|quot|#39);/g, entity => ({ '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" })[entity]);
+      for (const control of [this, ...this.descendants()].filter(node => node.tag === 'select')) { const choices = control.children.filter(node => node.tag === 'option'); control.value = decode((choices.find(node => 'selected' in node.attrs) || choices[0])?.attrs.value || ''); }
       for (const control of this.descendants().filter(node => node.tag === 'textarea')) {
         const match = [...html.matchAll(/<textarea([^>]*)>([\s\S]*?)<\/textarea>/g)].find(match => match[1].includes(`id="${control.attrs.id}"`));
         control.value = decode(match?.[2] || '');

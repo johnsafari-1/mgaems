@@ -55,10 +55,10 @@ test('correction submits the loaded revision and blocks context changes/double s
   assert.equal(h.ids.get('score_1').disabled, true); assert.equal(h.ids.get('assessmentClass').disabled, false);
 });
 
-test('revision-conflict response retains edits for review and escapes feedback', async () => {
+test('revision-conflict response retains edits, requires reload and escapes feedback', async () => {
   const h = harness({ post: async () => ({ ok: false, status: 409, error: '<Changed elsewhere>' }) }); await h.load();
   h.ids.get('score_0').value = '90'; h.ids.get('score_0').listeners.input(); await h.ids.get('saveRow_0').listeners.click();
-  assert.equal(h.ids.get('score_0').value, '90'); assert.equal(h.ids.get('saveRow_0').disabled, false);
+  assert.equal(h.ids.get('score_0').value, '90'); assert.equal(h.ids.get('saveRow_0').disabled, true);
   assert.match(h.ids.get('rowState_0').innerHTML, /&lt;Changed elsewhere&gt;/);
 });
 
