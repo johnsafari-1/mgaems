@@ -1,5 +1,5 @@
 MGAEMS.requireAuth();
-renderAppShell('/staff.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+renderAppShell('/staff.html');
 MGAEMS.initSidebar();
 
 const CREATE_ROLES = ['system_admin', 'head_teacher'];

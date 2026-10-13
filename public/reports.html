@@ -48,7 +48,7 @@ const REPORT_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teacher'];
 if (user && !REPORT_ROLES.includes(user.role)) window.location.href = MGAEMS.landingPage(user);
 
 if (user && REPORT_ROLES.includes(user.role)) {
-  renderAppShell('/reports.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  renderAppShell('/reports.html');
   MGAEMS.initSidebar();
 
   const state = {

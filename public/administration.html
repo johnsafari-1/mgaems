@@ -66,7 +66,7 @@ const ADMIN_ROLES = ['system_admin', 'head_teacher'];
 if (user && !ADMIN_ROLES.includes(user.role)) window.location.href = '/dashboard.html';
 
 if (user && ADMIN_ROLES.includes(user.role)) {
-  renderAppShell('/administration.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  renderAppShell('/administration.html');
   MGAEMS.initSidebar();
 
   const isSystemAdmin = user.role === 'system_admin';
@@ -293,7 +293,8 @@ if (user && ADMIN_ROLES.includes(user.role)) {
   async function loadSettings() {
     const target = document.getElementById('settingsState');
     target.innerHTML = MGAEMS.loadingHTML('Loading school settings…');
-    const result = await MGAEMS.get('/api/v1/settings/school');
+    const result = await MGAEMS.schoolSettings();
+    if (result.stale) return;
     if (!result.ok) {
       target.innerHTML = `${MGAEMS.errorHTML(result.status === 403 ? 'You do not have permission to view school settings.' : result.error)}<button class="btn btn-secondary btn-sm" id="retrySettings"><i data-lucide="refresh-cw"></i> Retry</button>`;
       target.querySelector('#retrySettings').addEventListener('click', loadSettings);
@@ -309,7 +310,6 @@ if (user && ADMIN_ROLES.includes(user.role)) {
   function renderSettings() {
     const settings = state.settings;
     const canUpdateSettings = true;
-    const logoUrl = settings.logo_path ? `/storage/${String(settings.logo_path).split('/').map(encodeURIComponent).join('/')}` : '';
     document.getElementById('settingsState').innerHTML = `
       <div class="admin-settings-grid">
         <form class="card" id="schoolSettingsForm">
@@ -329,12 +329,14 @@ if (user && ADMIN_ROLES.includes(user.role)) {
         </form>
         <div class="card admin-logo-area">
           <h2>School Logo</h2>
-          ${logoUrl ? `<img class="admin-logo-preview" src="${esc(logoUrl)}" alt="Current school logo" onerror="this.hidden=true">` : '<div class="empty-state" style="padding:var(--space-4)"><i data-lucide="image-off"></i><div class="title">No logo uploaded</div></div>'}
+          ${MGAEMS.schoolLogoHTML({ ...settings, logo_revision: MGAEMS.schoolBranding()?.logo_revision }, { className: 'admin-logo-preview' })}
+          <p class="text-muted">${settings.logo_path ? 'Saved school logo. Its original proportions are preserved.' : 'No logo configured. Upload a school logo to show it throughout MGAEMS.'}</p>
           ${canUpdateSettings ? '<form id="schoolLogoForm"><div class="field"><label for="schoolLogo">Upload logo (JPG or PNG, max 2 MB)</label><input id="schoolLogo" type="file" accept="image/jpeg,image/png" required></div><button class="btn btn-secondary" type="submit" id="uploadLogo"><i data-lucide="upload"></i> Upload Logo</button><div id="logoUploadState"></div></form>' : ''}
         </div>
       </div>`;
     document.getElementById('schoolSettingsForm').addEventListener('submit', saveSettings);
     document.getElementById('schoolLogoForm')?.addEventListener('submit', uploadLogo);
+    MGAEMS.initSchoolLogos(document.getElementById('settingsState'));
     MGAEMS.initIcons();
   }
 
@@ -364,6 +366,7 @@ if (user && ADMIN_ROLES.includes(user.role)) {
     button.innerHTML = '<i data-lucide="save"></i> Save Settings';
     if (!result.ok) { showSettingsError(result.status === 403 ? 'You do not have permission to update school settings.' : result.error); MGAEMS.initIcons(); return; }
     state.settings = result.data;
+    MGAEMS.updateSchoolSettings(state.settings);
     document.getElementById('settingsSaveState').innerHTML = '<div class="alert alert-success"><i data-lucide="circle-check"></i><span>School settings saved.</span></div>';
     MGAEMS.toast('School settings saved.', 'success');
     MGAEMS.initIcons();
@@ -409,6 +412,7 @@ if (user && ADMIN_ROLES.includes(user.role)) {
       return;
     }
     state.settings.logo_path = result.data.logo_path;
+    MGAEMS.updateSchoolSettings(state.settings, { refreshLogo: true });
     MGAEMS.toast('School logo uploaded.', 'success');
     renderSettings();
   }

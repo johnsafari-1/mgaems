@@ -50,8 +50,10 @@ const MGAEMS_NAV_GROUPS = [
   { label: 'Administration', keys: ['administration'] },
 ];
 
-function renderAppShell(activeHref, logoUrl) {
+function renderAppShell(activeHref) {
   if (document.getElementById('appMain')) return;
+  // A destination is identified by its path, including when opened from a filtered link.
+  activeHref = String(activeHref || window.location.pathname).split(/[?#]/, 1)[0];
   const role = MGAEMS.currentUser()?.role;
   const keys = Object.hasOwn(MGAEMS_ROLE_NAV, role) ? MGAEMS_ROLE_NAV[role] : [];
   const items = keys.map(key => MGAEMS_NAV_ITEMS[key]);
@@ -71,9 +73,9 @@ function renderAppShell(activeHref, logoUrl) {
     <a class="skip-link" href="#appMain">Skip to main content</a>
     <div class="app-shell">
       <aside class="app-sidebar" id="appSidebar" aria-label="School navigation">
-        <a class="brand" href="${MGAEMS.landingPage()}" aria-label="MGAEMS home">
-          <span class="brand-mark" aria-hidden="true"><span>MG</span><img id="appSchoolLogo" ${logoUrl ? `src="${esc(logoUrl)}"` : 'hidden'} alt=""></span>
-          <div class="sidebar-label"><strong>MGAEMS</strong><div id="appSchoolName">School workspace</div><div class="sub" id="appSchoolMotto"></div></div>
+        <a class="brand" id="schoolHome" href="${MGAEMS.landingPage()}" aria-label="Manna Goodnews Academy home" title="Manna Goodnews Academy">
+          <span class="brand-mark" aria-hidden="true"><span>MG</span><img id="appSchoolLogo" hidden alt=""></span>
+          <div class="sidebar-label"><strong>MGAEMS</strong><div id="appSchoolName">Manna Goodnews Academy</div><div class="sub" id="appSchoolMotto"></div></div>
         </a>
         <button type="button" class="btn btn-secondary icon-control sidebar-close" id="closeNavigation" aria-label="Close navigation"><i data-lucide="x" aria-hidden="true"></i></button>
         <nav aria-label="Main navigation">${navLinks}</nav>
@@ -95,6 +97,8 @@ function renderAppShell(activeHref, logoUrl) {
   `);
   document.getElementById('shellLogout').addEventListener('click', MGAEMS.logout);
   document.getElementById('appSchoolLogo').addEventListener('error', event => { event.target.hidden = true; });
+  window.addEventListener('mgaems:school-settings', event => renderShellSchoolIdentity(event.detail));
+  renderShellSchoolIdentity(MGAEMS.schoolBranding());
   MGAEMS.initSidebar();
   MGAEMS.initThemeControls();
   initAppNavigation();
@@ -110,6 +114,18 @@ function initAppNavigation() {
   let collapsed = false;
   let open = false;
 
+  function focusableControls() {
+    return [...sidebar.querySelectorAll('a[href], button, [tabindex]')].filter(element =>
+      !element.hidden && !element.disabled && !element.inert && element.getAttribute('aria-hidden') !== 'true'
+      && element.tabIndex !== -1 && (typeof element.getClientRects !== 'function' || element.getClientRects().length > 0));
+  }
+
+  function focusInside() {
+    const first = focusableControls()[0];
+    if (first) first.focus();
+    else sidebar.focus();
+  }
+
   function update() {
     document.body.classList.toggle('sidebar-collapsed', !mobile.matches && collapsed);
     document.body.classList.toggle('navigation-open', mobile.matches && open);
@@ -120,9 +136,11 @@ function initAppNavigation() {
     if (mobile.matches && open) {
       sidebar.setAttribute('role', 'dialog');
       sidebar.setAttribute('aria-modal', 'true');
+      sidebar.setAttribute('tabindex', '-1');
     } else {
       sidebar.removeAttribute('role');
       sidebar.removeAttribute('aria-modal');
+      sidebar.removeAttribute('tabindex');
     }
     const expanded = mobile.matches ? open : !collapsed;
     toggle.setAttribute('aria-expanded', String(expanded));
@@ -142,12 +160,17 @@ function initAppNavigation() {
   });
   close.addEventListener('click', dismiss);
   backdrop.addEventListener('click', dismiss);
+  sidebar.addEventListener('click', event => {
+    if (!mobile.matches || !open || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (event.target.closest?.('a[href]')) dismiss();
+  });
   document.addEventListener('keydown', event => {
     if (!mobile.matches || !open) return;
     if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
     if (event.key === 'Tab') {
-      const controls = [...sidebar.querySelectorAll('a[href], button')].filter(el => !el.hidden);
+      const controls = focusableControls();
       const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { event.preventDefault(); sidebar.focus(); return; }
       if (event.shiftKey && (document.activeElement === first || !sidebar.contains(document.activeElement))) {
         event.preventDefault(); last.focus();
       } else if (!event.shiftKey && (document.activeElement === last || !sidebar.contains(document.activeElement))) {
@@ -155,27 +178,40 @@ function initAppNavigation() {
       }
     }
   });
+  document.addEventListener('focusin', () => {
+    // The skip link and browser/script focus can otherwise escape an open drawer.
+    if (mobile.matches && open && !sidebar.contains(document.activeElement)) focusInside();
+  });
   mobile.addEventListener('change', () => {
     const wasInSidebar = sidebar.contains(document.activeElement);
+    const wasClose = document.activeElement === close;
     open = false;
     update();
-    if (mobile.matches && wasInSidebar) toggle.focus();
+    if ((mobile.matches && wasInSidebar) || (!mobile.matches && wasClose)) toggle.focus();
   });
   update();
 }
 
+function renderShellSchoolIdentity(settings) {
+  if (!settings) return;
+  const name = document.getElementById('appSchoolName');
+  const motto = document.getElementById('appSchoolMotto');
+  const logo = document.getElementById('appSchoolLogo');
+  if (!name || !motto || !logo) return;
+  name.textContent = settings.school_name || 'Manna Goodnews Academy';
+  const home = document.getElementById('schoolHome');
+  if (home) { home.setAttribute('aria-label', `${name.textContent} home`); home.setAttribute('title', name.textContent); }
+  motto.textContent = settings.motto || '';
+  const logoUrl = MGAEMS.schoolLogoURL(settings.logo_path, { revision: settings.logo_revision });
+  if (logoUrl) { logo.src = logoUrl; logo.hidden = false; }
+  else { logo.removeAttribute('src'); logo.hidden = true; }
+}
+
 async function loadShellContext() {
   if (!MGAEMS.currentUser()) return;
-  const schoolRequest = MGAEMS.get('/api/v1/settings/school').then(result => {
-    if (!result.ok || !result.data) return;
-    document.getElementById('appSchoolName').textContent = result.data.school_name || 'School workspace';
-    document.getElementById('appSchoolMotto').textContent = result.data.motto || '';
-    if (result.data.logo_path) {
-      const logo = document.getElementById('appSchoolLogo');
-      logo.src = '/storage/' + String(result.data.logo_path).replace(/^\/+/, '');
-      logo.hidden = false;
-    }
-  });
+  const schoolRequest = MGAEMS.schoolSettings().then(result => {
+    if (result.ok && result.data && !result.stale) renderShellSchoolIdentity(MGAEMS.schoolBranding() || result.data);
+  }).catch(() => { /* Keep the safe school placeholder when identity is unavailable. */ });
   const context = document.getElementById('academicContext');
   if (context) {
     const [years, terms] = await MGAEMS.academicContext();

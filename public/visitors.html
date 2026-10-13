@@ -44,7 +44,7 @@ const VISITOR_WRITE_ROLES = ['system_admin', 'head_teacher', 'deputy_head_teache
 if (user && !VISITOR_READ_ROLES.includes(user.role)) window.location.href = '/dashboard.html';
 
 if (user && VISITOR_READ_ROLES.includes(user.role)) {
-  renderAppShell('/visitors.html', '/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg');
+  renderAppShell('/visitors.html');
   MGAEMS.initSidebar();
 
   const canRegister = VISITOR_WRITE_ROLES.includes(user.role);

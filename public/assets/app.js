@@ -75,6 +75,9 @@ const MGAEMS = (() => {
   }
 
   function logout() {
+    schoolRevision += 1;
+    schoolRequest = null;
+    schoolIdentity = null;
     fetch('/api/v1/auth/logout', {
       method: 'POST',
       headers: { Accept: 'application/json', Authorization: 'Bearer ' + token() },
@@ -124,6 +127,77 @@ const MGAEMS = (() => {
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
   const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
   const del = (path) => api(path, { method: 'DELETE' });
+
+  // Share only in-flight reads. School identity stays in memory; contact settings
+  // and authenticated API responses are never persisted as a branding cache.
+  let schoolRequest = null;
+  let schoolIdentity = null;
+  let schoolRevision = 0;
+  let logoRevision = 0;
+  function schoolBranding() { return schoolIdentity ? { ...schoolIdentity } : null; }
+  function updateSchoolSettings(settings, { refreshLogo = false } = {}) {
+    schoolRevision += 1;
+    schoolRequest = null;
+    if (refreshLogo) logoRevision += 1;
+    schoolIdentity = {
+      school_name: typeof settings?.school_name === 'string' ? settings.school_name : '',
+      motto: typeof settings?.motto === 'string' ? settings.motto : '',
+      logo_path: typeof settings?.logo_path === 'string' ? settings.logo_path : null,
+      logo_revision: logoRevision,
+    };
+    const branding = schoolBranding();
+    if (window.dispatchEvent && typeof window.CustomEvent === 'function') {
+      window.dispatchEvent(new window.CustomEvent('mgaems:school-settings', { detail: branding }));
+    }
+    return branding;
+  }
+  function schoolSettings() {
+    if (schoolRequest) return schoolRequest;
+    const revision = schoolRevision;
+    const credential = token();
+    const request = MGAEMS.get('/api/v1/settings/school').then(result => {
+      if (revision !== schoolRevision || credential !== token()) {
+        return { ok: false, stale: true, error: 'School settings changed. Please reload.' };
+      }
+      if (result.ok) updateSchoolSettings(result.data);
+      return result;
+    }).finally(() => { if (schoolRequest === request) schoolRequest = null; });
+    schoolRequest = request;
+    return request;
+  }
+  function schoolLogoURL(path, { revision = 0 } = {}) {
+    if (typeof path !== 'string' || !path || path !== path.trim() || /[\\\u0000-\u001f\u007f?#:]/.test(path)) return '';
+    const parts = path.split('/');
+    if (parts.some(part => !part || part === '.' || part === '..')) return '';
+    try {
+      if (parts.some(part => /[\\/\u0000-\u001f\u007f]/.test(decodeURIComponent(part)) || ['.', '..'].includes(decodeURIComponent(part)))) return '';
+    } catch { return ''; }
+    const version = Number.isSafeInteger(revision) && revision > 0 ? `?v=${revision}` : '';
+    return '/storage/' + parts.map(encodeURIComponent).join('/') + version;
+  }
+  function schoolLogoHTML(settings = {}, { className = '', decorative = false } = {}) {
+    const url = schoolLogoURL(settings.logo_path, { revision: settings.logo_revision });
+    const name = settings.school_name || 'School';
+    return `<span class="school-logo ${escapeHTML(className)}" data-school-logo><img class="school-logo-image" data-school-logo-image ${url ? `src="${escapeHTML(url)}"` : 'hidden'} alt="${decorative ? '' : escapeHTML(name + ' logo')}"><span class="school-logo-fallback" data-school-logo-fallback ${url ? 'hidden' : ''} ${decorative ? 'aria-hidden="true"' : 'role="img" aria-label="School logo not configured"'}>MG</span></span>`;
+  }
+  function initSchoolLogos(root = document) {
+    const wrappers = root.matches?.('[data-school-logo]') ? [root] : [...root.querySelectorAll('[data-school-logo]')];
+    wrappers.forEach(wrapper => {
+      const image = wrapper.querySelector('[data-school-logo-image]');
+      const fallback = wrapper.querySelector('[data-school-logo-fallback]');
+      if (!image || !fallback || image.dataset.logoBound) return;
+      image.dataset.logoBound = 'true';
+      image.addEventListener('error', () => {
+        image.hidden = true;
+        fallback.hidden = false;
+        if (fallback.getAttribute('role') === 'img') fallback.setAttribute('aria-label', 'School logo unavailable');
+      });
+      image.addEventListener('load', () => {
+        image.hidden = false;
+        fallback.hidden = true;
+      });
+    });
+  }
 
   // Share concurrent shell/dashboard reads; retain no academic response cache.
   let academicRequest = null;
@@ -317,5 +391,5 @@ const MGAEMS = (() => {
     if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, patch, del, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, patch, del, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, setTheme, initThemeControls };
 })();

@@ -194,12 +194,12 @@ a:hover { text-decoration: underline; }
 .nav-section-title { padding: var(--space-2) var(--space-3); color: var(--sidebar-muted); font-size: var(--text-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
 .app-sidebar nav a {
   display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+  padding: 10px var(--space-3);
   border-radius: var(--radius);
   color: var(--sidebar-text);
   font-size: var(--text-sm);
   font-weight: 500;
-  margin-bottom: 2px; min-height: var(--control-height); border-left: 3px solid transparent;
+  margin-bottom: var(--space-1); min-height: var(--touch-target); border-left: 3px solid transparent;
 }
 .app-sidebar nav a:hover { background: var(--sidebar-hover); text-decoration: none; }
 .app-sidebar nav a.active { background: var(--sidebar-active); color: var(--sidebar-text); font-weight: 700; border-left-color: var(--gold); }
@@ -209,12 +209,12 @@ a:hover { text-decoration: underline; }
 .sidebar-collapsed .nav-section-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .sidebar-collapsed .sidebar-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .sidebar-collapsed .brand { padding: var(--space-3) var(--space-2); }
-.sidebar-collapsed nav a { justify-content: center; min-height: 40px; }
+.sidebar-collapsed nav a { justify-content: center; min-height: var(--touch-target); }
 .sidebar-close, .sidebar-backdrop { display: none; }
 .navigation-open { overflow: hidden; }
 .skip-link { position: fixed; top: -100px; left: var(--space-4); padding: var(--space-3); background: var(--surface); z-index: 80; border-radius: var(--radius); }
 .skip-link:focus { top: var(--space-3); }
-.icon-control { width: var(--control-height); height: var(--control-height); padding: var(--space-2); flex-shrink: 0; }
+.icon-control { width: var(--touch-target); height: var(--touch-target); padding: var(--space-2); flex-shrink: 0; }
 
 .app-main { grid-column: 2; padding: var(--space-6) var(--space-8); max-width: var(--content-width); width: 100%; min-width: 0; margin: 0 auto; }
 
@@ -481,6 +481,28 @@ tr:hover td { background: var(--gray-50); }
 .page-heading { margin-bottom: var(--space-6); }
 .page-heading p { margin: var(--space-2) 0 0; color: var(--gray-500); }
 .page-heading h1 { font-size: var(--text-2xl); line-height: 1.25; letter-spacing: -.02em; }
+.dashboard-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-4); padding-bottom: var(--space-5); border-bottom: 1px solid var(--gray-200); }
+.dashboard-heading > div { min-width: 0; }
+.dashboard-school-name { display: block; color: var(--gray-700); font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
+.dashboard-heading-meta { display: flex; align-items: center; gap: var(--space-2); color: var(--gray-500); font-size: var(--text-sm); white-space: nowrap; padding-top: var(--space-1); }
+.dashboard-heading-meta svg, .dashboard-calendar-summary svg { width: 18px; height: 18px; flex-shrink: 0; }
+.dashboard-stat-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.dashboard-stat-heading .label { margin: 0; }
+.dashboard-stat-icon { display: grid; place-items: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: var(--radius); color: var(--teal); background: var(--teal-light); }
+.dashboard-stat-icon svg { width: 18px; height: 18px; }
+.dashboard-stat-card .num { margin-top: var(--space-4); overflow-wrap: anywhere; }
+.dashboard-stat-card .detail { min-height: 1.5em; }
+.dashboard-calendar-summary { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-4) 0 0; padding-top: var(--space-3); border-top: 1px solid var(--gray-200); color: var(--gray-500); font-size: var(--text-sm); }
+.dashboard-calendar-incomplete { margin-top: var(--space-4); }
+.dashboard-section-description { color: var(--gray-500); margin: 0 0 var(--space-4); }
+.section-header .dashboard-section-description { margin: var(--space-1) 0 0; }
+.school-logo { display: inline-grid; place-items: center; position: relative; width: 44px; height: 44px; overflow: hidden; background: var(--surface); color: var(--navy); border-radius: var(--radius); flex-shrink: 0; }
+.school-logo-image, .school-logo-fallback { grid-area: 1 / 1; }
+.school-logo-image { display: block; width: 100%; height: 100%; object-fit: contain; }
+.school-logo-fallback { display: grid; place-items: center; width: 100%; height: 100%; font-size: var(--text-sm); font-weight: 700; letter-spacing: .04em; }
+.brand-mark .school-logo { width: 100%; height: 100%; }
+.brand .school-logo-image { position: static; }
+.admin-logo-preview.school-logo { width: 144px; height: 144px; padding: var(--space-3); border: 1px solid var(--gray-200); }
 .eyebrow { display: block; color: var(--navy-light); font-size: var(--text-xs); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: var(--space-2); }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: var(--space-6); align-items: start; }
 .dashboard-stack { min-width: 0; }
@@ -494,6 +516,8 @@ tr:hover td { background: var(--gray-50); }
 .quick-link { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); background: var(--surface); border: 1px solid var(--gray-200); border-radius: var(--radius); color: var(--navy); font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
 .quick-link:hover { background: var(--teal-light); border-color: var(--teal); text-decoration: none; }
 .quick-link span { flex: 1; min-width: 0; }
+.quick-link-copy { display: flex; flex-direction: column; gap: var(--space-1); }
+.quick-link-description { font-size: var(--text-xs); font-weight: 400; color: var(--gray-500); }
 .quick-link svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--teal); }
 .period-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; }
 .period-detail dt { color: var(--gray-500); font-size: var(--text-xs); }
@@ -540,6 +564,7 @@ tr:hover td { background: var(--gray-50); }
 .record-list label.record-item { align-items: flex-start; }
 
 @media (max-width: 1100px) {
+  .app-main { padding: var(--space-6); }
   .overview-grid { grid-template-columns: 1fr; }
   .dashboard-grid { grid-template-columns: 1fr; }
   .app-header .user { gap: var(--space-2); }
@@ -553,6 +578,9 @@ tr:hover td { background: var(--gray-50); }
   .sidebar-backdrop { display: block; position: fixed; inset: 0; background: var(--overlay); border: 0; z-index: 30; }
 }
 @media (max-width: 640px) {
+  .app-main { padding: var(--space-5) var(--space-4); }
+  .dashboard-heading { flex-direction: column; }
+  .dashboard-heading-meta { padding: 0; }
   .app-header { padding: var(--space-3); flex-wrap: wrap; gap: var(--space-3); }
   .app-header .user { width: 100%; }
   .app-header .user-identity { flex: 1; }
