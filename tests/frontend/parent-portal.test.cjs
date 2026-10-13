@@ -78,7 +78,7 @@ test('attendance filters and pagination stay child-specific and no-record remain
 });
 test('report-derived progress keeps continuous end-term score zero and stored performance terminology', async () => {
   const h = harness(); await flush(); const html = h.ids.get('familyProgress').innerHTML;
-  assert.match(html, /Continuous/); assert.match(html, /End-term/); assert.match(html, /Performance level/); assert.match(html, /<td>0<\/td>/);
+  assert.match(html, /Continuous/); assert.match(html, /End-term/); assert.match(html, /Performance level/); assert.match(html, /<dt>Score<\/dt><dd>0<\/dd>/);
   assert.match(html, /&lt;Stored level&gt;/); assert.doesNotMatch(html, /average|weighted|grade|<Published remark>/i);
 });
 test('report download captures child identity and filename before switching learners', async () => {
@@ -110,6 +110,53 @@ test('Parent portal uses announcement reads without compose directory messaging 
   assert.equal(h.requests.some(url => /\/users|\/staff|\/messages|\/health|\/assessments|\/sponsorships/.test(url)), false);
   assert.match(h.ids.get('familyAnnouncements').innerHTML, /&lt;Parent update&gt;/);
   assert.doesNotMatch(h.ids.get('appMain').innerHTML, /recipient|Compose|Publish announcement/i);
+});
+
+test('family selector announces the selected child and each mobile section link has an accessible target', async () => {
+  const h = harness(); await flush();
+  assert.match(h.ids.get('childSelector').innerHTML, /2 linked children|Choose a child/);
+  assert.equal(h.ids.get('familySelectionStatus').attrs.role, 'status');
+  const links = h.ids.get('familyChild').querySelectorAll('a'); assert.equal(links.length, 6);
+  for (const link of links) { const target = h.ids.get(link.attrs.href.slice(1)); assert.ok(target); assert.equal(target.attrs.tabindex, '-1'); assert.ok(target.attrs['aria-labelledby']); }
+  switchChild(h, '2'); await flush(); assert.equal(h.ids.get('familySelectionStatus').textContent, 'Viewing Child B Family · B2');
+  assert.equal(h.ids.get('familyLearner').attrs['aria-describedby'], 'familySelectorHint');
+});
+
+test('invalid attendance ranges send no request and clear dates restores the selected-child query', async () => {
+  const h = harness(); await flush(); switchChild(h, '2'); await flush(); const before = h.requests.length;
+  h.ids.get('familyFrom').value = '2026-10-10'; h.ids.get('familyTo').value = '2026-10-01';
+  h.ids.get('familyAttendanceFilter').listeners.submit({ preventDefault() {} }); await flush();
+  assert.equal(h.requests.length, before); assert.equal(h.ids.get('familyTo').attrs['aria-invalid'], 'true');
+  assert.match(h.ids.get('familyAttendanceFilter').querySelector('[data-form-error]').innerHTML, /end date must be on or after/);
+  h.ids.get('familyClearDates').listeners.click(); await flush();
+  assert.match(h.requests.at(-1), /children\/2\/attendance\?page=1/); assert.equal(h.ids.get('familyTo').attrs['aria-invalid'], undefined);
+  assert.equal(new URLSearchParams(h.requests.at(-1).split('?')[1]).has('from'), false);
+  assert.equal(h.document.activeElement, h.ids.get('familyFrom'));
+});
+
+test('a late attendance filter response cannot overwrite the newest range', async () => {
+  let release;
+  const h = harness({ get: url => url.includes('/attendance?') && url.includes('from=2026-09-01') ? new Promise(resolve => { release = resolve; }) : undefined }); await flush();
+  h.ids.get('familyFrom').value = '2026-09-01'; h.ids.get('familyAttendanceFilter').listeners.submit({ preventDefault() {} }); await flush();
+  h.ids.get('familyClearDates').listeners.click(); await flush();
+  release({ ok: true, data: { summary: { total: 0 }, records: [] }, meta: { total: 0, per_page: 30 } }); await flush();
+  assert.match(h.ids.get('familyAttendance').innerHTML, /Historical class 1/); assert.doesNotMatch(h.ids.get('familyAttendance').innerHTML, /No recorded attendance/);
+});
+
+test('family timetable groups actual days and omits Staff or clinical extras', async () => {
+  const h = harness({ get: url => url.endsWith('/timetable') ? { ok: true, data: [
+    { day_of_week: 3, start_time: '10:00', end_time: '10:40', subject: { name: 'Wednesday lesson' }, staff: 'PRIVATE-STAFF' },
+    { day_of_week: 1, start_time: '08:00', end_time: '08:40', subject: { name: 'Monday lesson' }, medical_info: 'PRIVATE-HEALTH' },
+  ] } : undefined }); await flush();
+  const html = h.ids.get('familyTimetable').innerHTML;
+  assert.ok(html.indexOf('Monday') < html.indexOf('Wednesday')); assert.doesNotMatch(html, /Tuesday|PRIVATE-STAFF|PRIVATE-HEALTH/);
+  assert.equal(h.ids.get('familyTimetable').querySelectorAll('li').length, 2);
+});
+
+test('progress cards retain missing values and report availability without inventing results', async () => {
+  const h = harness({ get: url => url.endsWith('/progress') ? { ok: true, data: [{ subject: 'Subject', assessment_type: 'continuous', score: null, competency_rating: null }] } : url.endsWith('/report-cards') ? { ok: true, data: [{ id: 10, term: { name: 'Term' }, download_available: false }] } : undefined }); await flush();
+  assert.match(h.ids.get('familyProgress').innerHTML, /<dt>Score<\/dt><dd>Not recorded<\/dd>/);
+  assert.equal(h.ids.get('familyCards').querySelector('[data-card]'), null); assert.match(h.ids.get('familyCards').innerHTML, /File unavailable/);
 });
 test('Administrator provisioning UI excludes new Student roles while retaining existing Student review', async () => {
   const html = fs.readFileSync(path.resolve(__dirname, '../../public/administration.html'), 'utf8');

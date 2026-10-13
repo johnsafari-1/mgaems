@@ -8,8 +8,9 @@ const summary = { sponsors: 2, sponsorships: 3, by_status: { active: 1, paused: 
 const sponsor = { id: 5, name: '<Sponsor>', sponsor_type: 'church', sponsorships_count: 1, notes: '<Notes>', address: '<Address>', phone: '<Phone>' };
 const learner = { id: 7, first_name: '<Learner>', last_name: 'Name', admission_no: '<Admission>', school_class: { name: '<Class>' } };
 const item = { id: 9, sponsor: { name: '<Sponsor>' }, sponsorship_type: 'individual', student: learner, students: [], status: 'active', start_date: '2026-01-01', end_date: null, notes: '<Operational notes>' };
-function harness({ role = 'sponsor_coordinator', page = '/sponsorship.html', get } = {}) {
+function harness({ role = 'sponsor_coordinator', page = '/sponsorship.html', get, hash = '' } = {}) {
   const h = createDOM(role, page), requests = [], writes = [];
+  h.context.window.location.hash = hash;
   h.app.get = async url => {
     requests.push(url);
     const custom = await get?.(url); if (custom !== undefined) return custom;
@@ -154,4 +155,81 @@ test('a pending save cannot submit a duplicate sponsorship mutation', async () =
   const first=form.listeners.submit({preventDefault(){}});await flush();
   await form.listeners.submit({preventDefault(){}});assert.equal(calls,1);assert.equal(h.modals.at(-1).busy,true);
   resolve({ok:true});await first;await flush();assert.equal(h.modals.at(-1).closed,true);
+});
+
+test('directory tabs support roving keyboard focus and dashboard links select the intended directory', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush();
+  assert.equal(h.ids.get('spItems').attrs['aria-selected'], 'true'); assert.match(h.requests[0], /\/sponsorships\?/);
+  h.ids.get('spItems').listeners.keydown({ key: 'Home', preventDefault() {} }); await flush();
+  assert.equal(h.ids.get('spSponsors').attrs['aria-selected'], 'true'); assert.equal(h.ids.get('spItems').tabIndex, -1);
+  assert.equal(h.document.activeElement, h.ids.get('spSponsors')); assert.equal(h.ids.get('spView').attrs['aria-labelledby'], 'spSponsors');
+  h.ids.get('spSponsors').listeners.keydown({ key: 'ArrowRight', preventDefault() {} }); await flush(); assert.equal(h.ids.get('spItems').attrs['aria-selected'], 'true');
+  const dashboard = harness({ page: '/dashboard.html' }); await flush();
+  assert.match(dashboard.ids.get('appMain').innerHTML, /href="\/sponsorship.html#sponsors"/); assert.match(dashboard.ids.get('appMain').innerHTML, /href="\/sponsorship.html#sponsorships"/);
+});
+
+test('status/type filters apply through the server and Clear filters resets the directory', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush();
+  h.ids.get('spStatusFilter').value = 'paused'; h.ids.get('spStatusFilter').listeners.change(); await flush();
+  h.ids.get('spTypeFilter').value = 'group'; h.ids.get('spTypeFilter').listeners.change(); await flush();
+  const params = new URLSearchParams(h.requests.at(-1).split('?')[1]); assert.equal(params.get('status'), 'paused'); assert.equal(params.get('sponsorship_type'), 'group'); assert.equal(params.get('page'), '1');
+  assert.equal(h.ids.get('spPageInfo').textContent, 'Showing 1–1 of 1 sponsorships · Page 1 of 1');
+  h.ids.get('spReset').listeners.click(); await flush(); assert.equal(h.ids.get('spTypeFilter').value, ''); assert.equal(h.ids.get('spStatusFilter').value, '');
+  assert.equal(h.document.activeElement, h.ids.get('spSearch'));
+  assert.match(h.ids.get('spResults').innerHTML, /role="region"[^>]*tabindex="0"/);
+});
+
+test('negative operational totals and malformed pagination show an error without fictional metrics', async () => {
+  const bad = harness({ page: '/dashboard.html', get: url => url.endsWith('/summary') ? { ok: true, data: { ...summary, group_memberships: -1 } } : undefined }); await flush();
+  assert.match(bad.ids.get('spSummary').innerHTML, /unexpected operational counts/); assert.doesNotMatch(bad.ids.get('spSummary').innerHTML, /class="num">-1/);
+  const page = harness({ get: url => url.startsWith('/api/v1/sponsors?') ? { ok: true, data: [], meta: { per_page: 0, total: 10 } } : undefined }); await flush();
+  assert.match(page.ids.get('spResults').innerHTML, /unexpected directory response/); assert.equal(page.ids.get('spNext').disabled, true);
+});
+
+test('planned-date and notes edit submits only the existing mutable sponsorship fields', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush(); h.ids.get('spResults').querySelector('[data-edit-item]').listeners.click(); await flush();
+  assert.equal(h.requests.at(-1), '/api/v1/sponsorships/9'); const form = h.ids.get('spForm');
+  assert.equal(form.elements.end_date.min, '2026-01-01'); assert.equal(form.elements.sponsorship_type, undefined); assert.equal(form.elements.student_ids, undefined);
+  form.elements.end_date.value = '2026-12-31'; form.elements.notes.value = ' Reviewed notes '; await form.listeners.submit({ preventDefault() {} }); await flush();
+  assert.deepEqual({ ...h.writes[0].body }, { status: 'active', end_date: '2026-12-31', notes: 'Reviewed notes' });
+  assert.equal(h.modals[0].footer.includes('form="spForm"'), true);
+});
+
+test('sponsorship edit refuses a freshly ended record rather than exposing a reopen action', async () => {
+  const h = harness({ hash: '#sponsorships', get: url => url === '/api/v1/sponsorships/9' ? { ok: true, data: { ...item, status: 'ended' } } : undefined }); await flush();
+  h.ids.get('spResults').querySelector('[data-edit-item]').listeners.click(); await flush(); assert.equal(h.modals.length, 0); assert.equal(h.writes.length, 0);
+});
+
+test('creation confirmation reviews chosen sponsor/programme and cancellation preserves the draft', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush(); h.ids.get('spNew').listeners.click();
+  const form = h.ids.get('spForm'); form.elements.sponsorship_type.value = 'school_wide'; form.elements.sponsorship_type.listeners.change();
+  h.ids.get('sponsorLookup').value = 'Sponsor'; h.ids.get('sponsorFind').listeners.click(); await flush(); h.ids.get('sponsorMatches').querySelector('[data-pick]').listeners.click();
+  form.elements.program_name.value = 'School programme'; form.elements.start_date.value = '2026-10-13';
+  let confirmation; h.app.confirmAction = async (...args) => { confirmation = args; return false; };
+  await form.listeners.submit({ preventDefault() {} });
+  assert.match(confirmation[1], /<Sponsor>|School programme|2026-10-13/); assert.equal(h.writes.length, 0); assert.equal(h.modals[0].closed, false); assert.equal(h.modals[0].busy, false);
+  assert.equal(form.elements.program_name.value, 'School programme'); assert.equal(h.document.activeElement, h.modals[0].overlay.querySelector('[data-sp-save]'));
+});
+
+test('a learner lookup in flight cannot repopulate the selection after sponsorship type changes', async () => {
+  let release;
+  const h = harness({ hash: '#sponsorships', get: url => url.startsWith('/api/v1/sponsorships/learners?') ? new Promise(resolve => { release = resolve; }) : undefined }); await flush(); h.ids.get('spNew').listeners.click();
+  h.ids.get('learnerLookup').value = 'Learner'; h.ids.get('learnerFind').listeners.click(); await flush();
+  const form = h.ids.get('spForm'); form.elements.sponsorship_type.value = 'school_wide'; form.elements.sponsorship_type.listeners.change();
+  release({ ok: true, data: [learner], meta: { per_page: 10, total: 1 } }); await flush();
+  assert.equal(h.ids.get('learnerMatches').innerHTML, ''); assert.equal(h.ids.get('learnerSelected').innerHTML, ''); assert.equal(h.ids.get('learnerMore').hidden, true);
+});
+
+test('a status change cannot issue duplicate patches while confirmation or mutation is pending', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush(); const button = h.ids.get('spResults').querySelector('[data-status]');
+  let release; h.app.patch = () => new Promise(resolve => { h.writes.push('patch'); release = resolve; });
+  const first = button.listeners.click(); await flush(); await button.listeners.click(); assert.equal(h.writes.length, 1);
+  release({ ok: true }); await first;
+});
+
+test('ending cancellation preserves the required reason/date and sends no status update', async () => {
+  const h = harness({ hash: '#sponsorships' }); await flush(); h.ids.get('spResults').querySelector('[data-end]').listeners.click();
+  const form = h.ids.get('spForm'); form.elements.end_date.value = '2026-10-13'; form.elements.notes.value = 'Draft reason';
+  h.app.confirmAction = async () => false; await form.listeners.submit({ preventDefault() {} });
+  assert.equal(h.writes.length, 0); assert.equal(form.elements.notes.value, 'Draft reason'); assert.equal(h.modals[0].closed, false);
 });

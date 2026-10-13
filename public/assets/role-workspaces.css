@@ -1,0 +1,102 @@
+/* Role interfaces share the Phase 1 palette, typography and interaction tokens. */
+.workspace-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-5); }
+.workspace-heading p { color: var(--gray-500); margin-top: var(--space-2); }
+.workspace-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); margin-bottom: var(--space-5); }
+.workspace-duty { min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.workspace-duty h2, .workspace-section h2 { font-size: var(--text-lg); color: var(--navy); }
+.workspace-duty .form-actions { margin-top: auto; padding-top: var(--space-3); }
+.workspace-duty > .badge { align-self: flex-start; }
+.workspace-duty > p, .workspace-section > p { color: var(--gray-500); }
+.assignment-list { display: grid; gap: var(--space-3); }
+.assignment-item { padding: var(--space-3); border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); overflow-wrap: anywhere; }
+.assignment-item strong { display: block; color: var(--navy); }
+.workspace-section { margin-bottom: var(--space-5); min-width: 0; }
+.workspace-section .section-header { margin-bottom: var(--space-3); }
+.workspace-note { padding: var(--space-3) var(--space-4); border-left: 3px solid var(--navy-light); background: var(--gray-50); margin: var(--space-3) 0; font-size: var(--text-sm); color: var(--gray-700); }
+.week-schedule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-4); }
+.schedule-day { min-width: 0; border: 1px solid var(--gray-200); border-radius: var(--radius); overflow: hidden; }
+.schedule-day h3 { padding: var(--space-3) var(--space-4); background: var(--gray-50); color: var(--navy); font-size: var(--text-sm); border-bottom: 1px solid var(--gray-200); }
+.schedule-lessons { list-style: none; margin: 0; padding: 0; }
+.schedule-lesson { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--gray-200); overflow-wrap: anywhere; }
+.schedule-lesson:last-child { border-bottom: 0; }
+.lesson-time { display: block; color: var(--navy-light); font-weight: 700; font-variant-numeric: tabular-nums; margin-bottom: var(--space-1); }
+.schedule-lesson strong { display: block; }
+.workspace-name { font-weight: 700; color: var(--navy); }
+.workspace-links { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.workspace-links .btn { min-height: var(--touch-target); }
+.family-selector { padding: var(--space-5); background: var(--teal-light); border: 1px solid var(--gray-300); border-radius: var(--radius-lg); margin: var(--space-4) 0 var(--space-5); }
+.family-selector label { display: block; font-weight: 700; color: var(--navy); margin: var(--space-2) 0; }
+.family-selector select { width: 100%; min-height: var(--touch-target); font-weight: 600; }
+.family-selector p { font-size: var(--text-sm); color: var(--gray-700); margin-top: var(--space-2); }
+.family-navigation { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0 var(--space-5); }
+.family-navigation a { display: flex; align-items: center; padding: var(--space-2) var(--space-3); border: 1px solid var(--gray-300); border-radius: var(--radius); background: var(--surface); color: var(--navy); font-weight: 600; min-height: var(--touch-target); font-size: var(--text-sm); }
+.family-navigation a:hover { background: var(--gray-50); }
+.family-section { scroll-margin-top: var(--space-5); }
+.family-section > h2 { margin-bottom: var(--space-3); }
+.family-section > p { margin-bottom: var(--space-4); }
+.family-section:focus-visible, .family-navigation a:focus-visible, .workspace-table-wrap:focus-visible, .workspace-summary-details summary:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.family-date-filter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto auto; gap: var(--space-3); align-items: end; margin-bottom: var(--space-4); }
+.family-date-filter .field { margin: 0; }
+.family-date-filter .btn { min-height: var(--touch-target); }
+.family-attendance-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-4) 0; }
+.family-attendance-summary > div { padding: var(--space-3); border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.family-attendance-summary dt { color: var(--gray-500); font-size: var(--text-sm); }
+.family-attendance-summary dd { margin: var(--space-1) 0 0; font-size: var(--text-lg); font-weight: 700; }
+.family-records { list-style: none; padding: 0; margin: var(--space-4) 0; }
+.family-attendance-record { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--gray-200); }
+.family-progress-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.family-progress-record { padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius); min-width: 0; }
+.family-progress-record h3 { color: var(--navy); font-size: var(--text-base); overflow-wrap: anywhere; }
+.family-result-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-3) 0; }
+.family-result-values dt { font-size: var(--text-xs); color: var(--gray-500); }
+.family-result-values dd { margin: var(--space-1) 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.family-copy { white-space: pre-wrap; overflow-wrap: anywhere; }
+.family-report { padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius); display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-3); }
+.family-report > div { min-width: 0; }
+.family-report h3 { color: var(--navy); font-size: var(--text-base); }
+.family-report p { margin-top: var(--space-2); }
+.family-portal .week-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workspace-summary-details { margin-bottom: var(--space-5); }
+.workspace-summary-details summary { cursor: pointer; padding: var(--space-3) 0; font-weight: 600; color: var(--navy); }
+.workspace-summary-details .dashboard-summary-grid { margin-top: var(--space-3); }
+.sponsorship-directory { padding: 0; overflow: hidden; }
+.sponsorship-directory .workspace-filter-grid { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto; gap: var(--space-3); align-items: end; padding: var(--space-4); background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
+.workspace-filter-grid .field { margin: 0; min-width: 0; }
+.workspace-table-wrap { overflow-x: auto; max-width: 100%; min-width: 0; }
+.workspace-table { min-width: 720px; }
+.workspace-table .actions { flex-wrap: wrap; white-space: normal; }
+.workspace-target { margin-top: var(--space-2); overflow-wrap: anywhere; }
+.workspace-dialog fieldset { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); margin: var(--space-4) 0; min-width: 0; }
+.workspace-dialog legend { padding: 0 var(--space-2); font-weight: 700; color: var(--navy); }
+.workspace-dialog .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workspace-dialog .field input, .workspace-dialog .field select { min-height: var(--touch-target); }
+.workspace-dialog .field textarea { min-height: 100px; }
+.workspace-dialog .sponsorship-matches { display: flex; flex-direction: column; gap: var(--space-2); max-height: 240px; overflow-y: auto; }
+.workspace-dialog .sponsorship-matches .btn { justify-content: flex-start; min-height: var(--touch-target); text-align: left; }
+.workspace-selection { display: grid; gap: var(--space-2); }
+.workspace-selection > span { padding: var(--space-2); background: var(--gray-50); border-radius: var(--radius); overflow-wrap: anywhere; }
+.workspace-tabs { overflow-x: auto; }
+.workspace-tabs .tab { white-space: nowrap; min-height: var(--touch-target); }
+#spView:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.sponsorship-directory #spResults > .empty-state, .sponsorship-directory #spResults > .error-banner { margin: var(--space-4); }
+.sponsorship-directory #spResults > .btn { margin: 0 var(--space-4) var(--space-4); }
+@media (max-width: 900px) {
+  .workspace-grid { grid-template-columns: 1fr; }
+  .week-schedule { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sponsorship-directory .workspace-filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .workspace-filter-grid > .field:first-child { grid-column: 1 / -1; }
+  .family-date-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .workspace-heading { flex-direction: column; align-items: stretch; }
+  .workspace-heading > .btn { align-self: flex-start; }
+  .week-schedule, .family-portal .week-schedule, .family-progress-grid, .workspace-dialog .form-grid, .sponsorship-directory .workspace-filter-grid { grid-template-columns: 1fr; }
+  .family-selector { padding: var(--space-4); }
+  .family-navigation { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .family-navigation a { justify-content: center; text-align: center; }
+  .family-attendance-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .family-date-filter { grid-template-columns: 1fr; }
+  .family-report { flex-direction: column; }
+  .family-report .btn { width: 100%; min-height: var(--touch-target); }
+  .workspace-duty .form-actions .btn, .workspace-links .btn { flex: 1 1 auto; }
+}

@@ -17,7 +17,6 @@
     if (state.learnerModal) { state.learnerModal.body.innerHTML = ''; state.learnerModal.close(); state.learnerModal = null; }
   }
   const byId = id => document.getElementById(id);
-  const table = (headings, rows) => `<div class="table-scroll"><table><thead><tr>${headings.map(title => `<th scope="col">${title}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   const period = item => [item.academic_year?.name, item.name].filter(Boolean).join(' · ');
   const show = (target, html) => { target.innerHTML = html; target.setAttribute('aria-busy', 'false'); MGAEMS.initIcons(); };
   const link = (href, label) => `<a class="btn btn-secondary btn-sm" href="${href}">${label}</a>`;
@@ -30,8 +29,8 @@
       target.querySelector('[data-retry]').addEventListener('click', retry);
     }
   };
-  main.innerHTML = `<div class="page-heading"><h1>${learnersPage ? 'My Learners' : timetablePage ? 'My Timetable' : 'Teacher Workspace'}</h1>
-    <p>${learnersPage ? 'Active learners in your current Class Teacher or eligible subject assignments.' : timetablePage ? 'Your existing recurring lessons, matched to eligible current subject assignments.' : 'Your class supervision and subject teaching responsibilities.'}</p></div>
+  main.innerHTML = `<div class="workspace-heading"><div><h1>${learnersPage ? 'My Learners' : timetablePage ? 'My Timetable' : 'Teacher Workspace'}</h1>
+    <p>${learnersPage ? 'Active learners in your current Class Teacher or eligible subject assignments.' : timetablePage ? 'Your assigned lessons, organized by weekday.' : 'Your classes, teaching assignments and weekly lessons in one place.'}</p></div>${timetablePage ? link('/dashboard.html', 'Teacher Workspace') : ''}</div>
     <div id="teacherSetup" role="status" aria-busy="true">${MGAEMS.loadingHTML('Loading teaching responsibilities…')}</div>
     <div id="teacherContent" hidden></div>`;
 
@@ -62,21 +61,21 @@
 
   function renderOverview() {
     const classes = state.context.class_teacher_classes, subjects = state.context.subject_assignments;
-    byId('teacherView').innerHTML = `<div class="stat-cards" aria-label="Your current responsibilities">${[['Class Teacher classes', classes.length], ['Subject allocations', subjects.length], ['Scoped learner classes', state.context.learner_classes.length]].map(([title, value]) => `<div class="card stat-card"><div class="label">${title}</div><div class="num">${value}</div><div class="detail">From your authorized responsibilities</div></div>`).join('')}</div><div class="overview-grid">
-      <section class="section" aria-labelledby="classTeacherHeading"><h2 id="classTeacherHeading">Class Teacher responsibilities</h2><p>Daily attendance belongs to your Class Teacher classes.</p>
-        <div class="card">${classes.length ? classes.map(item => `<article class="record-item"><div><strong>${esc(item.name)}</strong><div class="text-meta">${esc(item.level)}</div></div></article>`).join('') : MGAEMS.emptyStateHTML('No Class Teacher classes', 'Subject assignments alone do not grant daily attendance management.', 'users')}</div>
+    byId('teacherView').innerHTML = `<div class="stat-cards" aria-label="Your current responsibilities">${[['Class Teacher classes', classes.length], ['Subject allocations', subjects.length], ['Scoped learner classes', state.context.learner_classes.length]].map(([title, value]) => `<div class="card stat-card"><div class="label">${title}</div><div class="num">${value}</div><div class="detail">From your authorized responsibilities</div></div>`).join('')}</div><div class="workspace-grid">
+      <section class="card workspace-duty" aria-labelledby="classTeacherHeading"><span class="badge badge-navy">Class supervision</span><h2 id="classTeacherHeading">Class Teacher responsibilities</h2><p>Record daily attendance and review the learners in your supervised classes.</p>
+        <div class="assignment-list">${classes.length ? classes.map(item => `<article class="assignment-item"><strong>${esc(item.name)}</strong><div class="text-meta">${esc(item.level)} · Class Teacher</div></article>`).join('') : MGAEMS.emptyStateHTML('No Class Teacher classes', 'Subject assignments alone do not grant daily attendance management.', 'users')}</div>
         ${classes.length ? `<div class="form-actions">${link('/attendance.html', 'Manage class attendance')}${link('/students.html', 'My Learners')}</div>` : ''}</section>
-      <section class="section" aria-labelledby="subjectTeacherHeading"><h2 id="subjectTeacherHeading">Subject Teacher responsibilities</h2><p>Assessment entry follows your class, subject and term assignments.</p>
-        <div class="card">${subjects.length ? subjects.map(item => `<article class="record-item"><div><strong>${esc(item.subject.name)}</strong><div class="text-meta">${esc(item.school_class.name)} · ${esc(period(item.term))}</div></div></article>`).join('') : MGAEMS.emptyStateHTML('No eligible subject assignments', 'Class Teacher ownership alone does not grant subject assessment entry.', 'book-open')}</div>
+      <section class="card workspace-duty" aria-labelledby="subjectTeacherHeading"><span class="badge badge-navy">Subject teaching</span><h2 id="subjectTeacherHeading">Subject Teacher responsibilities</h2><p>Assessment entry follows your class, subject and term assignments.</p>
+        <div class="assignment-list">${subjects.length ? subjects.map(item => `<article class="assignment-item"><strong>${esc(item.subject.name)}</strong><div class="text-meta">${esc(item.school_class.name)}</div><div class="text-meta">${esc(period(item.term))}</div></article>`).join('') : MGAEMS.emptyStateHTML('No eligible subject assignments', 'Class Teacher ownership alone does not grant subject assessment entry.', 'book-open')}</div>
         ${subjects.length ? `<div class="form-actions">${link('/assessment.html', 'Enter assigned assessments')}${link('/students.html', 'My Learners')}${link('/teacher-timetable.html', 'My Timetable')}</div>` : ''}</section></div>
-      <section class="section" aria-labelledby="teacherTimetableHeading"><h2 id="teacherTimetableHeading">My Timetable</h2><div id="teacherTimetable" aria-busy="true"></div></section>
-      <section class="section" aria-labelledby="teacherSafetyHeading"><h2 id="teacherSafetyHeading">Learner safety information</h2><p>Open an authorized learner in My Learners to see published actionable safety instructions. Current assignment scope remains required.</p>${link('/students.html', 'Open My Learners')}</section>
-      <div class="form-actions">${link('/communication.html', 'School announcements and messages')}</div>`;
+      <section class="card workspace-section" aria-labelledby="teacherTimetableHeading"><div class="section-header"><h2 id="teacherTimetableHeading">My Timetable</h2>${link('/teacher-timetable.html', 'Open weekly timetable')}</div><div id="teacherTimetable" aria-busy="true"></div></section>
+      <div class="workspace-grid"><section class="card workspace-duty" aria-labelledby="teacherSafetyHeading"><h2 id="teacherSafetyHeading">Learner safety information</h2><p>Open an authorized learner in My Learners to see published actionable safety instructions. Current assignment scope remains required.</p><div class="form-actions">${link('/students.html', 'Open My Learners')}</div></section>
+      <section class="card workspace-duty"><h2>School communication</h2><p>Read school announcements and your existing messages.</p><div class="form-actions">${link('/communication.html', 'School announcements and messages')}</div></section></div>`;
     loadTimetable(); MGAEMS.initIcons();
   }
 
   function renderTimetable() {
-    byId('teacherView').innerHTML = '<div id="teacherTimetable" aria-busy="true"></div>';
+    byId('teacherView').innerHTML = '<section class="card workspace-section" aria-label="Assigned weekly lessons"><div id="teacherTimetable" aria-busy="true"></div></section>';
     loadTimetable();
   }
   async function loadTimetable() {
@@ -85,12 +84,14 @@
     const result = await MGAEMS.get('/api/v1/teacher/timetable');
     if (request !== state.timetableRequest) return;
     if (!result.ok) { failure(target, result, loadTimetable); return; }
-    if (!Array.isArray(result.data)) { failure(target, { error: 'The server returned an unexpected timetable.' }, loadTimetable); return; }
+    if (!Array.isArray(result.data) || result.data.some(item => !Number.isInteger(Number(item.day_of_week)) || Number(item.day_of_week) < 1 || Number(item.day_of_week) > 7 || typeof item.start_time !== 'string' || typeof item.end_time !== 'string')) { failure(target, { error: 'The server returned an unexpected timetable.' }, loadTimetable); return; }
     if (!result.data.length) { show(target, MGAEMS.emptyStateHTML('No eligible timetable entries', 'No existing lessons match your eligible current subject assignments.', 'calendar')); return; }
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    show(target, `<p class="text-muted">Weekly teaching schedule.</p>` + table(['Day', 'Lesson time', 'Class', 'Learning area / subject', 'Current year / term'], result.data.map(item => `<tr>
-      <td>${esc(days[Number(item.day_of_week) - 1] || 'Day unavailable')}</td><td>${esc(String(item.start_time).slice(0, 5))}–${esc(String(item.end_time).slice(0, 5))}</td>
-      <td>${esc(item.school_class?.name)}</td><td>${esc(item.subject?.name)}</td><td>${esc((item.current_periods || []).map(period).join(', '))}</td></tr>`)));
+    const rows = [...result.data].sort((a, b) => Number(a.day_of_week) - Number(b.day_of_week) || a.start_time.localeCompare(b.start_time));
+    show(target, `<p class="text-muted">Weekly teaching schedule · ${esc(rows.length)} assigned lesson${rows.length === 1 ? '' : 's'}.</p><p class="workspace-note">Recurring lessons matched to your current assignments. Academic period labels describe current eligibility.</p><div class="week-schedule" aria-label="Weekly assigned lessons">${days.map((day, index) => {
+      const lessons = rows.filter(item => Number(item.day_of_week) === index + 1);
+      return !lessons.length ? '' : `<section class="schedule-day" aria-label="${day} lessons"><h3>${day}</h3><ul class="schedule-lessons">${lessons.map(item => `<li class="schedule-lesson"><span class="lesson-time">${esc(item.start_time.slice(0, 5))}–${esc(item.end_time.slice(0, 5))}</span><strong>${esc(item.subject?.name)}</strong><span class="text-meta">${esc(item.school_class?.name)}</span><span class="text-meta">${esc((item.current_periods || []).map(period).join(', '))}</span></li>`).join('')}</ul></section>`;
+    }).join('')}</div>`);
   }
 
   function renderLearners() {

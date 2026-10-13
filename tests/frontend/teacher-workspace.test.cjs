@@ -39,6 +39,37 @@ test('Teacher dashboard separates responsibilities and shows only actual own tim
   assert.deepEqual(h.requests, ['/api/v1/teacher/context', '/api/v1/teacher/timetable']);
   assert.equal(h.ids.has('statsCards'), false);
   assert.match(html, /Your current responsibilities/); assert.match(html, /Class Teacher classes/); assert.match(html, /Subject allocations/);
+  assert.equal(h.ids.get('teacherView').querySelectorAll('[aria-labelledby="classTeacherHeading"]').length, 1);
+  assert.match(html, /Class supervision|Subject teaching/);
+});
+
+test('weekly Teacher timetable sorts actual lessons by weekday/time without inventing empty-day lessons', async () => {
+  const rows = [
+    { day_of_week: 5, start_time: '11:00:00', end_time: '11:40:00', subject: { name: 'Friday subject' }, school_class: { name: 'Assigned class' } },
+    { day_of_week: 1, start_time: '10:00:00', end_time: '10:40:00', subject: { name: 'Later lesson' }, school_class: { name: 'Assigned class' } },
+    { day_of_week: 1, start_time: '08:00:00', end_time: '08:40:00', subject: { name: '<First lesson>' }, school_class: { name: 'Assigned class' }, private: 'PRIVATE-TIMETABLE-SENTINEL' },
+  ];
+  const h = harness({ page: '/teacher-timetable.html', get: url => url.endsWith('/timetable') ? { ok: true, data: rows } : undefined }); await flush();
+  const html = h.ids.get('teacherTimetable').innerHTML;
+  assert.match(html, /3 assigned lessons|Weekly assigned lessons/); assert.equal(h.ids.get('teacherTimetable').querySelectorAll('li').length, 3);
+  assert.ok(html.indexOf('Monday') < html.indexOf('Friday')); assert.ok(html.indexOf('08:00') < html.indexOf('10:00'));
+  assert.match(html, /&lt;First lesson&gt;/); assert.doesNotMatch(html, /Tuesday|PRIVATE-TIMETABLE-SENTINEL|<First lesson>/);
+  assert.match(h.ids.get('appMain').innerHTML, /href="\/dashboard.html"/);
+});
+
+test('invalid timetable weekdays show a retry state without removing Teacher responsibilities', async () => {
+  const h = harness({ get: url => url.endsWith('/timetable') ? { ok: true, data: [{ day_of_week: 8, start_time: '09:00', end_time: '10:00' }] } : undefined }); await flush();
+  assert.match(h.ids.get('teacherTimetable').innerHTML, /unexpected timetable/);
+  assert.match(h.ids.get('teacherView').innerHTML, /Class Teacher responsibilities/);
+  assert.deepEqual(h.requests, ['/api/v1/teacher/context', '/api/v1/teacher/timetable']);
+});
+
+test('refresh invalidates a delayed timetable before displaying current assignment lessons', async () => {
+  let release, count = 0;
+  const h = harness({ get: url => url.endsWith('/timetable') && ++count === 1 ? new Promise(resolve => { release = resolve; }) : undefined }); await flush();
+  h.ids.get('refreshTeacher').listeners.click(); await flush();
+  release({ ok: true, data: [{ day_of_week: 1, start_time: '07:00', end_time: '07:40', subject: { name: 'STALE-ASSIGNMENT' } }] }); await flush();
+  assert.doesNotMatch(h.ids.get('teacherTimetable').innerHTML, /STALE-ASSIGNMENT/); assert.match(h.ids.get('teacherTimetable').innerHTML, /&lt;Subject&gt;/);
 });
 test('Class Teacher-only dashboard grants attendance entry without subject assessment entry', async () => {
   const context = { current_periods: [], class_teacher_classes: [{ id: 10, name: 'Assigned class', level: 'primary' }], subject_assignments: [], learner_classes: [{ id: 10, name: 'Assigned class' }] };
