@@ -1,0 +1,57 @@
+# PHP 8.3 is supported and within Laravel 10's documented PHP range.
+# The current lock has advisories: see docs/railway-staging.md before deployment.
+FROM php:8.3-apache-bookworm AS runtime-base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl unzip default-mysql-client \
+    libzip-dev libpng-dev libjpeg62-turbo-dev libfreetype6-dev \
+    libonig-dev libxml2-dev libicu-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install -j2 pdo_mysql mbstring bcmath zip intl gd opcache \
+    && a2enmod rewrite headers \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM runtime-base AS dependencies
+COPY --from=composer:2 /usr/bin/composer /usr/local/bin/composer
+WORKDIR /build
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --prefer-dist --no-interaction --no-progress \
+    --no-scripts --no-autoloader
+
+FROM runtime-base AS staging
+WORKDIR /var/www/html
+ENV APP_ENV=production APP_DEBUG=false MGAEMS_STAGING=true \
+    LOG_CHANNEL=stderr LOG_LEVEL=warning MAIL_MAILER=array \
+    SESSION_DRIVER=database SESSION_SECURE_COOKIE=true SESSION_ENCRYPT=true \
+    SESSION_COOKIE=mgaems_staging_session CACHE_DRIVER=file \
+    QUEUE_CONNECTION=sync FILESYSTEM_DISK=private SANCTUM_STATEFUL_DOMAINS="" \
+    PORT=8080
+
+COPY --from=dependencies /build/vendor ./vendor
+COPY --from=dependencies /usr/local/bin/composer /usr/local/bin/composer
+COPY composer.json composer.lock artisan ./
+COPY app ./app
+COPY bootstrap/app.php ./bootstrap/app.php
+COPY config ./config
+COPY database ./database
+COPY public ./public
+COPY resources ./resources
+COPY routes ./routes
+COPY docker/staging/apache.conf /etc/apache2/sites-available/000-default.conf.template
+COPY docker/staging/php.ini /usr/local/etc/php/conf.d/zz-staging.ini
+COPY docker/staging/start.sh /usr/local/bin/start-staging
+COPY docker/staging/validate.php /usr/local/bin/validate-staging.php
+
+RUN mkdir -p bootstrap/cache storage/app/private storage/app/public \
+    storage/framework/cache/data storage/framework/sessions storage/framework/views \
+    storage/logs storage/fonts \
+    && composer dump-autoload --no-dev --classmap-authoritative --no-interaction \
+    && composer check-platform-reqs --no-dev \
+    && chown -R www-data:www-data bootstrap/cache storage \
+    && chmod 0755 /usr/local/bin/start-staging \
+    && rm /usr/local/bin/composer
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl --fail --silent --max-time 4 "http://127.0.0.1:${PORT}/healthz" > /dev/null || exit 1
+ENTRYPOINT ["/usr/local/bin/start-staging"]

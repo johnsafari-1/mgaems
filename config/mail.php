@@ -1,9 +1,10 @@
 <?php
 
 return [
-    'default' => env('MAIL_MAILER', 'smtp'),
+    // Staging cannot select SMTP/log delivery, even with inherited mail variables.
+    'default' => env('MGAEMS_STAGING', false) ? 'array' : env('MAIL_MAILER', 'smtp'),
 
-    'mailers' => [
+    'mailers' => env('MGAEMS_STAGING', false) ? ['array' => ['transport' => 'array']] : [
         'smtp' => [
             'transport' => 'smtp',
             'host' => env('MAIL_HOST', '127.0.0.1'),
