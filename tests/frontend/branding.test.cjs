@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const createDOM = require('./helpers/dom.cjs');
-const administration = fs.readFileSync(path.resolve(__dirname, '../../public/administration.html'), 'utf8');
+const administration = fs.readFileSync(path.resolve(__dirname, '../../public/assets/administration.js'), 'utf8');
 const settings = { school_name: '<Fixture School>', motto: 'Learning together', logo_path: 'school/fixture logo.png', email: 'private@example.invalid' };
 function harness() {
   const h = createDOM('system_admin', '/administration.html');
@@ -104,12 +104,13 @@ function uploadHarness(response = { ok: true, status: 200, data: { logo_path: 's
     h.requests.push({ url, options });
     return { ok: response.ok, status: response.status, json: async () => ({ data: response.data, message: response.message }) };
   };
-  vm.runInContext(`const state = {settings: fixtureSettings}; const esc = MGAEMS.escapeHTML; ${render}\n${save}\n${upload}\nrenderSettings();`, h.context);
+  vm.runInContext(`const state = {settings: fixtureSettings, working: new Set()}; const current = () => true; const record = value => value !== null && typeof value === 'object'; const esc = MGAEMS.escapeHTML; ${render}\n${save}\n${upload}\nrenderSettings();`, h.context);
   return h;
 }
 
 test('a successful existing upload refreshes saved-path preview and publishes branding for the shell', async () => {
   const h = uploadHarness();
+  h.ids.get('settingsSchoolName').value = 'Unsaved school-name draft';
   h.ids.get('schoolLogo').files = [{ type: 'image/png', size: 100 }];
   await h.ids.get('schoolLogoForm').listeners.submit({ preventDefault() {} });
   assert.equal(h.requests.length, 1); assert.equal(h.requests[0].url, '/api/v1/settings/school/logo');
@@ -121,6 +122,7 @@ test('a successful existing upload refreshes saved-path preview and publishes br
   assert.equal(h.app.schoolBranding().logo_path, 'school/new logo.png');
   assert.equal(h.published.at(-1).type, 'mgaems:school-settings');
   assert.equal(h.ids.get('schoolLogo').files, undefined); // Fresh form; no selected file is retained.
+  assert.equal(h.ids.get('settingsSchoolName').value, 'Unsaved school-name draft');
 });
 
 test('invalid or rejected uploads preserve the saved logo and surface an error', async () => {

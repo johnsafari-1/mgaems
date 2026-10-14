@@ -1,0 +1,33 @@
+/* A presentation pass; restricted Health responses remain in memory only. */
+.health-heading { margin-bottom: var(--space-5); }
+.health-heading h1 { font-size: var(--text-2xl); line-height: 1.25; }
+.health-heading > p { color: var(--gray-500); margin: var(--space-2) 0 0; max-width: 90ch; }
+.health-workspace .health-picker { padding: var(--space-4); }
+.health-workspace .health-picker h2 { font-size: var(--text-lg); margin-bottom: var(--space-4); }
+.health-workspace .health-picker .field { margin-bottom: var(--space-2); }
+.health-picker-count { color: var(--gray-500); font-size: var(--text-sm); margin: 0 0 var(--space-3); }
+.health-workspace .health-choice { padding: var(--space-3); min-height: var(--touch-target); overflow-wrap: anywhere; }
+.health-workspace .health-choice[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-light); color: var(--navy); }
+.health-workspace .health-selected { color: var(--navy); padding: var(--space-4); margin: 0; border: 1px solid var(--gray-200); border-left: 3px solid var(--teal); border-radius: var(--radius); background: var(--surface); }
+.health-workspace .health-tabs { padding: var(--space-3) 0; border-bottom: 1px solid var(--gray-200); margin-bottom: var(--space-5); }
+.health-workspace .health-tabs [aria-pressed="true"] { background: var(--teal-light); border-color: var(--teal); color: var(--navy); }
+.health-workspace .btn, .health-dialog .btn, .health-workspace input, .health-dialog input, .health-dialog select { min-height: var(--touch-target); }
+.health-workspace .health-record { padding: var(--space-4); background: var(--surface); border-radius: var(--radius-lg); overflow-wrap: anywhere; }
+.health-workspace .health-record h3 { font-size: var(--text-base); line-height: 1.5; }
+.health-workspace .health-details dt, .health-dialog .health-details dt { font-size: var(--text-sm); }
+.health-workspace .health-details dd, .health-dialog .health-details dd { color: var(--gray-900); line-height: 1.6; }
+.health-workspace .health-actions { align-items: center; }
+.health-dialog .modal-header h2 { overflow-wrap: anywhere; }
+.health-dialog .modal-close { min-width: var(--touch-target); min-height: var(--touch-target); flex-shrink: 0; }
+.health-dialog .health-checkbox { padding: var(--space-3) 0; }
+.health-dialog .health-checkbox input { min-height: auto; width: 20px; height: 20px; }
+.health-dialog .health-form-grid { margin-top: var(--space-4); }
+.health-dialog textarea { width: 100%; min-height: 100px; padding: var(--space-3); border: 1px solid var(--gray-300); border-radius: var(--radius); color: var(--gray-900); background: var(--surface); font: inherit; resize: vertical; }
+.health-dialog [aria-invalid="true"] { border-color: var(--red); }
+.health-dialog .health-note { overflow-wrap: anywhere; line-height: 1.6; }
+@media (max-width: 640px) {
+  .health-heading h1 { font-size: 24px; }
+  .health-workspace .health-tabs .btn { flex: 1 1 100%; text-align: left; }
+  .health-workspace .health-details, .health-dialog .health-details { gap: var(--space-2); }
+  .health-dialog .health-actions .btn { flex: 1 1 100%; }
+}

@@ -54,6 +54,12 @@
 .message-dialog-meta dt { color: var(--gray-500); font-size: var(--text-xs); }
 .message-dialog-meta dd { color: var(--gray-900); margin: var(--space-1) 0 0; overflow-wrap: anywhere; }
 .message-body { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: var(--space-4); color: var(--gray-900); }
+.communication-recipient-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block: var(--space-3); }
+.communication-recipient-results { display: grid; gap: var(--space-2); }
+.communication-recipient-choice { display: flex; flex-direction: column; align-items: flex-start; text-align: left; white-space: normal; overflow-wrap: anywhere; gap: var(--space-1); }
+.communication-recipient-choice span { color: var(--gray-500); font-size: var(--text-xs); }
+.communication-recipient-lookup .pagination { flex-wrap: wrap; }
+.communication-recipient-lookup [role="status"] { overflow-wrap: anywhere; margin-block: var(--space-2); }
 @media (max-width: 900px) {
   .communication-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .communication-summary-item:last-child:nth-child(odd) { grid-column: 1 / -1; }

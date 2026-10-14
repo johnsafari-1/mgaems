@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const createDOM = require('./helpers/dom.cjs');
-const source = fs.readFileSync(path.resolve(__dirname, '../../public/reports.html'), 'utf8').match(/<script>\s*([\s\S]*?)<\/script>/)[1];
+const source = fs.readFileSync(path.resolve(__dirname, '../../public/assets/reports.js'), 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const learners = [{ id: 3, first_name: '<Ada>', last_name: 'Learner', admission_no: 'A003', status: 'active' }, { id: 4, first_name: 'Ben', last_name: 'Learner', admission_no: 'A004', status: 'active' }];
 const card = { id: 7, student_id: 3, term_id: 2, revision_number: 2, history_state: 'versioned', generated_at: '2026-10-01T08:00:00Z', download_available: true, student: learners[0], term: { id: 2, name: '<Term>' }, file_path: 'PRIVATE_FILE_MUST_NOT_RENDER', health: 'HEALTH_MUST_NOT_RENDER' };

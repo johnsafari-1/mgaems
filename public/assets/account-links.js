@@ -13,10 +13,23 @@ window.MGAEMSAccountLinks = (() => {
 
   async function open(userId, onSaved = () => {}) {
     if (!admin() || !Number.isSafeInteger(Number(userId)) || Number(userId) < 1) return;
-    const modal = MGAEMS.openModal({ title: 'Manage Staff account link', body: MGAEMS.loadingHTML('Loading verified account and Staff options…') });
+    const sessionCurrent = MGAEMS.sessionGuard();
+    const openedPath = window.location.pathname;
+    const authorized = () => sessionCurrent() && admin() && window.location.pathname === openedPath;
     let context = null, sequence = 0, search = '', page = 1, selected = null, pending = false, needsReload = false;
+    const modal = MGAEMS.openModal({ title: 'Manage Staff account link', body: MGAEMS.loadingHTML('Loading verified account and Staff options…'),
+      onClose: () => { sequence++; context = null; selected = null; modal.body.innerHTML = ''; } });
+
+    function currentDialog() {
+      if (modal.closed) return false;
+      if (authorized()) return true;
+      sequence++; context = null; selected = null; pending = false;
+      modal.setBusy(false); modal.body.innerHTML = ''; modal.close();
+      return false;
+    }
 
     async function load() {
+      if (!currentDialog()) return;
       const request = ++sequence;
       selected = null;
       needsReload = false;
@@ -24,7 +37,7 @@ window.MGAEMSAccountLinks = (() => {
       const params = new URLSearchParams({ page: String(page) });
       if (search) params.set('search', search);
       const result = await MGAEMS.get(`/api/v1/users/${Number(userId)}/staff-link?${params}`);
-      if (modal.closed || request !== sequence) return;
+      if (modal.closed || request !== sequence || !currentDialog()) return;
       if (!result.ok) {
         context = null;
         modal.body.innerHTML = MGAEMS.errorHTML(result.status === 403 ? 'Only a System Administrator can manage account links.' : result.error);
@@ -40,6 +53,7 @@ window.MGAEMSAccountLinks = (() => {
     }
 
     function render() {
+      if (!currentDialog()) return;
       const account = context.user, current = context.account_link.staff;
       modal.body.innerHTML = `<form id="staffLinkForm">
         <div data-form-error role="alert" tabindex="-1"></div>
@@ -56,14 +70,14 @@ window.MGAEMSAccountLinks = (() => {
       modal.body.querySelector('[data-link-cancel]').addEventListener('click', () => modal.close());
       modal.body.querySelector('#staffLinkReload').addEventListener('click', load);
       if (!current) {
-        modal.body.querySelector('#staffLinkChoice').addEventListener('change', event => { selected = context.staff_options.find(staff => String(staff.id) === event.target.value && staff.eligible) || null; });
-        modal.body.querySelector('#staffLinkFind').addEventListener('click', () => { search = modal.body.querySelector('#staffLinkSearch').value.trim(); page = 1; load(); });
-        modal.body.querySelector('#staffLinkPrev').addEventListener('click', () => { page--; load(); });
-        modal.body.querySelector('#staffLinkNext').addEventListener('click', () => { page++; load(); });
+        modal.body.querySelector('#staffLinkChoice').addEventListener('change', event => { if (currentDialog() && context) selected = context.staff_options.find(staff => String(staff.id) === event.target.value && staff.eligible) || null; });
+        modal.body.querySelector('#staffLinkFind').addEventListener('click', () => { if (!currentDialog()) return; search = modal.body.querySelector('#staffLinkSearch').value.trim(); page = 1; load(); });
+        modal.body.querySelector('#staffLinkPrev').addEventListener('click', () => { if (!currentDialog()) return; page--; load(); });
+        modal.body.querySelector('#staffLinkNext').addEventListener('click', () => { if (!currentDialog()) return; page++; load(); });
       }
       form.addEventListener('submit', async event => {
         event.preventDefault();
-        if (pending || needsReload) return;
+        if (!currentDialog() || !context || pending || needsReload) return;
         if (!modal.body.querySelector('#staffLinkConfirmed').checked || (!current && (!context.can_link || !selected))) {
           MGAEMS.showFormErrors(form, { error: 'Select an eligible existing identity and confirm the human verification.' });
           return;
@@ -72,7 +86,7 @@ window.MGAEMSAccountLinks = (() => {
         const expectedVersion = context.account_link.version;
         pending = true;
         const confirmed = await MGAEMS.confirmAction(current ? 'Remove Staff account link?' : 'Link this Staff identity?', `${account.username} (${label(account.role)}) ${current ? 'will no longer be linked to' : 'will be linked to'} ${identity.name} (Staff #${identity.id}). Confirm only after verifying the person. All affected sessions and tokens will be invalidated.`, current ? 'Remove verified link' : 'Link verified identity');
-        if (!confirmed || modal.closed) { pending = false; return; }
+        if (!currentDialog() || !confirmed) { pending = false; return; }
         modal.setBusy(true);
         const result = await MGAEMS.patch(`/api/v1/users/${account.id}/staff-link`, {
           staff_id: current ? null : identity.id,
@@ -81,6 +95,7 @@ window.MGAEMSAccountLinks = (() => {
           staff_revision: identity.revision,
           identity_confirmed: true,
         });
+        if (!currentDialog()) return;
         modal.setBusy(false);
         pending = false;
         if (!result.ok) {

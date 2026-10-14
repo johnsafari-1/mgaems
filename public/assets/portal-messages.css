@@ -1,0 +1,29 @@
+/* Account inboxes remain separate from child/programme-specific portal content. */
+.portal-account-messages { min-width: 0; margin-top: var(--space-5); scroll-margin-top: var(--space-5); }
+.portal-message-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.portal-message-heading > div { flex: 1 1 300px; min-width: 0; }
+.portal-message-heading h2 { color: var(--navy); font-size: var(--text-lg); }
+.portal-message-heading p { margin-top: var(--space-2); line-height: 1.6; }
+.portal-message-toolbar { display: grid; grid-template-columns: minmax(0, 2fr) minmax(170px, 1fr); gap: var(--space-3); }
+.portal-account-messages .btn, .portal-account-messages input, .portal-account-messages select, .portal-message-dialog .btn { min-height: var(--touch-target); }
+#portalMessageCount { color: var(--gray-500); margin-bottom: var(--space-3); font-size: var(--text-sm); }
+.portal-message-records { display: grid; gap: var(--space-3); }
+.portal-message-record { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); align-items: center; text-align: left; font: inherit; color: var(--gray-900); padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--surface); cursor: pointer; }
+.portal-message-record:hover { background: var(--gray-50); }
+.portal-message-unread { border-left: 4px solid var(--teal); }
+.portal-message-content { min-width: 0; }
+.portal-message-content strong { display: block; overflow-wrap: anywhere; }
+.portal-message-preview { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--gray-500); margin-top: var(--space-2); }
+.portal-message-state { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+.portal-message-state time { color: var(--gray-500); font-size: var(--text-xs); }
+.portal-message-details { display: grid; gap: var(--space-3); }
+.portal-message-details dt { font-size: var(--text-sm); color: var(--gray-500); }
+.portal-message-details dd { margin-top: var(--space-1); overflow-wrap: anywhere; }
+.portal-message-body { margin-top: var(--space-4); white-space: pre-wrap; overflow-wrap: anywhere; }
+.portal-account-messages :focus-visible, .portal-message-dialog :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.portal-message-dialog .modal-close { min-width: var(--touch-target); min-height: var(--touch-target); }
+@media (max-width: 640px) {
+  .portal-message-toolbar, .portal-message-record { grid-template-columns: 1fr; }
+  .portal-message-state { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+  .portal-message-heading .btn { width: 100%; }
+}

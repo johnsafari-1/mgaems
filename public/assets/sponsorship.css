@@ -1,0 +1,56 @@
+/* Sponsorship operations share the navy/teal palette and existing role controls. */
+.sponsorship-workspace { min-width: 0; }
+.sponsorship-workspace .workspace-heading h1 { font-size: var(--text-2xl); line-height: 1.3; }
+.sponsorship-workspace .workspace-heading p { max-width: 78ch; }
+.sponsorship-workspace .btn, .sponsorship-dialog .btn { min-height: var(--touch-target); }
+.sponsorship-workflow-note { padding: var(--space-4); margin-bottom: var(--space-5); border-left: 3px solid var(--teal); background: var(--gray-50); color: var(--gray-700); }
+.sponsorship-workflow-note strong { display: block; color: var(--navy); }
+.sponsorship-workflow-note p { margin: var(--space-2) 0 0; max-width: 90ch; }
+.sponsorship-workspace .workspace-table td { vertical-align: top; }
+.sponsorship-workspace .workspace-table .actions { white-space: normal; flex-wrap: wrap; min-width: 170px; }
+.sponsorship-workspace .workspace-table td[data-label="Type / target"] { min-width: 190px; max-width: 340px; }
+.sponsorship-workspace .workspace-target { overflow-wrap: anywhere; }
+.sponsorship-workspace .pagination { flex-wrap: wrap; gap: var(--space-2); }
+.sponsorship-workspace .pagination > span { flex: 1 1 250px; }
+.sponsorship-workspace .workspace-filter-grid input, .sponsorship-workspace .workspace-filter-grid select { min-height: var(--touch-target); }
+.sponsorship-dialog-intro { padding: var(--space-3); margin: 0 0 var(--space-4); border-left: 3px solid var(--teal); background: var(--gray-50); color: var(--gray-700); }
+.sponsorship-dialog fieldset { min-width: 0; }
+.sponsorship-dialog input, .sponsorship-dialog select { min-height: var(--touch-target); }
+.sponsorship-dialog .modal-header h2 { overflow-wrap: anywhere; }
+.sponsorship-dialog .modal-close { flex-shrink: 0; min-height: var(--touch-target); min-width: var(--touch-target); }
+.sponsorship-dialog .modal-footer { flex-wrap: wrap; }
+.sponsorship-dialog .detail-grid dd { overflow-wrap: anywhere; }
+.sponsorship-dialog .record-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sponsorship-lookup { display: flex; align-items: flex-start; gap: var(--space-3); }
+.sponsorship-lookup .field { flex: 1; min-width: 0; margin-bottom: var(--space-2); }
+.sponsorship-lookup > .btn { margin-top: 24px; }
+.sponsorship-matches { display: grid; gap: var(--space-2); min-width: 0; margin: var(--space-3) 0; }
+.sponsorship-choice { width: 100%; white-space: normal; text-align: left; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); overflow-wrap: anywhere; }
+.sponsorship-choice small { color: var(--gray-500); font-size: var(--text-xs); }
+.sponsorship-choice[aria-pressed="true"] { border-color: var(--teal); background: var(--teal-light); color: var(--navy); }
+.sponsorship-selection-count { color: var(--gray-700); font-size: var(--text-sm); font-weight: 600; margin-top: var(--space-3); }
+.sponsorship-dialog .workspace-selection { display: grid; gap: var(--space-2); }
+.sponsorship-dialog .workspace-selection > span { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-3); overflow-wrap: anywhere; }
+.sponsorship-detail-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.sponsorship-dialog .assignment-item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.sponsorship-dialog [aria-invalid="true"] { border-color: var(--red); }
+@media (max-width: 900px) {
+  .sponsorship-workspace .workspace-table { min-width: 760px; }
+}
+@media (max-width: 640px) {
+  .sponsorship-workspace .workspace-heading h1 { font-size: 24px; }
+  .sponsorship-workspace .workspace-table { min-width: 0; }
+  .sponsorship-workspace .workspace-table thead { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+  .sponsorship-workspace .workspace-table, .sponsorship-workspace .workspace-table tbody, .sponsorship-workspace .workspace-table tr, .sponsorship-workspace .workspace-table td { display: block; width: 100%; }
+  .sponsorship-workspace .workspace-table tr { margin-bottom: var(--space-3); border: 1px solid var(--gray-200); border-radius: var(--radius); }
+  .sponsorship-workspace .workspace-table td { border: 0; }
+  .sponsorship-workspace .workspace-table td + td { padding-top: 0; }
+  .sponsorship-workspace .workspace-table td[data-label]::before { content: attr(data-label); display: block; color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+  .sponsorship-workspace .workspace-table td[data-label="Type / target"] { min-width: 0; max-width: none; }
+  .sponsorship-workspace .workspace-table .actions { min-width: 0; }
+  .sponsorship-workspace .workspace-table .actions .btn, .sponsorship-dialog .modal-footer .btn, .sponsorship-detail-actions .btn { flex: 1 1 auto; }
+  .sponsorship-lookup { flex-direction: column; align-items: stretch; }
+  .sponsorship-lookup > .btn { margin-top: 0; }
+  .sponsorship-dialog .form-grid, .sponsorship-dialog .detail-grid { grid-template-columns: 1fr; }
+  .sponsorship-dialog .workspace-selection > span .btn { width: 100%; }
+}

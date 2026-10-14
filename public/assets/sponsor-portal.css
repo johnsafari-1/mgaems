@@ -1,0 +1,29 @@
+/* Read-only portals share established role cards and theme tokens. */
+.sponsor-portal { min-width: 0; }
+.sponsor-programme-selector { padding: var(--space-5); margin-block: var(--space-4) var(--space-5); background: var(--teal-light); border: 1px solid var(--gray-300); border-radius: var(--radius-lg); }
+.sponsor-programme-selector h2 { font-size: var(--text-lg); color: var(--navy); margin-block: var(--space-3); }
+.sponsor-programme-selector label, .sponsor-member-selector label { display: block; color: var(--navy); font-weight: 700; margin-block: var(--space-3) var(--space-2); }
+.sponsor-programme-selector select, .sponsor-member-selector select { width: 100%; min-height: var(--touch-target); }
+.sponsor-programme-selector p { margin-top: var(--space-3); font-size: var(--text-sm); color: var(--gray-700); }
+.sponsor-section-heading { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.sponsor-section-heading h2 { overflow-wrap: anywhere; }
+.sponsor-section-heading p { margin-top: var(--space-2); }
+.sponsor-programme-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-block: var(--space-4); }
+.sponsor-programme-dates dt { color: var(--gray-500); font-size: var(--text-sm); }
+.sponsor-programme-dates dd { margin-top: var(--space-1); color: var(--gray-900); }
+.sponsor-member-selector { margin-bottom: var(--space-5); }
+.sponsor-member-selector p { margin-top: var(--space-3); }
+.sponsor-copy { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; margin-top: var(--space-3); }
+.sponsor-subheading { font-size: var(--text-base); color: var(--navy); margin-top: var(--space-4); }
+.sponsor-portal .btn { min-height: var(--touch-target); }
+.sponsor-portal .family-report { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); }
+.sponsor-portal .family-section h2 { margin-bottom: var(--space-3); }
+.sponsor-portal :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.sponsor-portal [role="status"] { overflow-wrap: anywhere; }
+@media (max-width: 900px) { .sponsor-portal .family-progress-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) {
+  .sponsor-programme-selector { padding: var(--space-4); }
+  .sponsor-programme-dates { grid-template-columns: 1fr; }
+  .sponsor-portal .family-report .btn { width: 100%; }
+  .sponsor-portal .family-navigation { grid-template-columns: 1fr; }
+}

@@ -42,6 +42,10 @@ const MGAEMS = (() => {
   }
 
   window.addEventListener('storage', event => {
+    if (['mgaems_token', 'mgaems_user', null].includes(event.key) && !pageSessionCurrent()) {
+      clearObsoletePage();
+      return;
+    }
     if (event.key !== THEME_KEY && event.key !== null) return;
     preferredTheme = ['light', 'dark'].includes(event.newValue) ? event.newValue : null;
     applyTheme(preferredTheme || (systemTheme.matches ? 'dark' : 'light'));
@@ -50,11 +54,45 @@ const MGAEMS = (() => {
     if (!preferredTheme) applyTheme(event.matches ? 'dark' : 'light');
   });
 
-  const token = () => localStorage.getItem('mgaems_token');
+  const token = () => {
+    try { return localStorage.getItem('mgaems_token'); }
+    catch { return null; }
+  };
   const currentUser = () => {
     try { return JSON.parse(localStorage.getItem('mgaems_user') || 'null'); }
     catch { return null; }
   };
+
+  // Capture only in memory; callers use this to discard work from an old session.
+  function sessionGuard() {
+    const sessionToken = token();
+    const sessionUser = JSON.stringify([currentUser()?.id, currentUser()?.role]);
+    return () => token() === sessionToken && JSON.stringify([currentUser()?.id, currentUser()?.role]) === sessionUser;
+  }
+
+  // An old page must not dispatch a confirmed action using a replacement account.
+  const pageSessionCurrent = sessionGuard();
+
+  function clearObsoletePage() {
+    schoolRevision += 1;
+    schoolRequest = null;
+    schoolIdentity = null;
+    academicRequest = null;
+    while (activeModal) {
+      const modal = activeModal;
+      modal.body.textContent = '';
+      modal.setBusy(false);
+      modal.close();
+      if (activeModal === modal) break;
+    }
+    const main = document.getElementById('appMain');
+    if (main) main.innerHTML = errorHTML('Your account changed. Reloading your workspace…');
+    ['userInfo', 'userRole'].forEach(id => {
+      const element = document.getElementById(id);
+      if (element) element.textContent = '';
+    });
+    window.location.href = token() && currentUser() ? landingPage() : '/login.html';
+  }
 
   function requireAuth() {
     if (!token() || !currentUser()) {
@@ -75,13 +113,16 @@ const MGAEMS = (() => {
   }
 
   function logout() {
+    if (!pageSessionCurrent()) return;
+    const currentSession = sessionGuard();
     schoolRevision += 1;
     schoolRequest = null;
     schoolIdentity = null;
     fetch('/api/v1/auth/logout', {
       method: 'POST',
       headers: { Accept: 'application/json', Authorization: 'Bearer ' + token() },
-    }).finally(() => {
+    }).catch(() => { /* Clear the local session even if the server is unreachable. */ }).finally(() => {
+      if (!currentSession()) return;
       localStorage.removeItem('mgaems_token');
       localStorage.removeItem('mgaems_user');
       window.location.href = '/login.html';
@@ -93,24 +134,30 @@ const MGAEMS = (() => {
    * try/catch or manual status checks. Automatically redirects to login on 401.
    */
   async function api(path, options = {}) {
+    const currentSession = sessionGuard();
+    const requestToken = token();
+    const stale = () => ({ ok: false, stale: true, error: 'This request belongs to an earlier session.' });
+    if (!pageSessionCurrent()) return stale();
     try {
       const res = await fetch(path, {
         ...(path.startsWith('/api/v1/health/') ? { cache: 'no-store' } : {}),
         ...options,
         headers: {
           Accept: 'application/json',
-          Authorization: 'Bearer ' + token(),
+          Authorization: 'Bearer ' + requestToken,
           ...(options.body ? { 'Content-Type': 'application/json' } : {}),
           ...options.headers,
         },
       });
 
+      if (!currentSession()) return stale();
       if (res.status === 401) {
         logout();
         return { ok: false, status: 401, error: 'Session expired.' };
       }
 
       const json = await res.json().catch(() => ({}));
+      if (!currentSession()) return stale();
 
       if (!res.ok) {
         const message = (json.error && json.error.message) || json.message || 'Something went wrong.';
@@ -119,6 +166,7 @@ const MGAEMS = (() => {
 
       return { ok: true, data: json.data, meta: json.meta };
     } catch (e) {
+      if (!currentSession()) return stale();
       return { ok: false, error: 'Could not reach the server. Check your connection.' };
     }
   }
@@ -219,15 +267,27 @@ const MGAEMS = (() => {
     return { year, term: matching.length === 1 ? matching[0] : null };
   }
 
-  async function download(path, filename) {
+  async function download(path, filename, { isCurrent = () => true } = {}) {
+    const downloadToken = token();
+    const downloadUser = JSON.stringify([currentUser()?.id, currentUser()?.role]);
+    const current = () => pageSessionCurrent() && token() === downloadToken
+      && JSON.stringify([currentUser()?.id, currentUser()?.role]) === downloadUser && isCurrent();
+    const cancelled = () => ({ ok: false, stale: true, cancelled: true });
     try {
-      const res = await fetch(path, { headers: { Accept: 'application/pdf', Authorization: 'Bearer ' + token() } });
+      if (!current()) return cancelled();
+      const res = await fetch(path, { headers: { Accept: 'application/pdf', Authorization: 'Bearer ' + downloadToken } });
+      if (!current()) return cancelled();
       if (res.status === 401) { logout(); return { ok: false, error: 'Session expired.' }; }
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
+        if (!current()) return cancelled();
         return { ok: false, status: res.status, error: json.error?.message || 'Download failed.' };
       }
-      const url = URL.createObjectURL(await res.blob());
+      const contentType = res.headers?.get('Content-Type') || '';
+      if (/\b(?:text\/html|application\/(?:json|problem\+json))\b/i.test(contentType)) return { ok: false, error: 'The server did not return a downloadable file.' };
+      const blob = await res.blob();
+      if (!current()) return cancelled();
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a'); link.href = url; link.download = filename; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       return { ok: true };
@@ -275,8 +335,21 @@ const MGAEMS = (() => {
   }
 
   function initIcons() {
-    if (window.lucide) window.lucide.createIcons();
+    try {
+      if (window.lucide?.createIcons) { window.lucide.createIcons(); return; }
+    } catch { /* Keep controls usable when the optional icon provider fails. */ }
+    const symbols = { menu: '☰', x: '×', sun: '☀', moon: '◐', plus: '+', minus: '−',
+      download: '↓', upload: '↑', 'refresh-cw': '↻', 'arrow-left': '←', 'arrow-right': '→',
+      'arrow-up-right': '↗', 'chevron-left': '‹', 'chevron-right': '›', 'circle-check': '✓',
+      check: '✓', 'alert-circle': '!', 'log-in': '→', 'log-out': '→', search: '⌕' };
+    document.querySelectorAll('i[data-lucide]').forEach(icon => {
+      icon.textContent = symbols[icon.getAttribute('data-lucide')] || '◇';
+      icon.setAttribute('aria-hidden', 'true');
+      icon.classList.add('icon-fallback');
+    });
   }
+
+  document.addEventListener?.('DOMContentLoaded', initIcons);
 
   function escapeHTML(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -391,5 +464,5 @@ const MGAEMS = (() => {
     if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, patch, del, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, patch, del, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
 })();

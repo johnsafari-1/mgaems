@@ -13,6 +13,7 @@
   const canPublish = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator'].includes(user.role);
   const canMessage = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'sponsor_coordinator', 'teacher'].includes(user.role);
   const canSend = canMessage && user.role !== 'sponsor_coordinator';
+  const canLookupRecipients = user.role === 'system_admin';
   const esc = MGAEMS.escapeHTML;
   const identity = () => JSON.stringify([localStorage.getItem('mgaems_token'), MGAEMS.currentUser()?.id, MGAEMS.currentUser()?.role]);
   const initialIdentity = identity();
@@ -203,11 +204,93 @@
   }
   function openMessageForm(trigger) {
     if (!current() || !canSend) return;
-    openForm({ title: 'New message', label: 'Send message', progress: 'Sending…', success: 'Message sent.', endpoint: '/api/v1/messages', reload: loadMessages, trigger,
-      fields: '<fieldset class="communication-form-group"><legend>Recipient and message</legend><div class="field"><label for="messageRecipient">Recipient account number *</label><input type="number" name="recipient_id" id="messageRecipient" min="1" step="1" inputmode="numeric" required aria-describedby="messageRecipientHint"><p class="communication-note" id="messageRecipientHint">Enter the recipient’s existing account number supplied through the school’s established contact process.</p></div><div class="field"><label for="messageBody">Message *</label><textarea id="messageBody" name="body" required></textarea></div></fieldset>',
+    let pauseLookup = () => {};
+    const editor = openForm({ title: 'New message', label: 'Send message', progress: 'Sending…', success: 'Message sent.', endpoint: '/api/v1/messages', reload: loadMessages, trigger,
+      beforeSave: () => pauseLookup(),
+      fields: `<fieldset class="communication-form-group"><legend>Recipient and message</legend><div class="field"><label for="messageRecipient">Recipient account number *</label><input type="number" name="recipient_id" id="messageRecipient" min="1" step="1" inputmode="numeric" required aria-describedby="messageRecipientHint"><p class="communication-note" id="messageRecipientHint">Enter the recipient’s existing account number supplied through the school’s established contact process.</p></div><div class="field"><label for="messageBody">Message *</label><textarea id="messageBody" name="body" required></textarea></div></fieldset>${canLookupRecipients ? '<fieldset class="communication-form-group communication-recipient-lookup"><legend>Optional administrator account lookup</legend><p class="communication-note" id="recipientLookupHint">Find accounts loads one page from the existing administrator directory. Search applies only to that loaded page. Choosing an account fills the recipient number; review it before sending.</p><div class="communication-recipient-toolbar"><button type="button" class="btn btn-secondary" id="recipientFind">Find accounts</button><button type="button" class="btn btn-secondary" id="recipientClear">Clear lookup</button></div><div class="field"><label for="recipientPageSearch">Search accounts on this page</label><input type="search" id="recipientPageSearch" maxlength="100" aria-describedby="recipientLookupHint" placeholder="Username, account number or role"></div><p id="recipientChosen" role="status" aria-live="polite"></p><div id="recipientMatches" aria-live="polite" aria-busy="false"></div><div class="pagination"><span id="recipientPageInfo" role="status"></span><button type="button" class="btn btn-secondary" id="recipientPrevious" disabled>Previous accounts</button><button type="button" class="btn btn-secondary" id="recipientNext" disabled>Next accounts</button></div></fieldset>' : ''}`,
       payload: form => ({ recipient_id: Number(form.elements.namedItem('recipient_id').value), body: form.elements.namedItem('body').value.trim() }),
       validate: data => ({ ...(!Number.isSafeInteger(data.recipient_id) || data.recipient_id < 1 ? { recipient_id: ['Enter a valid positive recipient account number.'] } : {}), ...(!data.body ? { body: ['Enter a message.'] } : {}) }),
       confirmation: data => `Send this message to account #${data.recipient_id}? Review the recipient carefully before sending.` });
+    if (editor && canLookupRecipients) pauseLookup = bindRecipientLookup(editor);
+  }
+  function bindRecipientLookup({ handle, form, isSaving }) {
+    if (!canLookupRecipients) return;
+    const roles = ['system_admin', 'head_teacher', 'deputy_head_teacher', 'teacher', 'parent_guardian', 'sponsor', 'sponsor_coordinator', 'student'];
+    const lookup = { rows: [], page: 1, pages: 1, total: 0, perPage: 15, request: 0, pending: false, loaded: false, chosen: null };
+    const control = id => handle.body.querySelector('#' + id);
+    const available = () => current() && !handle.closed && state.modal === handle && !isSaving();
+    const prettyRole = value => value.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
+    const clearChosen = () => {
+      const recipient = form.elements.namedItem('recipient_id');
+      if (lookup.chosen && recipient.value === String(lookup.chosen.id)) recipient.value = '';
+      lookup.chosen = null; control('recipientChosen').textContent = '';
+    };
+    function render() {
+      if (!available() || !lookup.loaded || lookup.pending) return;
+      const search = control('recipientPageSearch').value.trim().toLowerCase();
+      const rows = lookup.rows.filter(row => !search || [row.username, row.id, prettyRole(row.role), row.status].join(' ').toLowerCase().includes(search));
+      control('recipientMatches').innerHTML = rows.length ? `<div class="communication-recipient-results">${rows.map(row => `<button type="button" class="btn btn-secondary communication-recipient-choice" data-recipient-choice="${esc(row.id)}" ${row.role === 'student' || row.ineligible ? 'disabled' : ''} aria-label="${row.role === 'student' || row.ineligible ? 'Inbox unavailable for' : 'Choose'} ${esc(row.username)}, account ${esc(row.id)}, ${esc(prettyRole(row.role))}, ${esc(row.status)}"><strong>${esc(row.username)}</strong><span>Account #${esc(row.id)} · ${esc(prettyRole(row.role))} · ${esc(prettyRole(row.status))}</span>${row.role === 'student' ? '<span>Student accounts receive announcements only; a message inbox is unavailable.</span>' : row.ineligible ? '<span>Staff-link eligibility is not currently met. This account cannot currently use its workspace.</span>' : row.status !== 'active' ? `<span>Currently ${esc(row.status)}; this account cannot currently sign in.</span>` : ''}</button>`).join('')}</div>` : MGAEMS.emptyStateHTML(lookup.rows.length ? 'No accounts match on this page' : 'No accounts on this page', lookup.rows.length ? 'Clear the page search or move to another directory page.' : 'No directory accounts are available here.', 'users');
+      control('recipientMatches').setAttribute('aria-busy', 'false');
+      control('recipientPageInfo').textContent = `${rows.length} of ${lookup.rows.length} loaded accounts shown · Page ${lookup.page} of ${lookup.pages} · ${lookup.total} directory accounts`;
+      control('recipientPrevious').disabled = lookup.page <= 1;
+      control('recipientNext').disabled = lookup.page >= lookup.pages;
+      control('recipientMatches').querySelectorAll('[data-recipient-choice]').forEach(button => button.addEventListener('click', () => {
+        if (!available() || lookup.pending) return;
+        const chosen = lookup.rows.find(row => String(row.id) === button.dataset.recipientChoice);
+        if (!chosen || chosen.role === 'student' || chosen.ineligible) return;
+        lookup.chosen = chosen;
+        form.elements.namedItem('recipient_id').value = String(chosen.id);
+        form.elements.namedItem('recipient_id').removeAttribute('aria-invalid');
+        control('recipientChosen').textContent = `Selected ${chosen.username} · Account #${chosen.id} · ${prettyRole(chosen.role)} · ${prettyRole(chosen.status)}. Confirm the account before sending.`;
+        form.elements.namedItem('recipient_id').focus();
+      }));
+      MGAEMS.initIcons();
+    }
+    async function find(page = 1) {
+      if (!available() || lookup.pending) return;
+      const request = ++lookup.request;
+      lookup.pending = true; lookup.loaded = false; lookup.rows = [];
+      control('recipientFind').disabled = true;
+      control('recipientPrevious').disabled = control('recipientNext').disabled = true;
+      control('recipientPageInfo').textContent = '';
+      control('recipientMatches').setAttribute('aria-busy', 'true');
+      control('recipientMatches').innerHTML = MGAEMS.loadingHTML('Loading administrator account directory…');
+      const result = await MGAEMS.get('/api/v1/users?' + new URLSearchParams({ page, per_page: 15 }));
+      if (!available() || request !== lookup.request) return;
+      lookup.pending = false; control('recipientFind').disabled = false; control('recipientMatches').setAttribute('aria-busy', 'false');
+      const meta = result.meta;
+      const valid = Array.isArray(result.data) && result.data.every(row => row && typeof row === 'object' && !Array.isArray(row) && positiveID(row.id) && typeof row.username === 'string' && roles.includes(row.role) && ['active', 'inactive', 'locked'].includes(row.status)) && new Set(result.data.map(row => String(row.id))).size === result.data.length && Number.isSafeInteger(meta?.page) && meta.page === page && Number.isSafeInteger(meta?.per_page) && meta.per_page >= 1 && meta.per_page <= 100 && Number.isSafeInteger(meta?.total) && meta.total >= result.data.length && result.data.length <= meta.per_page;
+      if (!result.ok || !valid) {
+        clearChosen();
+        control('recipientMatches').innerHTML = MGAEMS.errorHTML(result.error || 'The account directory returned unexpected information. Use a verified account number or retry Find accounts.');
+        MGAEMS.initIcons(); return;
+      }
+      lookup.page = meta.page; lookup.pages = Math.max(1, Math.ceil(meta.total / meta.per_page)); lookup.total = meta.total; lookup.perPage = meta.per_page;
+      if (lookup.page > lookup.pages) { find(lookup.pages); return; }
+      lookup.rows = result.data.map(row => ({ id: row.id, username: row.username, role: row.role, status: row.status, ineligible: row.account_link?.required === true && row.account_link.eligible === false })); lookup.loaded = true; render();
+    }
+    control('recipientFind').addEventListener('click', () => find());
+    control('recipientPageSearch').addEventListener('input', render);
+    control('recipientPageSearch').addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); render(); } });
+    control('recipientPrevious').addEventListener('click', () => { if (lookup.page > 1) find(lookup.page - 1); });
+    control('recipientNext').addEventListener('click', () => { if (lookup.page < lookup.pages) find(lookup.page + 1); });
+    control('recipientClear').addEventListener('click', () => {
+      if (!available()) return;
+      ++lookup.request; lookup.pending = false; lookup.loaded = false; lookup.rows = [];
+      clearChosen(); control('recipientPageSearch').value = ''; control('recipientMatches').innerHTML = ''; control('recipientMatches').setAttribute('aria-busy', 'false');
+      control('recipientPageInfo').textContent = ''; control('recipientFind').disabled = false;
+      control('recipientPrevious').disabled = control('recipientNext').disabled = true;
+      control('recipientFind').focus();
+    });
+    form.elements.namedItem('recipient_id').addEventListener('input', () => {
+      if (lookup.chosen && form.elements.namedItem('recipient_id').value !== String(lookup.chosen.id)) { lookup.chosen = null; control('recipientChosen').textContent = ''; }
+    });
+    return () => {
+      if (!lookup.pending) return;
+      ++lookup.request; lookup.pending = false; lookup.loaded = false; lookup.rows = [];
+      control('recipientFind').disabled = false; control('recipientMatches').setAttribute('aria-busy', 'false');
+      control('recipientMatches').innerHTML = '<p class="communication-note">Account lookup paused while you review the message. Use Find accounts to reload when editing the draft.</p>';
+    };
   }
   function openForm(definition) {
     const handle = modal({ title: definition.title, trigger: definition.trigger, body: `<form id="communicationForm"><div data-form-error role="status"></div>${definition.fields}</form>`, footer: `<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button class="btn btn-primary" type="submit" form="communicationForm" data-save-communication>${esc(definition.label)}</button>` });
@@ -222,6 +305,7 @@
       const fields = definition.validate(payload);
       if (Object.keys(fields).length) { MGAEMS.showFormErrors(form, { error: 'Please check the highlighted fields.', fields }); return; }
       if (!form.reportValidity()) return;
+      definition.beforeSave?.();
       saving = true;
       handle.setBusy(true);
       const controls = [...form.elements].filter(control => ['input', 'select', 'textarea'].includes(control.tagName?.toLowerCase() || control.tag)).map(control => [control, control.disabled]);
@@ -250,6 +334,7 @@
       MGAEMS.toast(definition.success, 'success');
       await definition.reload();
     });
+    return { handle, form, isSaving: () => saving };
   }
   updateSummary();
   MGAEMS.initIcons();

@@ -353,7 +353,7 @@
     MGAEMS.toast(`${qualification ? 'Qualification' : 'Emergency contact'} removed.`, 'success'); refreshProfile(handle, person.id, kind);
   }
   function documentsPanel(person) {
-    return `<div class="staff-panel-heading"><div><h3>Documents on record</h3><p class="text-muted">Metadata for documents already associated with this staff record.</p></div></div>${person.documents?.length ? `<div class="record-list">${person.documents.map(record => `<div class="record-item"><div><strong>${esc(record.doc_type)}</strong><p class="staff-meta">Uploaded ${date(record.uploaded_at)}</p></div><span class="badge badge-gray">On file</span></div>`).join('')}</div>` : MGAEMS.emptyStateHTML('No documents recorded', 'No staff documents are associated with this record.', 'file-text')}<p class="staff-info alert">Document upload and download are unavailable until secure document endpoints are implemented.</p>`;
+    return `<div class="staff-panel-heading"><div><h3>Documents on record</h3><p class="text-muted">Documents listed on this Staff record.</p></div></div>${person.documents?.length ? `<div class="record-list">${person.documents.map(record => `<div class="record-item"><div><strong>${esc(record.doc_type)}</strong><p class="staff-meta">Uploaded ${date(record.uploaded_at)}</p></div><span class="badge badge-gray">On record</span></div>`).join('')}</div>` : MGAEMS.emptyStateHTML('No documents recorded', 'No staff documents are associated with this record.', 'file-text')}<p class="staff-info alert">Contact authorized school administration for document access or updates.</p>`;
   }
   loadPage();
 })();

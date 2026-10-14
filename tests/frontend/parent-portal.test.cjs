@@ -159,12 +159,12 @@ test('progress cards retain missing values and report availability without inven
   assert.equal(h.ids.get('familyCards').querySelector('[data-card]'), null); assert.match(h.ids.get('familyCards').innerHTML, /File unavailable/);
 });
 test('Administrator provisioning UI excludes new Student roles while retaining existing Student review', async () => {
-  const html = fs.readFileSync(path.resolve(__dirname, '../../public/administration.html'), 'utf8');
+  const html = fs.readFileSync(path.resolve(__dirname, '../../public/assets/administration.js'), 'utf8');
   const create = html.slice(html.indexOf('  async function openCreateUser()'), html.indexOf('  async function viewUser('));
   const edit = html.slice(html.indexOf('  async function editUser('), html.indexOf('  async function deactivateUser('));
   for (const existingRole of ['teacher', 'student']) {
     const captured = [];
-    const context = vm.createContext({ state: { roles: [{ name: 'student' }, { name: 'teacher' }, { name: 'parent_guardian' }] },
+    const context = vm.createContext({ state: { roles: [{ name: 'student' }, { name: 'teacher' }, { name: 'parent_guardian' }], accountRequest: 0 }, isSystemAdmin: true, current: () => true, validId: value => Number(value) > 0, record: value => value !== null && typeof value === 'object',
       MGAEMS: { get: async () => ({ ok: true, data: { id: 1, username: 'Fixture', email: 'fixture@example.test', role: existingRole } }) },
       loadUserRoleOptions: async () => ({ ok: true }), createModal: (title, body) => captured.push(body), esc: String, prettyRole: String });
     vm.runInContext(create + edit, context); await vm.runInContext('openCreateUser()', context);

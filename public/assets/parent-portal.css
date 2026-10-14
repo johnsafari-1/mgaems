@@ -1,0 +1,10 @@
+/* Family refinements build on the shared role-workspace components. */
+.family-portal .btn, .family-portal input, .family-portal select { min-height: var(--touch-target); }
+.family-portal .family-report { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); }
+.family-progress-toolbar { display: grid; grid-template-columns: minmax(0, 2fr) minmax(150px, 1fr); gap: var(--space-3); margin-bottom: var(--space-3); }
+.family-progress-toolbar .field { margin: 0; }
+.family-progress-toolbar + p { margin-bottom: var(--space-4); }
+.family-announcement-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.family-portal [role="status"] { overflow-wrap: anywhere; }
+.family-portal .family-section h2 { color: var(--navy); }
+@media (max-width: 640px) { .family-progress-toolbar { grid-template-columns: 1fr; } }

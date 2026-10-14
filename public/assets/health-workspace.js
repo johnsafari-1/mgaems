@@ -42,6 +42,7 @@
     action: ['incident_id', 'action_type', 'action_at'], notification: ['incident_id', 'channel', 'attempted_at', 'outcome'], referral: ['incident_id', 'referred_at', 'follow_up_status'],
     log: ['actor_id', 'operation', 'record_type', 'record_id', 'recorded_at'] };
   function project(type, row, summary = false) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return {};
     const names = summary ? summaryFields[type] : [...schemas[type].map(f => f.name), ...metadata[type], 'context_snapshot', 'contact_snapshot'];
     return Object.fromEntries(['id', 'revision_number', 'student_id', 'profile_id', 'incident_id', ...names].filter(name => Object.hasOwn(row, name)).map(name => [name, row[name]]));
   }
@@ -66,12 +67,15 @@
   if (!['head_teacher', 'deputy_head_teacher'].includes(user.role)) { window.location.href = MGAEMS.landingPage(user); return; }
   renderAppShell('/health-welfare.html');
   const main = document.getElementById('appMain');
+  main.setAttribute('class', 'app-main health-workspace');
+  const currentSession = MGAEMS.sessionGuard();
+  const current = () => currentSession() && window.location.pathname === '/health-welfare.html';
   const state = { generation: 0, denied: false, rows: [], learner: null, tab: 'profiles', profile: null, incident: null, modal: null, pickerPage: 1, pickerRequest: 0, pickerReady: false };
   const byId = id => document.getElementById(id);
   const button = (text, attr = '', primary = false) => `<button type="button" class="btn ${primary ? 'btn-primary' : 'btn-secondary'} btn-sm" ${attr}>${text}</button>`;
   const actions = html => `<div class="health-actions">${html}</div>`;
-  const validId = id => Number.isSafeInteger(Number(id)) && Number(id) > 0;
-  const validRecord = record => record && validId(record.id) && Number.isInteger(record.revision_number) && record.revision_number > 0;
+  const validId = id => (typeof id === 'number' || typeof id === 'string' && /^[1-9]\d*$/.test(id)) && Number.isSafeInteger(Number(id)) && Number(id) > 0;
+  const validRecord = record => record && typeof record === 'object' && !Array.isArray(record) && validId(record.id) && Number.isInteger(record.revision_number) && record.revision_number > 0;
   function clearModal() { if (state.modal) { state.modal.setBusy(false); state.modal.body.innerHTML = ''; state.modal.close(); state.modal = null; } }
   // Selected Health content and the paged roster have independent request owners.
   function clear() { state.generation++; state.profile = null; state.incident = null; clearModal(); }
@@ -80,8 +84,13 @@
     clearWorkspace(); state.denied = true;
     main.innerHTML = MGAEMS.emptyStateHTML('Health access unavailable', 'Your session or current Staff authorization no longer permits this workspace. Sign in again with an eligible account.', 'lock');
   }
-  async function read(path) { const result = await MGAEMS.get(path); if ([401, 403].includes(result.status)) deny(); return result; }
-  const alive = generation => !state.denied && generation === state.generation;
+  async function read(path) {
+    if (!current()) { deny(); return { ok: false, status: 401, error: 'Health session changed.' }; }
+    const result = await MGAEMS.get(path);
+    if (!current() || [401, 403].includes(result.status)) deny();
+    return result;
+  }
+  const alive = generation => current() && !state.denied && generation === state.generation;
   byId('shellLogout')?.addEventListener('click', () => { clearWorkspace(); state.denied = true; main.innerHTML = ''; });
   function error(target, result, retry) {
     target.innerHTML = MGAEMS.errorHTML(result.error || 'The information could not be loaded.');
@@ -112,22 +121,26 @@
     const result = await read('/api/v1/health/profiles?per_page=1');
     if (!alive(generation)) return;
     if (!result.ok) { error(main, result, start); return; }
-    if (!Array.isArray(result.data)) { error(main, { error: 'Unexpected Health authorization response.' }, start); return; }
-    main.innerHTML = `<div class="page-heading"><h1>Health &amp; Safety</h1><p>Restricted school leadership records and actionable school safety information.</p></div>
-      <div class="health-layout"><aside class="card health-picker" aria-label="Select a learner"><h2>Learners</h2><div class="field"><label for="healthLearnerFilter">Filter this loaded page by name or admission number</label><input type="search" id="healthLearnerFilter" maxlength="150"></div><div id="healthLearners" aria-live="polite"></div><div id="healthLearnerPages" class="health-actions"></div></aside>
+    if (!Array.isArray(result.data) || result.data.some(row => !validRecord(row))) { error(main, { error: 'Unexpected Health authorization response.' }, start); return; }
+    main.innerHTML = `<div class="page-heading health-heading"><span class="eyebrow">Restricted school leadership</span><h1>Health &amp; Safety</h1><p>Review reported school support information, actionable safety alerts and actual school incidents.</p><p class="health-note">Information is confidential. Select the learner carefully; only authorized school leadership can open these records. Teacher-visible alerts contain only actionable information within current assignments.</p></div>
+      <div class="health-layout"><aside class="card health-picker" aria-label="Select a learner"><h2>Learner selection</h2><div class="field"><label for="healthLearnerFilter">Name or admission number on this page</label><input type="search" id="healthLearnerFilter" maxlength="150" placeholder="Filter this loaded learner page" aria-describedby="healthLearnerCount"></div><p id="healthLearnerCount" class="health-picker-count" role="status"></p><div id="healthLearners" aria-live="polite" aria-busy="true"></div><div id="healthLearnerPages" class="health-actions"></div></aside>
       <section class="health-panel"><p id="healthSelected" class="health-selected" role="status">Select a learner</p><div class="health-tabs" role="group" aria-label="Health sections">${button('Profiles &amp; safety alerts', 'data-health-tab="profiles" aria-pressed="true"')}${button('Incidents &amp; first aid', 'data-health-tab="incidents" aria-pressed="false"')}${button('Restricted access log', 'data-health-tab="logs" aria-pressed="false"')}</div><div id="healthPanel" aria-live="polite"></div></section></div>`;
     byId('healthLearnerFilter').addEventListener('input', renderLearnerChoices);
     main.querySelectorAll('[data-health-tab]').forEach(control => control.addEventListener('click', () => { clear(); state.tab = control.dataset.healthTab; renderPanel(); }));
     renderPanel(); loadLearners();
   }
   async function loadLearners() {
+    if (!current() || state.denied) return;
     const request = ++state.pickerRequest, target = byId('healthLearners');
-    state.pickerReady = false; state.rows = []; target.innerHTML = MGAEMS.loadingHTML('Loading this learner page…'); byId('healthLearnerPages').innerHTML = '';
+    state.pickerReady = false; state.rows = []; target.setAttribute('aria-busy', 'true'); target.innerHTML = MGAEMS.loadingHTML('Loading this learner page…'); byId('healthLearnerPages').innerHTML = ''; byId('healthLearnerCount').textContent = 'Loading learner page…';
     const result = await read(`/api/v1/students?page=${state.pickerPage}&per_page=20`);
     if (state.denied || request !== state.pickerRequest) return;
+    target.setAttribute('aria-busy', 'false');
+    byId('healthLearnerCount').textContent = 'Learner page unavailable';
     if (!result.ok) { error(target, result, loadLearners); return; }
-    if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || !Number.isInteger(result.meta?.per_page) || result.meta.per_page < 1) { error(target, { error: 'Unexpected learner response.' }, loadLearners); return; }
-    state.rows = result.data.filter(row => validId(row.id)).map(row => ({ id: row.id, first_name: row.first_name, last_name: row.last_name, admission_no: row.admission_no }));
+    if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || result.meta.total < result.data.length || !Number.isInteger(result.meta?.per_page) || result.meta.per_page < 1) { error(target, { error: 'Unexpected learner response.' }, loadLearners); return; }
+    if (result.data.some(row => !row || !validId(row.id) || !['first_name', 'last_name', 'admission_no'].every(key => typeof row[key] === 'string'))) { error(target, { error: 'Unexpected learner identity response.' }, loadLearners); return; }
+    state.rows = result.data.map(row => ({ id: row.id, first_name: row.first_name, last_name: row.last_name, admission_no: row.admission_no }));
     state.pickerReady = true;
     renderLearnerChoices();
     const pages = Math.max(1, Math.ceil(result.meta.total / result.meta.per_page));
@@ -138,15 +151,18 @@
   function renderLearnerChoices() {
     // Filtering is local: only the latest text is applied once a page has loaded.
     // It must not replace a pending loader or erase a failed request's retry.
-    if (!state.pickerReady) return;
+    if (!current() || !state.pickerReady) return;
     const query = byId('healthLearnerFilter').value.trim().toLowerCase();
     const rows = state.rows.filter(row => `${row.first_name} ${row.last_name} ${row.admission_no}`.toLowerCase().includes(query));
-    byId('healthLearners').innerHTML = rows.length ? rows.map(row => `<button type="button" class="btn btn-secondary health-choice" data-health-learner="${esc(row.id)}">${esc(row.first_name)} ${esc(row.last_name)}<br><small>${esc(row.admission_no)}</small></button>`).join('') : MGAEMS.emptyStateHTML(state.rows.length ? 'No learners on this page match' : 'No learners returned', state.rows.length ? 'Clear the filter or browse another page.' : 'The authorized roster returned no learners on this page.', 'users');
+    byId('healthLearnerCount').textContent = `${rows.length} of ${state.rows.length} learners on this page`;
+    byId('healthLearners').innerHTML = rows.length ? rows.map(row => `<button type="button" class="btn btn-secondary health-choice" data-health-learner="${esc(row.id)}" aria-pressed="${String(row.id) === String(state.learner?.id)}">${esc(row.first_name)} ${esc(row.last_name)}<br><small>Admission ${esc(row.admission_no)}</small></button>`).join('') : MGAEMS.emptyStateHTML(state.rows.length ? 'No learners on this page match' : 'No learners returned', state.rows.length ? 'Clear the filter or browse another page.' : 'The authorized roster returned no learners on this page.', 'users');
     byId('healthLearners').querySelectorAll('[data-health-learner]').forEach(control => control.addEventListener('click', () => {
-      clear(); state.learner = state.rows.find(row => String(row.id) === control.dataset.healthLearner); byId('healthSelected').textContent = learnerTitle(); renderPanel();
+      if (!current()) { deny(); return; }
+      clear(); state.learner = state.rows.find(row => String(row.id) === control.dataset.healthLearner); byId('healthSelected').textContent = learnerTitle(); renderLearnerChoices(); renderPanel();
     }));
   }
   function renderPanel() {
+    if (!current()) { deny(); return; }
     main.querySelectorAll('[data-health-tab]').forEach(control => control.setAttribute('aria-pressed', String(control.dataset.healthTab === state.tab)));
     const target = byId('healthPanel');
     target.innerHTML = '';
@@ -159,12 +175,13 @@
     }
   }
   async function loadProfile() {
+    if (!current()) { deny(); return; }
     const generation = state.generation, learnerId = state.learner.id, target = byId('healthPanel');
     state.profile = null; target.innerHTML = MGAEMS.loadingHTML('Loading learner Health profile…');
     const result = await read(`/api/v1/health/profiles?student_id=${learnerId}`);
     if (!alive(generation)) return;
     if (!result.ok) { error(target, result, loadProfile); return; }
-    if (!Array.isArray(result.data) || result.data.length > 1 || result.data.some(row => row.student_id !== learnerId || !validRecord(row))) { error(target, { error: 'Unexpected profile identity.' }); return; }
+    if (!Array.isArray(result.data) || result.data.length > 1 || result.data.some(row => !validRecord(row) || row.student_id !== learnerId)) { error(target, { error: 'Unexpected profile identity.' }); return; }
     if (!result.data.length) {
       target.innerHTML = MGAEMS.emptyStateHTML('No Health profile recorded', 'Legacy medical records remain separate. No information has been automatically converted.', 'shield-check') + actions(button('Record Health profile', 'id="healthNewProfile"', true));
       byId('healthNewProfile').addEventListener('click', () => editor('profile', '/api/v1/health/profiles', null, null, loadProfile)); return;
@@ -183,6 +200,7 @@
     list(byId('healthAlertList'), path + '/alerts', 'alert', id => openRecord('alert', path + '/alerts/' + id, null, loadProfile));
   }
   async function openIncident(id) {
+    if (!current()) { deny(); return; }
     clear(); const generation = state.generation, target = byId('healthPanel');
     target.innerHTML = MGAEMS.loadingHTML('Loading restricted incident…');
     const result = await read('/api/v1/health/incidents/' + id);
@@ -200,6 +218,7 @@
     loadEntries('actions');
   }
   function loadEntries(group) {
+    if (!current()) { deny(); return; }
     state.generation++; clearModal(); const parent = state.incident;
     const type = ({ actions: 'action', notifications: 'notification', referrals: 'referral' })[group];
     const path = `/api/v1/health/incidents/${parent.id}/${group}`, target = byId('healthEntries');
@@ -225,7 +244,7 @@
       const result = await read(path + (path.includes('?') ? '&' : '?') + `page=${page + 1}&per_page=20`);
       loading = false; if (!alive(generation)) { rows = []; return; }
       if (!result.ok) { error(target, result, load); return; }
-      if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || result.data.some(row => !validId(row.id) || (type !== 'log' && !validRecord(row))
+      if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || result.meta.total < 0 || result.data.some(row => !row || typeof row !== 'object' || Array.isArray(row) || !validId(row.id) || (type !== 'log' && !validRecord(row))
         || (type === 'incident' && row.student_id !== learnerId) || (type === 'alert' && row.profile_id !== owner)
         || (['action', 'notification', 'referral'].includes(type) && row.incident_id !== owner) || (timeKey && !Number.isFinite(Date.parse(row[timeKey]))))) { rows = []; error(target, { error: 'Unexpected record list identity.' }); return; }
       page++; rows = [...new Map(rows.concat(result.data.map(row => project(type, row, true))).map(row => [row.id, row])).values()];
@@ -240,9 +259,11 @@
   function privateModal(title, body) {
     clearModal();
     const modal = MGAEMS.openModal({ title, body, onClose: () => { modal.body.innerHTML = ''; if (state.modal === modal) state.modal = null; } });
+    modal.overlay.setAttribute('class', 'modal-overlay health-dialog');
     state.modal = modal; return modal;
   }
   async function openRecord(type, path, parent, refresh) {
+    if (!current()) { deny(); return; }
     const generation = state.generation, modal = privateModal('Restricted ' + label(type), MGAEMS.loadingHTML('Loading record…'));
     const result = await read(path);
     if (!alive(generation) || modal.closed) return;
@@ -259,6 +280,7 @@
     modal.body.querySelector('button').focus();
   }
   async function history(type, path) {
+    if (!current()) { deny(); return; }
     const generation = state.generation, modal = privateModal('Restricted correction history', MGAEMS.loadingHTML('Loading immutable revisions…'));
     let page = 1;
     async function load() {
@@ -266,10 +288,11 @@
       const result = await read(path + `/revisions?page=${page}&per_page=20`);
       if (!alive(generation) || modal.closed) return;
       if (!result.ok) { error(modal.body, result, load); return; }
-      if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total)) { error(modal.body, { error: 'Unexpected revision response.' }); return; }
+      if (!Array.isArray(result.data) || !Number.isInteger(result.meta?.total) || result.meta.total < 0 || result.data.some(row => !row || typeof row !== 'object' || !Number.isInteger(row.revision_number) || row.revision_number < 1 || !row.snapshot || typeof row.snapshot !== 'object' || Array.isArray(row.snapshot))) { error(modal.body, { error: 'Unexpected revision response.' }); return; }
       modal.body.innerHTML = result.data.length ? result.data.map((row, index) => `<article class="health-record"><h3>Revision ${esc(row.revision_number)} · ${esc(label(row.change_type))}</h3><p>User #${esc(row.actor_id)} · ${esc(displayTime(row.recorded_at))}</p>${button('Inspect this revision', `data-health-revision="${index}" aria-expanded="false" aria-controls="healthSnapshot${index}"`)}<div id="healthSnapshot${index}" data-health-snapshot="${index}"></div></article>`).join('') : MGAEMS.emptyStateHTML('No revision history', 'No revisions are available.', 'history');
       modal.body.innerHTML += actions(button('Previous', `data-history-prev ${page <= 1 ? 'disabled' : ''}`) + button('Next', `data-history-next ${page * 20 >= result.meta.total ? 'disabled' : ''}`));
       modal.body.querySelectorAll('[data-health-revision]').forEach(control => control.addEventListener('click', () => {
+        if (!alive(generation)) { deny(); return; }
         const row = result.data[Number(control.dataset.healthRevision)];
         const expanded = control.getAttribute('aria-expanded') !== 'true';
         control.setAttribute('aria-expanded', String(expanded));
@@ -283,6 +306,7 @@
     load();
   }
   async function editor(type, path, record, parent, refresh, operation = 'edit') {
+    if (!current()) { deny(); return; }
     const generation = state.generation, learnerId = state.learner.id;
     const modal = privateModal((record ? 'Correct / review ' : 'Record ') + label(type), MGAEMS.loadingHTML('Preparing the restricted form…'));
     let fields = schemas[type].map(f => ({ ...f }));
@@ -296,7 +320,8 @@
       if (!alive(generation) || modal.closed) return;
       if (!result.ok) { error(modal.body, result); return; }
       if (result.data?.id !== learnerId || !Array.isArray(result.data.guardians)) { error(modal.body, { error: 'Current Guardian relationships could not be verified.' }); return; }
-      guardians = result.data.guardians.filter(g => validId(g.id)).map(g => ({ id: g.id, full_name: g.full_name, relationship: g.relationship, phone: g.phone, email: g.email }));
+      if (result.data.guardians.some(g => !g || typeof g !== 'object' || !validId(g.id))) { error(modal.body, { error: 'Current Guardian relationships could not be verified.' }); return; }
+      guardians = result.data.guardians.map(g => ({ id: g.id, full_name: g.full_name, relationship: g.relationship, phone: g.phone, email: g.email }));
       fields.find(f => f.name === 'guardian_id').choices = guardians.map(g => [g.id, `${g.full_name} · ${g.relationship}`]);
     }
     if (!alive(generation) || modal.closed) return;
@@ -359,14 +384,20 @@
       }
       if (parent) data.expected_incident_revision = parent.revision_number;
       pending = true;
-      const confirmed = await MGAEMS.confirmAction('Confirm this school Health record?', 'Verify the selected learner, actual facts and event time. This operation records a restricted revision; active alert publication makes its actionable instructions visible only within the backend Teacher scope.', 'Confirm and save');
-      if (!confirmed || !alive(generation) || modal.closed) { pending = false; if (!alive(generation)) { modal.setBusy(false); modal.body.innerHTML = ''; modal.close(); } return; }
       modal.setBusy(true);
       const disabledFields = [...form.querySelectorAll('input, select, textarea')].map(input => [input, input.disabled]);
       disabledFields.forEach(([input]) => { input.disabled = true; });
+      const confirmed = await MGAEMS.confirmAction('Confirm this school Health record?', 'Verify the selected learner, actual facts and event time. This operation records a restricted revision; active alert publication makes its actionable instructions visible only within the backend Teacher scope.', 'Confirm and save');
+      if (!confirmed || !alive(generation) || modal.closed) {
+        pending = false; modal.setBusy(false);
+        if (!current()) deny();
+        else if (!alive(generation)) { modal.body.innerHTML = ''; modal.close(); }
+        else disabledFields.forEach(([input, disabled]) => { input.disabled = disabled; });
+        return;
+      }
       const method = record && !['review', 'verify'].includes(operation) ? 'patch' : 'post';
       const result = await MGAEMS[method](path, data);
-      if ([401, 403].includes(result.status)) deny();
+      if (!current() || [401, 403].includes(result.status)) deny();
       modal.setBusy(false); pending = false;
       if (!alive(generation) || modal.closed) return;
       disabledFields.forEach(([input, disabled]) => { input.disabled = disabled; });
