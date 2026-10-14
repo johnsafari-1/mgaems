@@ -31,6 +31,7 @@ function harness(role, fail = null) {
   const responses = {
     '/api/v1/academic-years': [{ id: 1, name: '<Year>', start_date: '2026-01-01', end_date: '2026-12-31', is_current: false }],
     '/api/v1/terms': [],
+    '/api/v1/academic-events': [{ id: 1, title: '<Event>', description: '<Details>', event_type: 'academic_activity', starts_on: '2026-01-03', ends_on: '2026-01-03', academic_year: { name: '<Year>' }, term: null }],
     '/api/v1/classes': [{ id: 1, name: '<Class>', level: 'primary', sequence: 1, capacity: 30, students_count: 0, subjects_count: 0, class_teacher: { first_name: '<Teacher>', last_name: 'Name' } }],
     '/api/v1/subjects': [{ id: 1, name: '<Area>', code: '<Code>', learning_area: '<Category>', status: 'active' }],
     '/api/v1/teacher-assignments': [],
@@ -42,11 +43,13 @@ function harness(role, fail = null) {
 
 test('teacher academic view remains read-only and does not request HR/administration data', async () => {
   const h = harness('teacher'); await new Promise(resolve => setImmediate(resolve));
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 5);
   assert.equal(h.requests.some(url => /staff|teacher-assignments|timetable/.test(url)), false);
   assert.doesNotMatch(h.elements.get('appMain').innerHTML, /data-add=|data-tab="assignments"/);
   assert.match(h.elements.get('academicData_classes').innerHTML, /View offerings/);
   assert.doesNotMatch(h.elements.get('academicData_classes').innerHTML, /delete_classes|edit_classes/);
+  assert.match(h.elements.get('academicData_events').innerHTML, /&lt;Event&gt;/);
+  assert.doesNotMatch(h.elements.get('academicData_events').innerHTML, /edit_events|delete_events/);
 });
 
 test('leadership view separates offerings from term allocations and escapes API text', async () => {
@@ -59,6 +62,7 @@ test('leadership view separates offerings from term allocations and escapes API 
   assert.doesNotMatch(h.elements.get('academicData_subjects').innerHTML, /<Area>|<Category>/);
   assert.equal(h.requests.some(url => url === '/api/v1/staff'), false);
   assert.equal(h.requests.some(url => url.startsWith('/api/v1/teacher-assignments')), true);
+  assert.match(h.elements.get('academicData_events').innerHTML, /edit_events/);
 });
 
 test('one unavailable API leaves other academic sections usable', async () => {

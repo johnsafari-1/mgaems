@@ -6,11 +6,11 @@
   const esc = MGAEMS.escapeHTML;
   const canStructure = ['system_admin', 'head_teacher', 'deputy_head_teacher'].includes(user.role);
   const canCalendar = ['system_admin', 'head_teacher'].includes(user.role);
-  const state = { years: null, terms: null, classes: null, subjects: null, assignments: null, staff: null, timetable: [], timetableRequest: 0, assignmentRequest: 0, requests: {}, searches: {}, statuses: {}, failures: {} };
+  const state = { years: null, terms: null, events: null, classes: null, subjects: null, assignments: null, staff: null, timetable: [], timetableRequest: 0, assignmentRequest: 0, requests: {}, searches: {}, statuses: {}, failures: {} };
   let editorOpening = false;
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const sections = [['years', 'Academic years'], ['terms', 'Terms'], ['classes', 'Classes / Grades'], ['subjects', 'Learning Areas / Subjects'], ...(canStructure ? [['assignments', 'Subject teachers'], ['timetable', 'Timetable']] : [])];
-  const endpoints = { years: 'academic-years', terms: 'terms', classes: 'classes', subjects: 'subjects' };
+  const sections = [['years', 'Academic years'], ['terms', 'Terms'], ['events', 'Calendar events'], ['classes', 'Classes / Grades'], ['subjects', 'Learning Areas / Subjects'], ...(canStructure ? [['assignments', 'Subject teachers'], ['timetable', 'Timetable']] : [])];
+  const endpoints = { years: 'academic-years', terms: 'terms', events: 'academic-events', classes: 'classes', subjects: 'subjects' };
   const main = document.getElementById('appMain');
   const button = (action, id, label, danger = false) => `<button type="button" class="btn ${danger ? 'btn-danger' : 'btn-secondary'} btn-sm" data-action="${action}" data-id="${esc(id)}">${label}</button>`;
   const current = active => `<span class="badge ${active === true ? 'badge-green' : 'badge-gray'}">${active === true ? 'Active' : 'Inactive'}</span>`;
@@ -37,6 +37,7 @@
   const notes = {
     years: 'Active marks the saved current year. Date ranges still determine which period is ready for school workflows.',
     terms: 'Each term belongs to an academic year. Activation and historical date protections remain controlled by the school calendar.',
+    events: 'Dated school events and academic activities belong to an academic year and can optionally be linked to one of its terms.',
     classes: 'Class Teachers are responsible for a class. Offered learning areas and term-specific Subject Teachers are managed separately.',
     subjects: 'Assessable learning areas and subjects. Category / grouping is optional metadata; inactive areas remain available in historical records.',
     assignments: 'Subject Teachers are allocated to a class and learning area for a term. This does not change the Class Teacher.',
@@ -52,7 +53,7 @@
     <div class="academic-summary" id="academicSummary" aria-busy="true"><div class="academic-summary-item">${MGAEMS.loadingHTML('Loading current periods…')}</div></div>
     <div class="tabs academic-tabs" role="tablist" aria-label="Academic Management sections">${sections.map(([key, title], index) => `<button type="button" class="tab ${index === 0 ? 'active' : ''}" id="academicTab_${key}" role="tab" aria-selected="${index === 0}" aria-controls="academicPanel_${key}" tabindex="${index === 0 ? 0 : -1}" data-tab="${key}">${title}</button>`).join('')}</div>
     ${sections.map(([key, title], index) => `<section class="tab-panel ${index === 0 ? 'active' : ''}" id="academicPanel_${key}" role="tabpanel" aria-labelledby="academicTab_${key}" ${index ? 'hidden' : ''}>
-      <div class="academic-panel-heading"><div><h2>${title}</h2><p class="academic-section-note">${esc(notes[key])}</p></div>${(key === 'years' || key === 'terms' ? canCalendar : canStructure) ? `<button type="button" class="btn btn-primary btn-sm" id="add_${key}" data-add="${key}" disabled><i data-lucide="plus" aria-hidden="true"></i>Add ${key === 'years' ? 'year' : key === 'terms' ? 'term' : key === 'classes' ? 'class' : key === 'subjects' ? 'learning area' : key === 'assignments' ? 'subject teacher' : 'timetable entry'}</button>` : ''}</div>
+      <div class="academic-panel-heading"><div><h2>${title}</h2><p class="academic-section-note">${esc(notes[key])}</p></div>${(['years', 'terms', 'events'].includes(key) ? canCalendar : canStructure) ? `<button type="button" class="btn btn-primary btn-sm" id="add_${key}" data-add="${key}" disabled><i data-lucide="plus" aria-hidden="true"></i>Add ${key === 'years' ? 'year' : key === 'terms' ? 'term' : key === 'events' ? 'event' : key === 'classes' ? 'class' : key === 'subjects' ? 'learning area' : key === 'assignments' ? 'subject teacher' : 'timetable entry'}</button>` : ''}</div>
       ${filters(key)}<p class="academic-result-count" id="academicCount_${key}" role="status"></p>
       <div id="academicData_${key}" aria-busy="true">${MGAEMS.loadingHTML('Loading ' + title.toLowerCase() + '…')}</div></section>`).join('')}`;
 
@@ -105,9 +106,9 @@
     }
     populate('assignmentTerm', state.terms, 'All terms', term => `${term.name} · ${term.academic_year?.name || ''}`);
     populate('assignmentClass', state.classes, 'All classes'); populate('timetableClass', state.classes, 'Select a class…');
-    ['years', 'terms', 'classes', 'subjects', 'assignments', 'timetable'].forEach(key => {
+    ['years', 'terms', 'events', 'classes', 'subjects', 'assignments', 'timetable'].forEach(key => {
       const control = document.getElementById('add_' + key); if (!control) return;
-      control.disabled = key === 'terms' ? !state.years?.length : key === 'assignments' ? !state.classes?.length || !state.subjects || !state.terms?.length : key === 'timetable' ? !state.classes?.length || !document.getElementById('timetableClass').value : !state[key];
+      control.disabled = key === 'terms' || key === 'events' ? !state.years?.length : key === 'assignments' ? !state.classes?.length || !state.subjects || !state.terms?.length : key === 'timetable' ? !state.classes?.length || !document.getElementById('timetableClass').value : !state[key];
     });
   }
   async function load(key) {
@@ -123,7 +124,7 @@
     const all = state[key];
     const query = state.searches[key] || '';
     const status = state.statuses[key] || '';
-    const searchable = item => key === 'classes' ? [item.name, item.level, item.class_teacher?.first_name, item.class_teacher?.last_name] : key === 'subjects' ? [item.name, item.code, item.learning_area] : [item.name, item.academic_year?.name, dateValue(item.start_date), dateValue(item.end_date)];
+    const searchable = item => key === 'classes' ? [item.name, item.level, item.class_teacher?.first_name, item.class_teacher?.last_name] : key === 'subjects' ? [item.name, item.code, item.learning_area] : key === 'events' ? [item.title, item.description, item.event_type, item.academic_year?.name, item.term?.name, dateValue(item.starts_on), dateValue(item.ends_on)] : [item.name, item.academic_year?.name, dateValue(item.start_date), dateValue(item.end_date)];
     const items = all.filter(item => (!query || searchable(item).filter(Boolean).join(' ').toLowerCase().includes(query)) && (!status || (key === 'subjects' ? item.status : item.is_current === true ? 'active' : 'inactive') === status));
     document.getElementById('academicCount_' + key).textContent = `${items.length} of ${all.length} records`;
     if (!items.length) { showData(key, MGAEMS.emptyStateHTML(all.length ? 'No matching records' : 'No ' + sections.find(item => item[0] === key)[1].toLowerCase() + ' configured', all.length ? 'Try another search or status filter.' : 'School configuration will appear here when it is available.', 'book-open')); return; }
@@ -132,6 +133,9 @@
       cards = items.map(item => `<article class="academic-record-card"><div class="academic-record-title"><h3>${esc(item.name)}</h3>${current(item.is_current)}</div><dl class="academic-record-meta">${detail('Start date', date(item.start_date))}${detail('End date', date(item.end_date))}</dl>${canCalendar ? `<div class="academic-card-actions">${button('edit_years', item.id, 'Edit year')}${!item.is_current ? button('activate_years', item.id, 'Activate') + button('delete_years', item.id, 'Delete', true) : ''}</div>` : ''}</article>`);
     } else if (key === 'terms') {
       cards = items.map(item => `<article class="academic-record-card"><div class="academic-record-title"><h3>${esc(item.name)}</h3>${current(item.is_current)}</div><dl class="academic-record-meta">${detail('Academic year', esc(item.academic_year?.name || 'Not available'))}${detail('Start date', date(item.start_date))}${detail('End date', date(item.end_date))}</dl>${canCalendar ? `<div class="academic-card-actions">${button('edit_terms', item.id, 'Edit term')}${!item.is_current ? button('activate_terms', item.id, 'Activate') + button('delete_terms', item.id, 'Delete', true) : ''}</div>` : ''}</article>`);
+    } else if (key === 'events') {
+      const labels = { academic_activity: 'Academic activity', assessment: 'Assessment', meeting: 'Meeting', closure: 'Closure', school_event: 'School event' };
+      cards = items.map(item => `<article class="academic-record-card"><div class="academic-record-title"><h3>${esc(item.title)}</h3><span class="badge badge-navy">${esc(labels[item.event_type] || 'School event')}</span></div><dl class="academic-record-meta">${detail('Date', date(item.starts_on) + (dateValue(item.starts_on) === dateValue(item.ends_on) ? '' : ' to ' + date(item.ends_on)))}${detail('Academic year', esc(item.academic_year?.name || 'Not available'))}${detail('Term', esc(item.term?.name || 'All-year event'))}${item.description ? detail('Details', esc(item.description)) : ''}</dl>${canCalendar ? `<div class="academic-card-actions">${button('edit_events', item.id, 'Edit event')}${button('delete_events', item.id, 'Delete', true)}</div>` : ''}</article>`);
     } else if (key === 'classes') {
       cards = items.map(item => `<article class="academic-record-card"><div class="academic-record-title"><h3>${esc(item.name)}</h3><span class="badge badge-navy">${esc(({ primary: 'Primary', junior: 'Junior' })[item.level] || item.level || 'Not available')}</span></div><dl class="academic-record-meta">${detail('Capacity', item.capacity === null ? 'Not set' : count(item.capacity))}${detail('Learner count', count(item.students_count))}${detail('Class Teacher', Object.hasOwn(item, 'class_teacher') ? name(item.class_teacher) : 'Not available')}${detail('Subject offerings', count(item.subjects_count))}${detail('Display order', count(item.sequence))}</dl><div class="academic-card-actions">${button('offerings', item.id, canStructure ? 'Manage offerings' : 'View offerings')}${canStructure ? button('edit_classes', item.id, 'Edit class') + button('delete_classes', item.id, 'Delete', true) : ''}</div></article>`);
     } else {
@@ -204,7 +208,7 @@
     return modal;
   }
   async function openEditor(key, item, trigger) {
-    if ((key === 'years' || key === 'terms') ? !canCalendar : !canStructure) return;
+    if (['years', 'terms', 'events'].includes(key) ? !canCalendar : !canStructure) return;
     if (editorOpening) return;
     editorOpening = true;
     try {
@@ -214,6 +218,11 @@
         if (key === 'terms' && !state.years?.length) { MGAEMS.toast('Configure an academic year first.', 'error'); return; }
         fields = group('Period details', (key === 'terms' ? select('academic_year_id', 'Academic year', options(state.years, item?.academic_year_id, year => `${year.name} · ${dateValue(year.start_date)} to ${dateValue(year.end_date)}`)) : '') + input('name', key === 'years' ? 'Year name' : 'Term name', item?.name, 'text', true, 'maxlength="20"')) + group('Date range', input('start_date', 'Start date', dateValue(item?.start_date), 'date') + input('end_date', 'End date', dateValue(item?.end_date), 'date'));
         note = key === 'terms' ? 'Term dates must fit within the owning year without overlapping sibling terms. Recorded historical term dates are protected.' : 'Dates must continue to contain all existing terms.';
+      } else if (key === 'events') {
+        if (!state.years?.length) { MGAEMS.toast('Configure an academic year first.', 'error'); return; }
+        const types = [{ id: 'academic_activity', name: 'Academic activity' }, { id: 'assessment', name: 'Assessment' }, { id: 'meeting', name: 'Meeting' }, { id: 'closure', name: 'Closure' }, { id: 'school_event', name: 'School event' }];
+        fields = group('Event details', input('title', 'Event title', item?.title, 'text', true, 'maxlength="160"') + select('event_type', 'Event type', options(types, item?.event_type)) + select('academic_year_id', 'Academic year', options(state.years, item?.academic_year_id, year => year.name)) + select('term_id', 'Term context', options(state.terms || [], item?.term_id, term => `${term.name} · ${term.academic_year?.name || ''}`, 'No specific term'), false)) + group('Date range', input('starts_on', 'Start date', dateValue(item?.starts_on), 'date') + input('ends_on', 'End date', dateValue(item?.ends_on), 'date')) + group('Additional details', '<div class="field full"><label for="academic_description">Details</label><textarea id="academic_description" name="description" maxlength="4000">' + esc(item?.description || '') + '</textarea></div>');
+        note = 'Events are dated school activities. This form does not create recurring timetable lessons or verify curriculum content.';
       } else if (key === 'classes') {
         fields = group('Class details', input('name', 'Class / Grade name', item?.name, 'text', true, 'maxlength="30"') + select('level', 'Level', options([{ id: 'primary', name: 'Primary' }, { id: 'junior', name: 'Junior' }], item?.level)) + input('sequence', 'Display order', item?.sequence, 'number', true, 'min="1" max="255" step="1"') + input('capacity', 'Capacity', item?.capacity, 'number', false, 'min="1" max="500" step="1"'));
         const teachers = [...state.staff];
@@ -245,6 +254,11 @@
             const year = state.years?.find(year => String(year.id) === String(item?.academic_year_id || payload.academic_year_id));
             if (year && (payload.start_date < dateValue(year.start_date) || payload.end_date > dateValue(year.end_date))) fields.start_date = ['Term dates must fall within their academic year.'];
           }
+        }
+        if (key === 'events' && payload.starts_on > payload.ends_on) fields.ends_on = ['The end date must be on or after the start date.'];
+        if (key === 'events') {
+          const term = state.terms?.find(term => String(term.id) === String(payload.term_id));
+          if (term && String(term.academic_year_id) !== String(payload.academic_year_id)) fields.term_id = ['Choose a term from the selected academic year.'];
         }
         if (key === 'timetable' && payload.end_time <= payload.start_time) fields.end_time = ['The end time must be after the start time.'];
         return fields;
@@ -315,14 +329,14 @@
   async function handleAction(action, id, control) {
     if (action === 'offerings') { const item = state.classes?.find(item => String(item.id) === id); if (item) openOfferings(item, control); return; }
     const [operation, key] = action.split('_');
-    if ((key === 'years' || key === 'terms') ? !canCalendar : !canStructure) return;
+    if (['years', 'terms', 'events'].includes(key) ? !canCalendar : !canStructure) return;
     const item = (state[key] || []).find(item => String(item.id) === id);
     if (!item) return;
     if (operation === 'edit') { openEditor(key, item, control); return; }
     control.disabled = true;
     const path = '/api/v1/' + (endpoints[key] || (key === 'assignments' ? 'teacher-assignments' : 'timetable')) + '/' + encodeURIComponent(id);
     const title = operation === 'activate' ? 'Activate academic period' : operation === 'status' ? 'Change learning area status' : 'Remove academic record';
-    const message = operation === 'activate' ? (key === 'terms' ? 'Activate this term and its owning academic year? Other current-period flags will be cleared.' : 'Activate this year? A current term from another year will be cleared.') : operation === 'status' ? (item.status === 'active' ? 'Retire this learning area? New offerings, allocations, and lessons will be blocked; existing records are retained.' : 'Reactivate this learning area for new academic configuration?') : 'Remove this unused academic record? Referenced learner, teaching, and assessment history will block unsafe deletion.';
+    const message = operation === 'activate' ? (key === 'terms' ? 'Activate this term and its owning academic year? Other current-period flags will be cleared.' : 'Activate this year? A current term from another year will be cleared.') : operation === 'status' ? (item.status === 'active' ? 'Retire this learning area? New offerings, allocations, and lessons will be blocked; existing records are retained.' : 'Reactivate this learning area for new academic configuration?') : key === 'events' ? 'Delete this calendar event? This does not change academic years, terms, or timetable lessons.' : 'Remove this unused academic record? Referenced learner, teaching, and assessment history will block unsafe deletion.';
     if (!await MGAEMS.confirmAction(title, message, operation === 'delete' ? 'Remove record' : 'Confirm')) { control.disabled = false; control.focus(); return; }
     const result = operation === 'activate' ? await MGAEMS.post(path + '/activate', {}) : operation === 'status' ? await MGAEMS.patch(path, { status: item.status === 'active' ? 'inactive' : 'active' }) : await MGAEMS.del(path);
     control.disabled = false;
@@ -330,7 +344,7 @@
     MGAEMS.toast('Academic configuration updated.', 'success'); refresh();
   }
   async function refresh() {
-    await Promise.all(['years', 'terms', 'classes', 'subjects'].map(load));
+    await Promise.all(['years', 'terms', 'events', 'classes', 'subjects'].map(load));
     if (canStructure) { loadAssignments(); loadTimetable(); }
     if (typeof loadShellContext === 'function') loadShellContext();
   }

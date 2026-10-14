@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AcademicCalendarController;
+use App\Http\Controllers\Api\AcademicEventController;
 use App\Http\Controllers\Api\AcademicStructureController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AssessmentController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\ReportingController;
 use App\Http\Controllers\Api\SchoolSettingController;
+use App\Http\Controllers\Api\SchemeOfWorkController;
 use App\Http\Controllers\Api\SponsorController;
 use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
@@ -107,6 +109,7 @@ Route::prefix('v1')->group(function () {
         // --- Academic Calendar: Years & Terms (SRS FR-ACAD-01) ---
         Route::get('/academic-years', [AcademicCalendarController::class, 'indexYears']);
         Route::get('/terms', [AcademicCalendarController::class, 'indexTerms']);
+        Route::get('/academic-events', [AcademicEventController::class, 'index']);
 
         Route::middleware('role:system_admin,head_teacher')->group(function () {
             Route::post('/academic-years', [AcademicCalendarController::class, 'storeYear']);
@@ -118,7 +121,25 @@ Route::prefix('v1')->group(function () {
             Route::patch('/terms/{term}', [AcademicCalendarController::class, 'updateTerm']);
             Route::post('/terms/{term}/activate', [AcademicCalendarController::class, 'activateTerm']);
             Route::delete('/terms/{term}', [AcademicCalendarController::class, 'destroyTerm']);
+            Route::post('/academic-events', [AcademicEventController::class, 'store']);
+            Route::patch('/academic-events/{academicEvent}', [AcademicEventController::class, 'update']);
+            Route::delete('/academic-events/{academicEvent}', [AcademicEventController::class, 'destroy']);
         });
+
+        // --- Teaching & Learning: Schemes of Work ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/schemes-of-work/context', [SchemeOfWorkController::class, 'context']);
+            Route::get('/schemes-of-work', [SchemeOfWorkController::class, 'index']);
+            Route::get('/schemes-of-work/{schemeOfWork}', [SchemeOfWorkController::class, 'show']);
+            Route::post('/schemes-of-work', [SchemeOfWorkController::class, 'store']);
+            Route::patch('/schemes-of-work/{schemeOfWork}', [SchemeOfWorkController::class, 'update']);
+            Route::post('/schemes-of-work/{schemeOfWork}/weeks', [SchemeOfWorkController::class, 'storeWeek']);
+            Route::patch('/schemes-of-work/{schemeOfWork}/weeks/{week}', [SchemeOfWorkController::class, 'updateWeek']);
+            Route::delete('/schemes-of-work/{schemeOfWork}/weeks/{week}', [SchemeOfWorkController::class, 'destroyWeek']);
+            Route::post('/schemes-of-work/{schemeOfWork}/submit', [SchemeOfWorkController::class, 'submit']);
+        });
+        Route::post('/schemes-of-work/{schemeOfWork}/review', [SchemeOfWorkController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
 
         // --- Academic Management: Classes, Subjects (SRS FR-ACAD-02/03) ---
         // Coordinator operations use minimal sponsorship references, not school academics.

@@ -105,6 +105,8 @@ Schema::create('audit_logs', function (Blueprint $table) {
 
 // Exercise the additive history migration only against these explicit memory fixtures.
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_06_000035_add_assessment_and_report_history.php')->up();
+// The teaching-workspace migration is exercised only against this explicit memory schema.
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000038_create_teaching_learning_workspace.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {

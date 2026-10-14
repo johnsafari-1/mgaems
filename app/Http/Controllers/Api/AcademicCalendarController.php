@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\AcademicYear;
+use App\Models\AcademicEvent;
 use App\Models\Assessment;
 use App\Models\ClassSubjectTeacher;
 use App\Models\PromotionTransfer;
@@ -45,8 +46,9 @@ class AcademicCalendarController extends Controller
         return $this->integrity->transaction(function () use ($validated, $academicYear, $auditLogger) {
             $year = AcademicYear::whereKey($academicYear->id)->lockForUpdate()->firstOrFail();
             $dates = $this->dateRange($validated['start_date'] ?? $year->start_date->toDateString(), $validated['end_date'] ?? $year->end_date->toDateString());
-            if ($year->terms()->where(fn ($query) => $query->where('start_date', '<', $dates['start_date'])->orWhere('end_date', '>', $dates['end_date']))->exists()) {
-                throw ValidationException::withMessages(['start_date' => 'The year must continue to contain all of its existing terms.']);
+            if ($year->terms()->where(fn ($query) => $query->where('start_date', '<', $dates['start_date'])->orWhere('end_date', '>', $dates['end_date']))->exists()
+                || $year->academicEvents()->where(fn ($query) => $query->where('starts_on', '<', $dates['start_date'])->orWhere('ends_on', '>', $dates['end_date']))->exists()) {
+                throw ValidationException::withMessages(['start_date' => 'The year must continue to contain all of its existing terms and calendar events.']);
             }
             $year->update(array_replace($validated, $dates));
             $auditLogger->log('UPDATE_ACADEMIC_YEAR', 'AcademicYear', $year->id, $validated);
@@ -83,7 +85,7 @@ class AcademicCalendarController extends Controller
         return $this->integrity->transaction(function () use ($academicYear, $auditLogger) {
             $year = AcademicYear::whereKey($academicYear->id)->lockForUpdate()->firstOrFail();
             if ($year->is_current) return $this->integrity->conflict('YEAR_CURRENT', 'Activate another academic year before deleting the current year.');
-            if ($year->terms()->exists()) return $this->integrity->conflict('YEAR_HAS_TERMS', 'This year has terms. Preserve its historical periods; remove only unused terms first.');
+            if ($year->terms()->exists() || $year->academicEvents()->exists()) return $this->integrity->conflict('YEAR_IN_USE', 'This year has terms or calendar events. Preserve its historical periods before deletion.');
             $year->delete();
             $auditLogger->log('DELETE_ACADEMIC_YEAR', 'AcademicYear', $year->id);
 
@@ -129,6 +131,9 @@ class AcademicCalendarController extends Controller
             $changedDates = $dates['start_date'] !== $term->start_date->toDateString() || $dates['end_date'] !== $term->end_date->toDateString();
             if ($changedDates && $this->termHasHistory($term->id)) {
                 throw ValidationException::withMessages(['start_date' => 'Dates of a term with recorded assessments, report cards, or learner history cannot be changed.']);
+            }
+            if ($changedDates && $term->academicEvents()->where(fn ($query) => $query->where('starts_on', '<', $dates['start_date'])->orWhere('ends_on', '>', $dates['end_date']))->exists()) {
+                throw ValidationException::withMessages(['start_date' => 'The term must continue to contain all of its calendar events.']);
             }
             $this->assertTermRange($year, $dates, $term->id);
             if (isset($validated['name']) && Term::where('academic_year_id', $year->id)->where('name', $validated['name'])->where('id', '!=', $term->id)->exists()) {
@@ -177,8 +182,8 @@ class AcademicCalendarController extends Controller
             AcademicYear::whereKey($term->academic_year_id)->lockForUpdate()->firstOrFail();
             $term = Term::whereKey($term->id)->lockForUpdate()->firstOrFail();
             if ($term->is_current) return $this->integrity->conflict('TERM_CURRENT', 'Activate another term before deleting the current term.');
-            if ($this->termHasHistory($term->id) || ClassSubjectTeacher::where('term_id', $term->id)->exists()) {
-                return $this->integrity->conflict('TERM_IN_USE', 'This term has teacher assignments, assessments, report cards, or learner history and cannot be deleted.');
+            if ($this->termHasHistory($term->id) || ClassSubjectTeacher::where('term_id', $term->id)->exists() || $term->academicEvents()->exists()) {
+                return $this->integrity->conflict('TERM_IN_USE', 'This term has teacher assignments, calendar events, assessments, report cards, or learner history and cannot be deleted.');
             }
             $term->delete();
             $auditLogger->log('DELETE_TERM', 'Term', $term->id);

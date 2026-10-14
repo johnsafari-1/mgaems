@@ -130,10 +130,10 @@ test('Health API reads and writes explicitly bypass the browser cache', async ()
 });
 
 const roleDestinations = {
-  system_admin: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
-  head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare', 'administration'],
-  deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare'],
-  teacher: ['dashboard', 'students', 'teacher-timetable', 'attendance', 'assessment', 'communication'],
+  system_admin: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
+  head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare', 'administration'],
+  deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare'],
+  teacher: ['dashboard', 'students', 'teacher-timetable', 'schemes-of-work', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'dashboard', 'communication', 'visitors'],
   parent_guardian: ['parent-portal'],
   sponsor: ['sponsor-portal'],

@@ -20,4 +20,9 @@ class AcademicYear extends Model
     {
         return $this->hasMany(Term::class);
     }
+
+    public function academicEvents()
+    {
+        return $this->hasMany(AcademicEvent::class);
+    }
 }

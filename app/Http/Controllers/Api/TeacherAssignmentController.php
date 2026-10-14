@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSubjectTeacher;
+use App\Models\SchemeOfWork;
 use App\Models\Term;
 use App\Models\TimetableEntry;
 use App\Services\AcademicIntegrity;
@@ -70,8 +71,9 @@ class TeacherAssignmentController extends Controller
             Term::whereKey($classSubjectTeacher->term_id)->lockForUpdate()->firstOrFail();
             $assignment = ClassSubjectTeacher::whereKey($classSubjectTeacher->id)->lockForUpdate()->firstOrFail();
             if ($this->integrity->hasAssessments((int) $assignment->class_id, (int) $assignment->subject_id, (int) $assignment->term_id)
-                || TimetableEntry::where('class_id', $assignment->class_id)->where('subject_id', $assignment->subject_id)->where('staff_id', $assignment->staff_id)->exists()) {
-                return $this->integrity->conflict('ASSIGNMENT_IN_USE', 'This assignment has assessment history or recurring timetable entries. Preserve historical teacher authorization and resolve timetable dependencies first.');
+                || TimetableEntry::where('class_id', $assignment->class_id)->where('subject_id', $assignment->subject_id)->where('staff_id', $assignment->staff_id)->exists()
+                || SchemeOfWork::where('class_subject_teacher_id', $assignment->id)->exists()) {
+                return $this->integrity->conflict('ASSIGNMENT_IN_USE', 'This assignment has a scheme of work, assessment history, or recurring timetable entries. Preserve historical teaching authorization and resolve dependencies first.');
             }
             $assignment->delete();
             $auditLogger->log('DELETE_TEACHER_ASSIGNMENT', 'ClassSubjectTeacher', $assignment->id);

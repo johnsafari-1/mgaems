@@ -192,7 +192,7 @@ test('malformed collection responses finish loading with an error instead of fab
 
 test('academic reference views retain teacher restrictions and do not fetch staff or assignment APIs', async () => {
   const h = harness({ role: 'teacher' }).start(); await settle();
-  assert.equal(h.requests.length, 4);
+  assert.equal(h.requests.length, 5);
   assert.equal(h.requests.some(url => /staff|teacher-assignments|timetable/.test(url)), false);
   assert.equal(h.ids.has('assignmentTerm'), false);
   assert.equal(h.ids.has('add_classes'), false);

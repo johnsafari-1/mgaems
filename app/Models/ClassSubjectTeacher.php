@@ -29,4 +29,9 @@ class ClassSubjectTeacher extends Model
     {
         return $this->belongsTo(Term::class);
     }
+
+    public function schemeOfWork()
+    {
+        return $this->hasOne(SchemeOfWork::class, 'class_subject_teacher_id');
+    }
 }
