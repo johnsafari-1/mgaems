@@ -11,9 +11,11 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\GuardianController;
+use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\RecordOfWorkController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\ReportingController;
 use App\Http\Controllers\Api\SchoolSettingController;
@@ -139,6 +141,30 @@ Route::prefix('v1')->group(function () {
             Route::post('/schemes-of-work/{schemeOfWork}/submit', [SchemeOfWorkController::class, 'submit']);
         });
         Route::post('/schemes-of-work/{schemeOfWork}/review', [SchemeOfWorkController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+
+        // --- Teaching & Learning: Lesson Plans and Records of Work ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/lesson-plans/context', [LessonPlanController::class, 'context']);
+            Route::get('/lesson-plans', [LessonPlanController::class, 'index']);
+            Route::get('/lesson-plans/{lessonPlan}', [LessonPlanController::class, 'show']);
+            Route::get('/lesson-plans/{lessonPlan}/pdf', [LessonPlanController::class, 'pdf']);
+            Route::post('/lesson-plans', [LessonPlanController::class, 'store']);
+            Route::patch('/lesson-plans/{lessonPlan}', [LessonPlanController::class, 'update']);
+            Route::post('/lesson-plans/{lessonPlan}/duplicate', [LessonPlanController::class, 'duplicate']);
+            Route::post('/lesson-plans/{lessonPlan}/submit', [LessonPlanController::class, 'submit']);
+
+            Route::get('/records-of-work/context', [RecordOfWorkController::class, 'context']);
+            Route::get('/records-of-work', [RecordOfWorkController::class, 'index']);
+            Route::get('/records-of-work/{recordOfWork}', [RecordOfWorkController::class, 'show']);
+            Route::get('/records-of-work/{recordOfWork}/pdf', [RecordOfWorkController::class, 'pdf']);
+            Route::post('/records-of-work', [RecordOfWorkController::class, 'store']);
+            Route::patch('/records-of-work/{recordOfWork}', [RecordOfWorkController::class, 'update']);
+            Route::post('/records-of-work/{recordOfWork}/submit', [RecordOfWorkController::class, 'submit']);
+        });
+        Route::post('/lesson-plans/{lessonPlan}/review', [LessonPlanController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+        Route::post('/records-of-work/{recordOfWork}/review', [RecordOfWorkController::class, 'review'])
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
 
         // --- Academic Management: Classes, Subjects (SRS FR-ACAD-02/03) ---

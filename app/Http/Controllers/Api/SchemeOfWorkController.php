@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSubjectTeacher;
+use App\Models\LessonPlan;
 use App\Models\SchemeOfWork;
 use App\Models\SchemeOfWorkWeek;
 use App\Services\AuditLogger;
-use App\Services\SchemeOfWorkAccess;
+use App\Services\TeachingDocumentAccess;
+use App\Services\TeachingDocumentData;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,12 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 class SchemeOfWorkController extends Controller
 {
-    private const ASSIGNMENT_RELATIONS = [
-        'schoolClass:id,name,level', 'subject:id,name,code,learning_area,status', 'staff:id,first_name,last_name',
-        'term:id,academic_year_id,name,start_date,end_date,is_current', 'term.academicYear:id,name',
-    ];
+    private const ASSIGNMENT_RELATIONS = TeachingDocumentData::ASSIGNMENT_RELATIONS;
 
-    public function __construct(private SchemeOfWorkAccess $access)
+    public function __construct(private TeachingDocumentAccess $access, private TeachingDocumentData $data)
     {
     }
 
@@ -46,7 +45,7 @@ class SchemeOfWorkController extends Controller
             'class_id' => ['sometimes', 'integer', 'exists:classes,id'],
             'status' => ['sometimes', Rule::in(['draft', 'submitted', 'returned', 'approved'])],
         ]);
-        $schemes = $this->access->readable($user);
+        $schemes = $this->access->readable($user, SchemeOfWork::class);
         $schemes->with(self::schemeRelations())
             ->when($filters['term_id'] ?? null, fn ($query, $id) => $query->whereHas('assignment', fn ($assignment) => $assignment->where('term_id', $id)))
             ->when($filters['class_id'] ?? null, fn ($query, $id) => $query->whereHas('assignment', fn ($assignment) => $assignment->where('class_id', $id)))
@@ -58,7 +57,7 @@ class SchemeOfWorkController extends Controller
     public function show(Request $request, SchemeOfWork $schemeOfWork)
     {
         $user = $this->access->user($request->user());
-        $scheme = $this->access->scheme($user, $schemeOfWork->id)->load(self::schemeRelations(), 'weeks');
+        $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id)->load(self::schemeRelations(), 'weeks');
 
         return response()->json(['data' => $this->schemeData($scheme, true)]);
     }
@@ -93,7 +92,7 @@ class SchemeOfWorkController extends Controller
 
         return DB::transaction(function () use ($request, $validated, $schemeOfWork, $auditLogger) {
             $user = $this->access->user($request->user(), true);
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true);
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true);
             $this->assertEditable($scheme);
             $scheme->update($validated);
             $auditLogger->log('UPDATE_SCHEME_OF_WORK', 'SchemeOfWork', $scheme->id, array_keys($validated));
@@ -108,7 +107,7 @@ class SchemeOfWorkController extends Controller
 
         return DB::transaction(function () use ($request, $validated, $schemeOfWork, $auditLogger) {
             $user = $this->access->user($request->user(), true);
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true)->load('assignment.term');
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true)->load('assignment.term');
             $this->assertEditable($scheme);
             $values = $this->weekDates($scheme, $validated);
             if ($scheme->weeks()->where('week_number', $values['week_number'])->lockForUpdate()->exists()) {
@@ -127,7 +126,7 @@ class SchemeOfWorkController extends Controller
 
         return DB::transaction(function () use ($request, $validated, $schemeOfWork, $week, $auditLogger) {
             $user = $this->access->user($request->user(), true);
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true)->load('assignment.term');
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true)->load('assignment.term');
             abort_unless((int) $week->scheme_of_work_id === (int) $scheme->id, 404);
             $this->assertEditable($scheme);
             $week = SchemeOfWorkWeek::whereKey($week->id)->lockForUpdate()->firstOrFail();
@@ -146,10 +145,15 @@ class SchemeOfWorkController extends Controller
     {
         return DB::transaction(function () use ($request, $schemeOfWork, $week, $auditLogger) {
             $user = $this->access->user($request->user(), true);
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true);
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true);
             abort_unless((int) $week->scheme_of_work_id === (int) $scheme->id, 404);
             $this->assertEditable($scheme);
             $week = SchemeOfWorkWeek::whereKey($week->id)->lockForUpdate()->firstOrFail();
+            // A planned lesson keeps its link to this weekly entry; deleting the
+            // entry would silently discard teaching history.
+            if (LessonPlan::where('scheme_of_work_week_id', $week->id)->exists()) {
+                return $this->conflict('WEEK_IN_USE', 'A lesson plan is linked to this weekly plan. Remove or re-link that lesson plan before deleting the week.');
+            }
             $week->delete();
             $auditLogger->log('DELETE_SCHEME_OF_WORK_WEEK', 'SchemeOfWorkWeek', $week->id, ['scheme_of_work_id' => $scheme->id]);
 
@@ -162,7 +166,7 @@ class SchemeOfWorkController extends Controller
         return DB::transaction(function () use ($request, $schemeOfWork, $auditLogger) {
             $user = $this->access->user($request->user(), true);
             abort_unless(! $this->access->leader($user), 403, 'Only the assigned teacher can submit a scheme for review.');
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true);
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true);
             abort_unless(in_array($scheme->status, ['draft', 'returned'], true), 409, 'Only draft or returned schemes can be submitted.');
             if (! $scheme->weeks()->lockForUpdate()->exists()) {
                 throw ValidationException::withMessages(['weeks' => 'Add at least one complete weekly plan before submitting for review.']);
@@ -184,7 +188,7 @@ class SchemeOfWorkController extends Controller
         return DB::transaction(function () use ($request, $validated, $schemeOfWork, $auditLogger) {
             $user = $this->access->user($request->user(), true);
             abort_unless($this->access->leader($user), 403, 'Scheme reviews require school leadership.');
-            $scheme = $this->access->scheme($user, $schemeOfWork->id, true);
+            $scheme = $this->access->document($user, SchemeOfWork::class, $schemeOfWork->id, true);
             abort_unless($scheme->status === 'submitted', 409, 'Only submitted schemes can be reviewed.');
             $scheme->update([
                 'status' => $validated['action'],
@@ -200,11 +204,7 @@ class SchemeOfWorkController extends Controller
 
     private static function schemeRelations(): array
     {
-        return [
-            'assignment.schoolClass:id,name,level', 'assignment.subject:id,name,code,learning_area,status',
-            'assignment.staff:id,first_name,last_name', 'assignment.term:id,academic_year_id,name,start_date,end_date,is_current',
-            'assignment.term.academicYear:id,name',
-        ];
+        return TeachingDocumentData::SCHEME_RELATIONS;
     }
 
     private function assertEditable(SchemeOfWork $scheme): void
@@ -263,16 +263,7 @@ class SchemeOfWorkController extends Controller
 
     private function assignmentData(ClassSubjectTeacher $assignment): array
     {
-        return [
-            'id' => $assignment->id,
-            'class_id' => $assignment->class_id,
-            'subject_id' => $assignment->subject_id,
-            'term_id' => $assignment->term_id,
-            'school_class' => $assignment->schoolClass?->only(['id', 'name', 'level']),
-            'subject' => $assignment->subject?->only(['id', 'name', 'code', 'learning_area', 'status']),
-            'staff' => $assignment->staff?->only(['id', 'first_name', 'last_name']),
-            'term' => $assignment->term,
-        ];
+        return $this->data->assignment($assignment);
     }
 
     private function schemeData(SchemeOfWork $scheme, bool $detail = false): array

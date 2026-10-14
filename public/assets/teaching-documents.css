@@ -1,0 +1,40 @@
+/* Lesson Plans and Records of Work share this teaching-document workspace styling. */
+.lesson-plans-workspace, .records-workspace { min-width: 0; }
+.lesson-plans-heading, .records-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
+.lesson-plans-heading h1, .records-heading h1 { font-size: var(--text-2xl); margin: var(--space-1) 0 0; }
+.lesson-plans-heading p, .records-heading p { color: var(--gray-500); max-width: 76ch; margin: var(--space-2) 0 0; }
+.lesson-plans-notice, .records-notice { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border-left: 3px solid var(--teal); background: var(--gray-50); color: var(--gray-700); }
+.lesson-plans-toolbar, .records-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; padding: var(--space-4); margin-bottom: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); }
+.lesson-plans-toolbar .field, .records-toolbar .field { flex: 1 1 200px; margin: 0; }
+.lesson-plans-toolbar input, .lesson-plans-toolbar select, .records-toolbar input, .records-toolbar select { min-height: var(--touch-target); }
+.plan-grid, .record-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-4); }
+.plan-card, .record-card, .plan-detail, .record-detail { min-width: 0; overflow-wrap: anywhere; padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); }
+.plan-card, .record-card { display: flex; flex-direction: column; gap: var(--space-3); }
+.plan-card-heading, .record-card-heading, .plan-detail-heading, .record-detail-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.plan-card h2, .record-card h2, .plan-detail h2, .record-detail h2 { color: var(--navy); font-size: var(--text-lg); line-height: 1.35; }
+.plan-meta, .record-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.plan-meta > div, .record-meta > div { min-width: 0; }
+.plan-meta dt, .record-meta dt { color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+.plan-meta dd, .record-meta dd { color: var(--gray-900); font-weight: 600; margin: 0; }
+.plan-actions, .record-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--gray-200); }
+.plan-actions .btn, .record-actions .btn { min-height: var(--touch-target); }
+.plan-sections, .record-sections { display: grid; gap: var(--space-3); margin: var(--space-4) 0 0; }
+.plan-section, .record-section { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-3) var(--space-4); background: var(--gray-50); min-width: 0; }
+.plan-section h3, .record-section h3 { color: var(--navy); font-size: var(--text-sm); text-transform: uppercase; letter-spacing: 0.04em; margin: 0 0 var(--space-2); }
+.plan-section p, .record-section p { margin: 0; white-space: pre-wrap; color: var(--gray-900); }
+.plan-reference, .record-reference { color: var(--gray-500); font-size: var(--text-sm); margin: var(--space-3) 0 0; }
+.plan-review, .record-review { margin: var(--space-4) 0 0; padding: var(--space-3); background: var(--gray-50); border-left: 3px solid var(--navy-light); white-space: pre-wrap; }
+.plan-detail[hidden], .record-detail[hidden] { display: none; }
+.plan-dialog .form-grid, .record-dialog .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.plan-dialog textarea, .record-dialog textarea { min-height: 100px; }
+.plan-dialog .full, .record-dialog .full { grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .plan-meta, .record-meta { grid-template-columns: 1fr; }
+}
+@media (max-width: 640px) {
+  .lesson-plans-heading, .records-heading { display: block; }
+  .lesson-plans-heading .btn, .records-heading .btn { margin-top: var(--space-4); }
+  .plan-dialog .form-grid, .record-dialog .form-grid { grid-template-columns: 1fr; }
+  .plan-actions .btn, .record-actions .btn { flex: 1 1 auto; }
+  .lesson-plans-toolbar, .records-toolbar { padding: var(--space-3); }
+}

@@ -34,4 +34,14 @@ class ClassSubjectTeacher extends Model
     {
         return $this->hasOne(SchemeOfWork::class, 'class_subject_teacher_id');
     }
+
+    public function lessonPlans()
+    {
+        return $this->hasMany(LessonPlan::class, 'class_subject_teacher_id');
+    }
+
+    public function recordsOfWork()
+    {
+        return $this->hasMany(RecordOfWork::class, 'class_subject_teacher_id');
+    }
 }

@@ -21,9 +21,14 @@ $app->bootstrapWith([
 
 use App\Http\Controllers\Api\AcademicCalendarController;
 use App\Http\Controllers\Api\AcademicEventController;
+use App\Http\Controllers\Api\LessonPlanController;
+use App\Http\Controllers\Api\RecordOfWorkController;
 use App\Http\Controllers\Api\SchemeOfWorkController;
+use App\Http\Controllers\Api\TeacherAssignmentController;
 use App\Models\AcademicYear;
 use App\Models\ClassSubjectTeacher;
+use App\Models\LessonPlan;
+use App\Models\RecordOfWork;
 use App\Models\Role;
 use App\Models\SchoolClass;
 use App\Models\Staff;
@@ -32,6 +37,10 @@ use App\Models\Term;
 use App\Models\User;
 use App\Services\AcademicIntegrity;
 use App\Services\AuditLogger;
+use App\Services\TeachingDocumentAccess;
+use App\Services\TeachingDocumentData;
+use App\Services\TeachingDocumentExport;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,10 +75,14 @@ Schema::create('audit_logs', function (Blueprint $table) {
     $table->unsignedBigInteger('entity_id')->nullable(); $table->text('details')->nullable(); $table->string('ip_address')->nullable(); $table->timestamp('created_at');
 });
 // Calendar history checks inspect these existing academic dependencies.
-Schema::create('assessments', function (Blueprint $table) { $table->id(); $table->foreignId('term_id')->constrained('terms'); });
+Schema::create('assessments', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained('students'); $table->foreignId('subject_id')->constrained('subjects'); $table->foreignId('term_id')->constrained('terms'); $table->foreignId('class_id')->nullable()->constrained('classes'); });
 Schema::create('report_cards', function (Blueprint $table) { $table->id(); $table->foreignId('term_id')->constrained('terms'); });
-Schema::create('promotions_transfers', function (Blueprint $table) { $table->id(); $table->foreignId('term_id')->constrained('terms'); });
+Schema::create('promotions_transfers', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained('students'); $table->foreignId('term_id')->constrained('terms'); $table->foreignId('from_class_id')->nullable()->constrained('classes'); $table->foreignId('to_class_id')->nullable()->constrained('classes'); });
+// Assignment removal inspects the existing recurring timetable and legacy learner placements.
+Schema::create('students', function (Blueprint $table) { $table->id(); $table->foreignId('class_id')->constrained('classes'); });
+Schema::create('timetable_entries', function (Blueprint $table) { $table->id(); $table->foreignId('class_id')->constrained('classes'); $table->foreignId('subject_id')->constrained('subjects'); $table->foreignId('staff_id')->constrained('staff'); });
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000038_create_teaching_learning_workspace.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000039_create_lesson_plans_and_records_of_work_tables.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {
@@ -95,7 +108,12 @@ $class = SchoolClass::create(['name' => 'Test class', 'level' => 'primary', 'seq
 DB::table('class_subjects')->insert(['class_id' => $class->id, 'subject_id' => $subject->id]);
 $assignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $teacherStaff->id, 'term_id' => $term->id]);
 $otherAssignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $otherStaff->id, 'term_id' => $term->id]);
-$integrity = new AcademicIntegrity(); $events = new AcademicEventController($integrity); $schemes = new SchemeOfWorkController(new App\Services\SchemeOfWorkAccess()); $calendar = new AcademicCalendarController($integrity); $passed = 0;
+$secondTerm = Term::create(['academic_year_id' => $year->id, 'name' => 'Second term', 'start_date' => '2026-05-01', 'end_date' => '2026-08-31']);
+$secondAssignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $teacherStaff->id, 'term_id' => $secondTerm->id]);
+$integrity = new AcademicIntegrity(); $events = new AcademicEventController($integrity); $schemes = new SchemeOfWorkController(new TeachingDocumentAccess(), new TeachingDocumentData()); $calendar = new AcademicCalendarController($integrity); $passed = 0;
+$access = new TeachingDocumentAccess(); $documentData = new TeachingDocumentData();
+$lessonPlans = new LessonPlanController($access, $documentData, new TeachingDocumentExport());
+$records = new RecordOfWorkController($access, $documentData, new TeachingDocumentExport());
 
 check('calendar events are contained by their school periods and audited', function () use ($events, $admin, $year, $term, $otherYear) {
     $request = requestFor($admin, ['academic_year_id' => $year->id, 'term_id' => $term->id, 'title' => 'Staff entered activity', 'event_type' => 'academic_activity', 'starts_on' => '2026-02-02', 'ends_on' => '2026-02-03']);
@@ -117,10 +135,118 @@ check('teachers create and plan only their exact allocations', function () use (
     ensure($schemes->storeWeek($week, App\Models\SchemeOfWork::findOrFail($scheme['id']), new AuditLogger($week))->getStatusCode() === 201, 'Weekly plan created');
     $submit = requestFor($teacher); ensure($schemes->submit($submit, App\Models\SchemeOfWork::findOrFail($scheme['id']), new AuditLogger($submit))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted');
 });
+function lessonPlanInput(array $replace = []): array {
+    return array_replace([
+        'class_subject_teacher_id' => 0, 'title' => 'Structured lesson plan', 'lesson_date' => '2026-02-03',
+        'duration_minutes' => 40, 'strand' => 'Strand', 'sub_strand' => 'Sub-strand',
+        'specific_learning_outcomes' => 'Outcomes', 'key_inquiry_questions' => 'Inquiry questions',
+        'teaching_learning_resources' => 'Resources', 'introduction' => 'Introduction',
+        'lesson_development' => 'Development', 'conclusion' => 'Conclusion', 'learning_activities' => 'Activities',
+        'assessment_approach' => 'Assessment', 'teacher_reflection' => 'Reflection',
+    ], $replace);
+}
+function recordInput(array $replace = []): array {
+    return array_replace([
+        'class_subject_teacher_id' => 0, 'taught_on' => '2026-02-03', 'content_covered' => 'Covered content',
+        'learning_activities_conducted' => 'Conducted activities', 'work_completed' => 'Completed work',
+        'work_not_completed' => 'One exercise', 'reasons_for_deviations' => 'Time',
+        'teacher_observations' => 'Observations', 'follow_up_actions' => 'Review next lesson',
+    ], $replace);
+}
+
+check('teachers create and revise lesson plans only in their exact assignments', function () use ($lessonPlans, $teacher, $otherTeacher, $assignment, $otherAssignment, $secondAssignment) {
+    $request = requestFor($teacher, lessonPlanInput(['class_subject_teacher_id' => $assignment->id]));
+    $created = $lessonPlans->store($request, new AuditLogger($request));
+    ensure($created->getStatusCode() === 201, 'Lesson plan created'); $plan = $created->getData(true)['data'];
+    ensure($plan['status'] === 'draft' && $plan['has_record_of_work'] === false, 'New plan is an undelivered draft');
+    try { $lessonPlans->store(requestFor($otherTeacher, lessonPlanInput(['class_subject_teacher_id' => $assignment->id])), new AuditLogger(requestFor($otherTeacher))); throw new RuntimeException('Expected foreign allocation denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign allocation denied'); }
+    invalid(fn () => $lessonPlans->store(requestFor($teacher, lessonPlanInput(['class_subject_teacher_id' => $secondAssignment->id, 'lesson_date' => '2026-09-01'])), new AuditLogger($request)), 'lesson_date');
+    $foreignWeek = App\Models\SchemeOfWorkWeek::firstOrFail()->id;
+    invalid(fn () => $lessonPlans->store(requestFor($teacher, lessonPlanInput(['class_subject_teacher_id' => $secondAssignment->id, 'lesson_date' => '2026-06-02', 'scheme_of_work_week_id' => $foreignWeek])), new AuditLogger($request)), 'scheme_of_work_week_id');
+    try { $lessonPlans->store(requestFor($teacher, lessonPlanInput(['class_subject_teacher_id' => $otherAssignment->id])), new AuditLogger($request)); throw new RuntimeException('Expected other allocation denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Another teacher allocation denied'); }
+    $edit = requestFor($teacher, ['strand' => 'Revised strand']); ensure($lessonPlans->update($edit, LessonPlan::findOrFail($plan['id']), new AuditLogger($edit))->getData(true)['data']['strand'] === 'Revised strand', 'Draft edited');
+    ensure(DB::table('audit_logs')->where('action', 'CREATE_LESSON_PLAN')->exists(), 'Lesson plan audit');
+});
+check('duplicating a lesson plan creates an independent editable draft', function () use ($lessonPlans, $teacher) {
+    $source = LessonPlan::firstOrFail();
+    $request = requestFor($teacher, ['lesson_date' => '2026-02-10']);
+    $response = $lessonPlans->duplicate($request, $source, new AuditLogger($request));
+    $copy = $response->getData(true)['data'];
+    ensure($response->getStatusCode() === 201 && $copy['id'] !== $source->id, 'Copy created');
+    ensure($copy['status'] === 'draft' && $copy['duplicated_from_lesson_plan_id'] === $source->id && $copy['teacher_reflection'] === null, 'Draft copy without previous reflection');
+    ensure($copy['lesson_date'] === '2026-02-10' && $copy['strand'] === 'Revised strand', 'Planning content copied');
+    ensure(DB::table('audit_logs')->where('action', 'DUPLICATE_LESSON_PLAN')->exists(), 'Duplicate audit');
+});
+check('lesson plan workflow is teacher submitted and leadership reviewed', function () use ($lessonPlans, $teacher, $admin, $otherTeacher) {
+    $plan = LessonPlan::orderByDesc('id')->firstOrFail();
+    try { $lessonPlans->submit(requestFor($admin), $plan, new AuditLogger(requestFor($admin))); throw new RuntimeException('Expected leadership submission denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Leadership cannot submit a teacher plan'); }
+    ensure($lessonPlans->submit(requestFor($teacher), $plan, new AuditLogger(requestFor($teacher)))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted');
+    $locked = requestFor($teacher, ['strand' => 'Late change']);
+    try { $lessonPlans->update($locked, $plan, new AuditLogger($locked)); throw new RuntimeException('Expected read-only denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 409, 'Submitted plan is read-only'); }
+    $missingNote = requestFor($admin, ['action' => 'returned']);
+    try { $lessonPlans->review($missingNote, $plan, new AuditLogger($missingNote)); throw new RuntimeException('Expected review note requirement'); }
+    catch (ValidationException $exception) { ensure(isset($exception->errors()['review_notes']), 'Returned review requires a note'); }
+    $review = requestFor($admin, ['action' => 'returned', 'review_notes' => 'Add the weekly resources.']);
+    ensure($lessonPlans->review($review, $plan, new AuditLogger($review))->getData(true)['data']['status'] === 'returned', 'Returned for changes');
+    try { $lessonPlans->review($review, $plan, new AuditLogger($review)); throw new RuntimeException('Expected single review'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 409, 'Only submitted documents are reviewable'); }
+});
+check('a record of work is explicit and reports delivery only for its own plan', function () use ($records, $lessonPlans, $teacher, $otherTeacher, $assignment, $secondAssignment) {
+    $plan = LessonPlan::orderByDesc('id')->firstOrFail();
+    $request = requestFor($teacher, recordInput(['class_subject_teacher_id' => $assignment->id, 'lesson_plan_id' => $plan->id]));
+    $created = $records->store($request, new AuditLogger($request)); ensure($created->getStatusCode() === 201, 'Record created');
+    $record = $created->getData(true)['data'];
+    ensure($record['lesson_plan']['id'] === $plan->id && $record['status'] === 'draft', 'Linked record');
+    $detail = $lessonPlans->show(requestFor($teacher), $plan)->getData(true)['data'];
+    ensure($detail['has_record_of_work'] === true && $detail['record_of_work']['id'] === $record['id'], 'Delivery follows a real record');
+    invalid(fn () => $records->store(requestFor($teacher, recordInput(['class_subject_teacher_id' => $secondAssignment->id, 'taught_on' => '2026-06-02', 'lesson_plan_id' => $plan->id])), new AuditLogger($request)), 'lesson_plan_id');
+    invalid(fn () => $records->store(requestFor($teacher, recordInput(['class_subject_teacher_id' => $assignment->id, 'taught_on' => '2027-01-05'])), new AuditLogger($request)), 'taught_on');
+    try { $records->store(requestFor($otherTeacher, recordInput(['class_subject_teacher_id' => $assignment->id])), new AuditLogger($request)); throw new RuntimeException('Expected foreign record denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign record denied'); }
+    $unlinked = LessonPlan::create(['class_subject_teacher_id' => $assignment->id, 'title' => 'Undelivered plan', 'lesson_date' => '2026-03-02',
+        'duration_minutes' => 40, 'strand' => 'Strand', 'sub_strand' => 'Sub', 'specific_learning_outcomes' => 'Outcomes',
+        'key_inquiry_questions' => 'Questions', 'teaching_learning_resources' => 'Resources', 'introduction' => 'Introduction',
+        'lesson_development' => 'Development', 'conclusion' => 'Conclusion', 'learning_activities' => 'Activities',
+        'assessment_approach' => 'Assessment', 'status' => 'draft', 'created_by' => $teacher->id]);
+    $fresh = $lessonPlans->show(requestFor($teacher), $unlinked)->getData(true)['data'];
+    ensure($fresh['has_record_of_work'] === false && $fresh['record_of_work'] === null, 'A plan alone is never delivered');
+});
+check('record of work review transitions are leader controlled and audited', function () use ($records, $teacher, $admin) {
+    $record = RecordOfWork::firstOrFail();
+    try { $records->review(requestFor($teacher, ['action' => 'approved']), $record, new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected teacher review denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Teacher cannot review'); }
+    ensure($records->submit(requestFor($teacher), $record, new AuditLogger(requestFor($teacher)))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted record');
+    $review = requestFor($admin, ['action' => 'approved']);
+    ensure($records->review($review, $record, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Record approved');
+    ensure(DB::table('audit_logs')->where('action', 'APPROVED_RECORD_OF_WORK')->exists(), 'Record review audit');
+});
 check('leadership review returns a submitted scheme and preserves the audit trail', function () use ($schemes, $admin) {
     $scheme = App\Models\SchemeOfWork::firstOrFail(); $request = requestFor($admin, ['action' => 'returned', 'review_notes' => 'Please clarify the weekly resources.']);
     $response = $schemes->review($request, $scheme, new AuditLogger($request)); ensure($response->getData(true)['data']['status'] === 'returned', 'Returned for revision');
     ensure(DB::table('audit_logs')->where('action', 'RETURNED_SCHEME_OF_WORK')->exists(), 'Review audit');
+});
+check('teaching documents block assignment deletion and are exportable as PDFs', function () use ($lessonPlans, $records, $schemes, $teacher, $otherTeacher, $admin, $assignment) {
+    $plan = LessonPlan::firstOrFail();
+    $assignments = new TeacherAssignmentController(new AcademicIntegrity());
+    $request = requestFor($admin);
+    ensure($assignments->destroy(ClassSubjectTeacher::findOrFail($assignment->id), new AuditLogger($request))->getStatusCode() === 409, 'Assignment with teaching history retained');
+    $week = App\Models\SchemeOfWorkWeek::firstOrFail(); $scheme = App\Models\SchemeOfWork::firstOrFail();
+    ensure($scheme->status === 'returned', 'Returned scheme is editable again');
+    $linked = $lessonPlans->store(requestFor($teacher, lessonPlanInput(['class_subject_teacher_id' => $assignment->id, 'lesson_date' => '2026-02-17', 'scheme_of_work_week_id' => $week->id])), new AuditLogger(requestFor($teacher)));
+    ensure($linked->getData(true)['data']['scheme_week']['id'] === $week->id, 'Lesson plan linked to a weekly plan');
+    ensure($schemes->destroyWeek(requestFor($teacher), $scheme, $week, new AuditLogger(requestFor($teacher)))->getData(true)['error']['code'] === 'WEEK_IN_USE', 'Linked weekly plan is retained');
+    $pdf = $lessonPlans->pdf(requestFor($teacher), $plan);
+    ensure($pdf->getStatusCode() === 200 && str_contains($pdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Lesson plan PDF');
+    $recordPdf = $records->pdf(requestFor($teacher), RecordOfWork::firstOrFail());
+    ensure($recordPdf->getStatusCode() === 200 && str_contains($recordPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Record PDF');
+    try { $lessonPlans->show(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign read denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot read another allocation plan'); }
+    try { $lessonPlans->pdf(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign export denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot export'); }
 });
 
 echo $passed.' Teaching & Learning Workspace checks passed on in-memory SQLite only.'.PHP_EOL;

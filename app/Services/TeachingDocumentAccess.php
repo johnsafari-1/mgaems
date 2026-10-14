@@ -4,11 +4,19 @@ namespace App\Services;
 
 use App\Models\ClassSubjectTeacher;
 use App\Models\Role;
-use App\Models\SchemeOfWork;
 use App\Models\Staff;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
-class SchemeOfWorkAccess
+/**
+ * Shared authorization for teaching documents: schemes of work, lesson plans,
+ * and records of work. Every document is anchored to one existing term-specific
+ * class_subject_teacher allocation, so teacher rights follow that exact
+ * allocation and active teaching-staff link rather than class ownership,
+ * client-supplied identities, or timetable rows.
+ */
+class TeachingDocumentAccess
 {
     public const LEADERS = [Role::SYSTEM_ADMIN, Role::HEAD_TEACHER, Role::DEPUTY_HEAD_TEACHER];
 
@@ -19,7 +27,7 @@ class SchemeOfWorkAccess
         if ($lock) $query->sharedLock();
         $current = $query->firstOrFail();
         abort_unless($current->status === 'active', 403, 'An active account is required.');
-        abort_unless($this->leader($current) || $current->hasRole(Role::TEACHER), 403, 'Scheme of work access is restricted.');
+        abort_unless($this->leader($current) || $current->hasRole(Role::TEACHER), 403, 'Teaching document access is restricted.');
 
         return $current;
     }
@@ -51,9 +59,20 @@ class SchemeOfWorkAccess
         return $assignment;
     }
 
-    public function scheme(User $user, int $id, bool $lock = false): SchemeOfWork
+    /** List scope: school-wide for leadership, own allocations for teachers. */
+    public function readable(User $user, string $model): Builder
     {
-        $query = SchemeOfWork::whereKey($id);
+        $query = $model::query();
+        if ($this->leader($user)) return $query;
+        $staff = $this->staff($user);
+
+        return $query->whereHas('assignment', fn ($assignment) => $assignment->where('staff_id', $staff->id));
+    }
+
+    /** Single-document scope: same allocation rule as the list scope. */
+    public function document(User $user, string $model, int $id, bool $lock = false): Model
+    {
+        $query = $model::whereKey($id);
         if (! $this->leader($user)) {
             $staff = $this->staff($user, $lock);
             $query->whereHas('assignment', fn ($assignment) => $assignment->where('staff_id', $staff->id));
@@ -61,14 +80,5 @@ class SchemeOfWorkAccess
         if ($lock) $query->lockForUpdate();
 
         return $query->firstOrFail();
-    }
-
-    public function readable(User $user)
-    {
-        $query = SchemeOfWork::query();
-        if ($this->leader($user)) return $query;
-        $staff = $this->staff($user);
-
-        return $query->whereHas('assignment', fn ($assignment) => $assignment->where('staff_id', $staff->id));
     }
 }

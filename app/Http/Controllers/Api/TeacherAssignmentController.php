@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSubjectTeacher;
+use App\Models\LessonPlan;
+use App\Models\RecordOfWork;
 use App\Models\SchemeOfWork;
 use App\Models\Term;
 use App\Models\TimetableEntry;
@@ -72,13 +74,21 @@ class TeacherAssignmentController extends Controller
             $assignment = ClassSubjectTeacher::whereKey($classSubjectTeacher->id)->lockForUpdate()->firstOrFail();
             if ($this->integrity->hasAssessments((int) $assignment->class_id, (int) $assignment->subject_id, (int) $assignment->term_id)
                 || TimetableEntry::where('class_id', $assignment->class_id)->where('subject_id', $assignment->subject_id)->where('staff_id', $assignment->staff_id)->exists()
-                || SchemeOfWork::where('class_subject_teacher_id', $assignment->id)->exists()) {
-                return $this->integrity->conflict('ASSIGNMENT_IN_USE', 'This assignment has a scheme of work, assessment history, or recurring timetable entries. Preserve historical teaching authorization and resolve dependencies first.');
+                || $this->hasTeachingDocuments($assignment)) {
+                return $this->integrity->conflict('ASSIGNMENT_IN_USE', 'This assignment has teaching documents, assessment history, or recurring timetable entries. Preserve historical teaching authorization and resolve dependencies first.');
             }
             $assignment->delete();
             $auditLogger->log('DELETE_TEACHER_ASSIGNMENT', 'ClassSubjectTeacher', $assignment->id);
 
             return response()->json(['data' => ['message' => 'Assignment removed.']]);
         });
+    }
+
+    /** Teaching documents keep the historical class, teacher, term and subject context. */
+    private function hasTeachingDocuments(ClassSubjectTeacher $assignment): bool
+    {
+        return SchemeOfWork::where('class_subject_teacher_id', $assignment->id)->exists()
+            || LessonPlan::where('class_subject_teacher_id', $assignment->id)->exists()
+            || RecordOfWork::where('class_subject_teacher_id', $assignment->id)->exists();
     }
 }

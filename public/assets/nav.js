@@ -9,6 +9,8 @@ const MGAEMS_NAV_ITEMS = {
   guardians: { href: '/guardians.html', icon: 'contact-round', label: 'Parents / Guardians' },
   academic: { href: '/academic.html', icon: 'book-open', label: 'Academics' },
   schemesOfWork: { href: '/schemes-of-work.html', icon: 'notebook-tabs', label: 'Schemes of Work' },
+  lessonPlans: { href: '/lesson-plans.html', icon: 'notebook-pen', label: 'Lesson Plans' },
+  recordsOfWork: { href: '/records-of-work.html', icon: 'clipboard-check', label: 'Records of Work' },
   attendance: { href: '/attendance.html', icon: 'calendar-check', label: 'Attendance' },
   assessment: { href: '/assessment.html', icon: 'clipboard-check', label: 'Assessment' },
   sponsorship: { href: '/sponsorship.html', icon: 'heart-handshake', label: 'Sponsorship' },
@@ -29,10 +31,10 @@ const MGAEMS_NAV_ITEMS = {
 // Page visibility follows current APIs. Laravel remains the authorization boundary.
 const MGAEMS_LEADERSHIP_NAV = ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'];
 const MGAEMS_ROLE_NAV = {
-  system_admin: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'administration'],
-  head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'health', 'administration'],
-  deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'health'],
-  teacher: ['teacher', 'myLearners', 'myTimetable', 'schemesOfWork', 'attendance', 'assessment', 'communication'],
+  system_admin: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'administration'],
+  head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'health', 'administration'],
+  deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'health'],
+  teacher: ['teacher', 'myLearners', 'myTimetable', 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'attendance', 'assessment', 'communication'],
   sponsor_coordinator: ['sponsorship', 'coordinator', 'communication', 'visitors'],
   parent_guardian: ['parent'],
   sponsor: ['sponsor'],
@@ -44,7 +46,7 @@ const MGAEMS_ROLE_NAV = {
 const MGAEMS_NAV_GROUPS = [
   { label: 'Overview', keys: ['dashboard', 'teacher', 'coordinator', 'parent', 'sponsor'] },
   { label: 'Learners', keys: ['students', 'myLearners', 'guardians'] },
-  { label: 'Academics', keys: ['academic', 'myTimetable', 'schemesOfWork', 'attendance', 'assessment'] },
+  { label: 'Academics', keys: ['academic', 'myTimetable', 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'attendance', 'assessment'] },
   { label: 'School Operations', keys: ['sponsorship', 'health', 'staff', 'visitors'] },
   { label: 'Communication', keys: ['communication'] },
   { label: 'Reporting', keys: ['reports'] },
