@@ -49,4 +49,9 @@ class ClassSubjectTeacher extends Model
     {
         return $this->hasMany(Homework::class, 'class_subject_teacher_id');
     }
+
+    public function examPapers()
+    {
+        return $this->hasMany(ExamPaper::class, 'class_subject_teacher_id');
+    }
 }

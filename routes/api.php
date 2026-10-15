@@ -11,6 +11,9 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\GuardianController;
+use App\Http\Controllers\Api\ExamPaperController;
+use App\Http\Controllers\Api\AiTeachingAssistantController;
+use App\Http\Controllers\Api\TeachingReviewController;
 use App\Http\Controllers\Api\HomeworkController;
 use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\MessageController;
@@ -167,6 +170,39 @@ Route::prefix('v1')->group(function () {
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
         Route::post('/records-of-work/{recordOfWork}/review', [RecordOfWorkController::class, 'review'])
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+
+        // --- Teaching & Learning: Exam Paper Studio ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/exam-papers/context', [ExamPaperController::class, 'context']);
+            Route::get('/exam-papers', [ExamPaperController::class, 'index']);
+            Route::post('/exam-papers', [ExamPaperController::class, 'store']);
+            Route::get('/exam-papers/{examPaper}', [ExamPaperController::class, 'show']);
+            Route::patch('/exam-papers/{examPaper}', [ExamPaperController::class, 'update']);
+            Route::delete('/exam-papers/{examPaper}', [ExamPaperController::class, 'destroy']);
+            Route::post('/exam-papers/{examPaper}/sections', [ExamPaperController::class, 'storeSection']);
+            Route::patch('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'updateSection']);
+            Route::delete('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'destroySection']);
+            Route::post('/exam-papers/{examPaper}/questions', [ExamPaperController::class, 'storeQuestion']);
+            Route::patch('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'updateQuestion']);
+            Route::post('/exam-papers/{examPaper}/questions/{question}/duplicate', [ExamPaperController::class, 'duplicateQuestion']);
+            Route::delete('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'destroyQuestion']);
+            Route::post('/exam-papers/{examPaper}/attachments', [ExamPaperController::class, 'uploadAttachment']);
+            Route::get('/exam-papers/{examPaper}/attachments/{attachment}', [ExamPaperController::class, 'downloadAttachment']);
+            Route::get('/exam-papers/{examPaper}/pdf', [ExamPaperController::class, 'pdf']);
+            Route::get('/exam-papers/{examPaper}/marking-scheme/pdf', [ExamPaperController::class, 'markingSchemePdf']);
+            Route::post('/exam-papers/{examPaper}/submit', [ExamPaperController::class, 'submit']);
+        });
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/exam-papers/{examPaper}/review', [ExamPaperController::class, 'review']);
+            Route::post('/exam-papers/{examPaper}/publish', [ExamPaperController::class, 'publish']);
+            Route::get('/teaching-review', [TeachingReviewController::class, 'index']);
+            Route::post('/teaching-review/{documentType}/{documentId}', [TeachingReviewController::class, 'review']);
+        });
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/ai-teaching/status', [AiTeachingAssistantController::class, 'status']);
+            Route::post('/ai-teaching/drafts', [AiTeachingAssistantController::class, 'draft']);
+            Route::post('/ai-teaching/runs/{run}/accept', [AiTeachingAssistantController::class, 'accept']);
+        });
 
         // --- Teaching & Learning: Homework and Assignments ---
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {

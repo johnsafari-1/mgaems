@@ -21,15 +21,19 @@ $app->bootstrapWith([
 
 use App\Http\Controllers\Api\AcademicCalendarController;
 use App\Http\Controllers\Api\AcademicEventController;
+use App\Http\Controllers\Api\AiTeachingAssistantController;
+use App\Http\Controllers\Api\ExamPaperController;
 use App\Http\Controllers\Api\HomeworkController;
 use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\RecordOfWorkController;
 use App\Http\Controllers\Api\SchemeOfWorkController;
 use App\Http\Controllers\Api\TeacherAssignmentController;
+use App\Http\Controllers\Api\TeachingReviewController;
 use App\Models\AcademicYear;
 use App\Models\ClassSubjectTeacher;
 use App\Models\Homework;
 use App\Models\HomeworkCompletion;
+use App\Models\ExamPaper;
 use App\Models\LessonPlan;
 use App\Models\RecordOfWork;
 use App\Models\Role;
@@ -44,6 +48,10 @@ use App\Services\TeachingDocumentAccess;
 use App\Services\TeachingDocumentData;
 use App\Services\TeachingDocumentExport;
 use App\Services\HomeworkExport;
+use App\Services\ExamPaperExport;
+use App\Services\MockTeachingAssistantProvider;
+use App\Services\TeachingAssistant;
+use App\Services\TeachingDocumentVersions;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -91,6 +99,8 @@ Schema::create('timetable_entries', function (Blueprint $table) { $table->id(); 
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000038_create_teaching_learning_workspace.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000039_create_lesson_plans_and_records_of_work_tables.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000040_create_homework_and_assignments_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000041_create_exam_paper_studio_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000042_create_teaching_review_and_ai_tables.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {
@@ -123,6 +133,9 @@ $access = new TeachingDocumentAccess(); $documentData = new TeachingDocumentData
 $lessonPlans = new LessonPlanController($access, $documentData, new TeachingDocumentExport());
 $records = new RecordOfWorkController($access, $documentData, new TeachingDocumentExport());
 $homeworks = new HomeworkController($access, $documentData, new HomeworkExport());
+$examPapers = new ExamPaperController($access, $documentData, new ExamPaperExport());
+$reviewQueue = new TeachingReviewController($access, $documentData, new TeachingDocumentVersions());
+$teachingAi = new AiTeachingAssistantController($access, new TeachingAssistant(new MockTeachingAssistantProvider()));
 
 check('calendar events are contained by their school periods and audited', function () use ($events, $admin, $year, $term, $otherYear) {
     $request = requestFor($admin, ['academic_year_id' => $year->id, 'term_id' => $term->id, 'title' => 'Staff entered activity', 'event_type' => 'academic_activity', 'starts_on' => '2026-02-02', 'ends_on' => '2026-02-03']);
@@ -292,6 +305,29 @@ check('teaching documents block assignment deletion and are exportable as PDFs',
     catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot read another allocation plan'); }
     try { $lessonPlans->pdf(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign export denial'); }
     catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot export'); }
+});
+check('exam papers enforce allocation, preserve staff-only keys, and retain reviewed revisions', function () use ($examPapers, $reviewQueue, $teacher, $otherTeacher, $admin, $assignment) {
+    $create = requestFor($teacher, ['class_subject_teacher_id' => $assignment->id, 'examination_type' => 'end_term', 'title' => 'Staff entered assessment', 'instructions' => 'Answer all questions.', 'duration_minutes' => 45, 'exam_date' => '2026-02-20']);
+    $created = $examPapers->store($create, new AuditLogger($create)); ensure($created->getStatusCode() === 201, 'Exam draft created');
+    $paper = ExamPaper::findOrFail($created->getData(true)['data']['id']);
+    try { $examPapers->store(requestFor($otherTeacher, ['class_subject_teacher_id' => $assignment->id, 'examination_type' => 'practice', 'title' => 'Foreign']), new AuditLogger(requestFor($otherTeacher))); throw new RuntimeException('Expected foreign paper denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign teacher denied exam allocation'); }
+    $question = requestFor($teacher, ['position' => 1, 'question_type' => 'multiple_choice', 'prompt' => 'Staff entered assessment item', 'marks' => 5, 'options' => ['Correct option', 'Other option'], 'answer_key' => 'Correct option', 'marking_guidance' => 'Award five marks for the correct option.']);
+    ensure($examPapers->storeQuestion($question, $paper, new AuditLogger($question))->getStatusCode() === 201, 'Exam question created');
+    $paperView = $examPapers->show(requestFor($teacher), $paper)->getData(true)['data']; ensure($paperView['questions'][0]['answer_key'] === 'Correct option', 'Staff workspace retains answer key');
+    $submit = requestFor($teacher); ensure($examPapers->submit($submit, $paper, new AuditLogger($submit))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted examination paper');
+    $review = requestFor($admin, ['action' => 'approved']); ensure($reviewQueue->review($review, 'exam_paper', $paper->id, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Central review approved examination paper');
+    ensure(DB::table('teaching_document_revisions')->where('document_type', 'exam_paper')->where('document_id', $paper->id)->where('status', 'approved')->exists(), 'Approved exam revision retained');
+    $export = (new ExamPaperExport())->paper($paper->fresh(['assignment.schoolClass', 'assignment.subject', 'assignment.term.academicYear', 'questions', 'sections']), false);
+    ensure($export['unsectioned_questions'][0]['answer_key'] === null, 'Learner paper export omits answer key');
+});
+check('AI teaching drafts are labelled, structured, and never auto-save a paper', function () use ($teachingAi, $teacher) {
+    $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Teacher-entered fractions topic']]);
+    $result = $teachingAi->draft($request, new AuditLogger($request)); $data = $result->getData(true)['data'];
+    ensure($result->getStatusCode() === 201 && str_contains($data['label'], 'AI-generated') && isset($data['draft']['prompt']), 'Structured AI draft returned');
+    ensure(DB::table('ai_generation_runs')->where('id', $data['run_id'])->where('state', 'generated')->exists(), 'AI generation run audited without document mutation');
+    try { $teachingAi->draft(requestFor($teacher, ['operation' => 'exam_question', 'input' => ['student_name' => 'Must not leave MGAEMS']]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected sensitive AI input denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 422, 'Sensitive AI input denied'); }
 });
 
 echo $passed.' Teaching & Learning Workspace checks passed on in-memory SQLite only.'.PHP_EOL;

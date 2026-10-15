@@ -2,13 +2,23 @@
 
 namespace App\Providers;
 
+use App\Contracts\TeachingAssistantProvider;
+use App\Services\HttpTeachingAssistantProvider;
+use App\Services\MockTeachingAssistantProvider;
+use App\Services\UnavailableTeachingAssistantProvider;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        //
+        $this->app->bind(TeachingAssistantProvider::class, function () {
+            return match (config('services.ai.driver')) {
+                'mock' => new MockTeachingAssistantProvider,
+                'http' => new HttpTeachingAssistantProvider,
+                default => new UnavailableTeachingAssistantProvider,
+            };
+        });
     }
 
     public function boot(): void

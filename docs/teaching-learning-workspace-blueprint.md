@@ -69,6 +69,71 @@ The initial slice intentionally does not claim immutable document versions or
 official curriculum verification. Those belong in the later review/approval
 and source-governance phases.
 
+## Fourth-slice data model: Exam Paper Studio and review
+
+`exam_papers` belongs to the same `class_subject_teacher` allocation as all
+other teaching documents. It records a staff-entered examination type, title,
+instructions, duration, in-term examination date, workflow state, reviewer
+metadata, publication time, and retained revision sequence. Its lifecycle is
+`draft`, `submitted`, `returned`, `approved`, `published`, and `archived`.
+
+`exam_paper_sections` and `exam_paper_questions` provide ordered paper
+structure. Questions support short-answer, structured, and multiple-choice
+types; marks, options, answer keys, and marking guidance are structured fields.
+Only multiple-choice questions carry options, and their answer key must match
+one recorded option. `exam_paper_attachments` stores only metadata for approved
+PNG/JPEG/WebP diagrams in the private filesystem. Files are downloaded through
+an allocation-authorized staff endpoint, never a public storage URL.
+
+`exam_paper_revisions` retains a hash-checked snapshot for submitted, reviewed,
+and published paper transitions. `teaching_document_revisions` extends retained
+approval snapshots to schemes, lesson plans, records of work, and exam papers.
+The unified leadership queue reviews submitted documents without exposing them
+to parents, learners, sponsors, or unauthorised staff.
+
+## API — Exam, Review, and AI drafts
+
+Exam Paper Studio endpoints are all under `/api/v1/exam-papers`. Staff can read
+context/list/detail data, create or edit draft/returned papers, manage sections
+and questions, duplicate questions, upload/download approved private images,
+submit a paper, and download a learner paper PDF or a staff-only marking-scheme
+PDF. Leadership alone may review or publish. The learner paper PDF deliberately
+omits answer keys and marking guidance; the marking-scheme endpoint remains
+inside staff role middleware.
+
+`GET /teaching-review` lists submitted schemes, lesson plans, records of work,
+and examination papers for leadership. `POST /teaching-review/{type}/{id}`
+approves or returns a submitted item and records a retained review snapshot.
+
+The optional AI Teaching Assistant is exposed only to staff through
+`GET /ai-teaching/status`, `POST /ai-teaching/drafts`, and
+`POST /ai-teaching/runs/{run}/accept`. It is disabled by default. No key is sent
+to the browser or persisted in a generation run. Inputs containing learner,
+family, health, contact, credential, or similar sensitive fields are rejected.
+Generated content is returned as a labelled structured draft and cannot create,
+update, approve, or publish a teaching document automatically. Staff must review
+and manually save any useful material.
+
+The server-side provider selection is `MGAEMS_AI_DRIVER=disabled|mock|http`.
+The HTTP provider requires server-only `MGAEMS_AI_ENDPOINT`, `MGAEMS_AI_KEY`,
+and optional `MGAEMS_AI_MODEL`; it returns a safe unavailable response when
+configuration is absent. The `mock` driver exists for non-production testing.
+
+## MySQL integration boundary
+
+Migrations `2026_10_15_000040` through `000042` are pending repository changes.
+They have been exercised only against fresh in-memory SQLite during development.
+The current `mgaems-app` container is PHP 8.2/Laravel 10 while this repository
+requires PHP 8.3/Laravel 13, so it must not be used to apply migrations.
+
+Before any change to the existing `mgaems-mysql` volume or `mgaems-app`
+container, take an encrypted/restorable `mysqldump` backup, restore it into a
+separate disposable MySQL 8.0 container and volume, run migration planning and
+the pending migrations there using the PHP 8.3 upgrade image, then record the
+table/row-count/integrity results and rollback procedure. Applying migrations,
+rebuilding the running application container, or resetting the existing volume
+requires explicit approval after that rehearsal.
+
 ## API
 
 All endpoints are under `/api/v1`, authenticated with Sanctum, and return the

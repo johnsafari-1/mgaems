@@ -31,4 +31,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Kept server-side only. With the default disabled driver, no AI request is made.
+    'ai' => [
+        'driver' => env('MGAEMS_AI_DRIVER', 'disabled'),
+        'endpoint' => env('MGAEMS_AI_ENDPOINT'),
+        'key' => env('MGAEMS_AI_KEY'),
+        'model' => env('MGAEMS_AI_MODEL'),
+        'timeout' => env('MGAEMS_AI_TIMEOUT', 20),
+    ],
+
 ];

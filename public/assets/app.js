@@ -145,7 +145,7 @@ const MGAEMS = (() => {
         headers: {
           Accept: 'application/json',
           Authorization: 'Bearer ' + requestToken,
-          ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+          ...(options.body && !(typeof FormData !== 'undefined' && options.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
           ...options.headers,
         },
       });
@@ -175,6 +175,7 @@ const MGAEMS = (() => {
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
   const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
   const del = (path) => api(path, { method: 'DELETE' });
+  const upload = (path, body) => api(path, { method: 'POST', body });
 
   // Share only in-flight reads. School identity stays in memory; contact settings
   // and authenticated API responses are never persisted as a branding cache.
@@ -464,5 +465,5 @@ const MGAEMS = (() => {
     if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, patch, del, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, patch, del, upload, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
 })();

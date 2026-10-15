@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '../..');
 
 test('all page shells use their existing local modules, valid assets and nonblocking optional icons', () => {
   const pages = fs.readdirSync(path.join(root, 'public')).filter(name => name.endsWith('.html'));
-  assert.equal(pages.length, 21);
+  assert.equal(pages.length, 23);
   for (const page of pages) {
     const html = fs.readFileSync(path.join(root, 'public', page), 'utf8');
     assert.match(html, /name="viewport"/); assert.match(html, /assets\/app\.js/); assert.doesNotMatch(html, /<style>|<script>|onclick=|onerror=|\/storage\/school\//);
