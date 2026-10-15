@@ -68,14 +68,15 @@
     state.selected = String(child.id); state.page = 1; state.from = ''; state.to = ''; state.attendanceRequest++;
     const epoch = ++state.epoch; byId('familyLearner').value = state.selected;
     byId('familySelectionStatus').textContent = `Viewing ${child.first_name} ${child.last_name} · ${child.admission_no}`;
-    byId('familyChild').innerHTML = `<nav class="family-navigation" aria-label="Selected child sections"><a href="#familyOverviewSection">Overview</a><a href="#familyAttendanceSection">Attendance</a><a href="#familyProgressSection">Progress</a><a href="#familyCardsSection">Report cards</a><a href="#familyTimetableSection">Timetable</a><a href="#familyAnnouncementsSection">Announcements</a></nav>
+    byId('familyChild').innerHTML = `<nav class="family-navigation" aria-label="Selected child sections"><a href="#familyOverviewSection">Overview</a><a href="#familyAttendanceSection">Attendance</a><a href="#familyProgressSection">Progress</a><a href="#familyCardsSection">Report cards</a><a href="#familyTimetableSection">Timetable</a><a href="#familyHomeworkSection">Homework</a><a href="#familyAnnouncementsSection">Announcements</a></nav>
       <section class="card workspace-section family-section" id="familyOverviewSection" tabindex="-1" aria-labelledby="selectedChildHeading"><h2 id="selectedChildHeading">${esc(child.first_name)} ${esc(child.last_name)}</h2><div id="familyOverview" aria-busy="true"></div></section>
       <section class="card workspace-section family-section" id="familyAttendanceSection" tabindex="-1" aria-labelledby="familyAttendanceHeading"><h2 id="familyAttendanceHeading">Attendance</h2><p class="text-muted">View recorded attendance by date. Days without a record are not counted as absences.</p><form id="familyAttendanceFilter"><div data-form-error></div><div class="family-date-filter">
         <div class="field"><label for="familyFrom">From</label><input type="date" id="familyFrom" name="from"></div><div class="field"><label for="familyTo">To</label><input type="date" id="familyTo" name="to"></div><button type="submit" class="btn btn-secondary">Filter records</button><button type="button" class="btn btn-secondary" id="familyClearDates">Clear dates</button></div></form>
         <div id="familyAttendance" aria-live="polite" aria-busy="true"></div></section>
       <section class="card workspace-section family-section" id="familyProgressSection" tabindex="-1" aria-labelledby="familyProgressHeading"><h2 id="familyProgressHeading">Academic progress</h2><p class="text-muted">Results shown here come from available report cards. Continuous and end-term results remain separate.</p><div id="familyProgress" aria-busy="true"></div></section>
       <section class="card workspace-section family-section" id="familyCardsSection" tabindex="-1" aria-labelledby="familyCardsHeading"><h2 id="familyCardsHeading">Available report cards</h2><p class="text-muted">Download the school reports currently available for this child.</p><div id="familyCards" aria-busy="true"></div></section>
-      <section class="card workspace-section family-section" id="familyTimetableSection" tabindex="-1" aria-labelledby="familyTimetableHeading"><h2 id="familyTimetableHeading">Current available class timetable</h2><p class="text-muted">The current class's recurring weekly lessons. This is not a historical timetable.</p><div id="familyTimetable" aria-busy="true"></div></section>`;
+      <section class="card workspace-section family-section" id="familyTimetableSection" tabindex="-1" aria-labelledby="familyTimetableHeading"><h2 id="familyTimetableHeading">Current available class timetable</h2><p class="text-muted">The current class's recurring weekly lessons. This is not a historical timetable.</p><div id="familyTimetable" aria-busy="true"></div></section>
+      <section class="card workspace-section family-section" id="familyHomeworkSection" tabindex="-1" aria-labelledby="familyHomeworkHeading"><h2 id="familyHomeworkHeading">Published homework</h2><p class="text-muted">Only homework the school has published for this child's current class appears here. Answers and staff notes are never shared.</p><div id="familyHomework" aria-busy="true"></div></section>`;
     byId('familyAttendanceFilter').addEventListener('submit', event => {
       event.preventDefault();
       if (!current(child, epoch)) return;
@@ -95,6 +96,7 @@
     loadPane(child, epoch, 'familyProgress', '/progress', (data, meta, target) => renderProgress(data, meta, target, child, epoch));
     loadPane(child, epoch, 'familyCards', '/report-cards', (data, meta, target) => renderCards(data, target, child, epoch));
     loadPane(child, epoch, 'familyTimetable', '/timetable', renderTimetable);
+    loadPane(child, epoch, 'familyHomework', '/homework', renderHomework);
   }
   function current(child, epoch) { return authorized() && state.epoch === epoch && state.selected === String(child.id); }
   function revokeChild(child, epoch) {
@@ -187,6 +189,18 @@
       const entries = lessons.filter(row => Number(row.day_of_week) === index + 1);
       return !entries.length ? '' : `<section class="schedule-day" aria-label="${day} lessons"><h3>${day}</h3><ul class="schedule-lessons">${entries.map(row => `<li class="schedule-lesson"><span class="lesson-time">${esc(row.start_time.slice(0, 5))}–${esc(row.end_time.slice(0, 5))}</span><strong>${esc(row.subject?.name)}</strong></li>`).join('')}</ul></section>`;
     }).join('')}</div>`);
+  }
+  function renderHomework(rows, meta, target) {
+    if (!Array.isArray(rows)) throw new Error('Invalid homework');
+    if (meta && typeof meta.unavailable_reason === 'string' && meta.unavailable_reason !== 'no_published_homework') {
+      show(target, MGAEMS.emptyStateHTML('Homework unavailable', 'Published homework is shown only for a child in an eligible current class. Contact the school for details.', 'clipboard-list'));
+      return;
+    }
+    if (!rows.length) { show(target, MGAEMS.emptyStateHTML('No published homework', 'The school has not published homework for this child\'s class in the current academic period.', 'notebook')); return; }
+    if (rows.some(row => !object(row) || typeof row.title !== 'string' || !dateValue(row.due_on) || !Array.isArray(row.questions)
+      || row.questions.some(question => !object(question) || typeof question.prompt !== 'string' || 'answer_key' in question || 'marking_guidance' in question)
+      || 'answer_key' in row || 'marking_guidance' in row || 'teacher_notes' in row)) throw new Error('Invalid homework');
+    show(target, `<div class="assignment-list">${rows.map(row => `<article class="assignment-item"><div class="family-announcement-meta"><span class="badge badge-navy">${esc(row.assignment?.subject?.name || 'Learning area')}</span><span class="text-meta">Due ${date(row.due_on)}</span></div><h3>${esc(row.title)}</h3><p class="family-copy">${esc(row.instructions || '')}</p>${row.learning_outcomes ? `<p class="family-copy"><strong>What your child should be able to do:</strong> ${esc(row.learning_outcomes)}</p>` : ''}<p class="text-meta">Submission: ${esc(String(row.submission_method || 'not set').replace(/_/g, ' '))}${row.total_marks ? ' · ' + esc(row.total_marks) + ' marks' : ''}</p><ol class="family-homework-questions">${row.questions.map(question => `<li>${esc(question.prompt)}${question.marks ? ' (' + esc(question.marks) + ' marks)' : ''}</li>`).join('')}</ol></article>`).join('')}</div>`);
   }
   async function loadAnnouncements() {
     if (!authorized()) return;

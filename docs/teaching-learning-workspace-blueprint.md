@@ -219,6 +219,60 @@ submission rights; a leadership member cannot submit a teacher's document for
 review. Every significant write and status transition uses the existing
 `AuditLogger` inside the same transaction.
 
+## Third-slice data model: Homework and assignments
+
+`homeworks` belongs to the same historical `class_subject_teacher` allocation.
+It stores a staff-entered title, learner instructions, learning outcomes,
+optional total marks, assigned and due dates inside the allocation's term,
+expected submission method, optional links to one lesson plan and one scheme
+week from that allocation, staff-only notes, creator and lifecycle timestamps.
+Its states are `draft`, `published`, `closed`, and `archived`.
+
+`homework_questions` is an ordered child table with short-answer, structured,
+and multiple-choice question types, optional diagram reference and marks, and
+staff-only answer keys and marking guidance. Multiple-choice options are stored
+as a JSON string list and the recorded answer must be one of those options.
+
+`homework_completions` contains a row only after an assigned teacher records
+evidence for an active learner in the allocated class. It records `submitted`,
+`completed`, or `missing`, a note, recorder, and timestamp. No row means **not
+yet recorded**, never missing. Rows are removable so a mistaken entry returns
+the learner to that unrecorded state.
+
+## API and permissions: Homework
+
+Staff endpoints are under `/api/v1/homework`. `GET /context`, `GET /`, and
+`GET /{homework}` provide allocation-scoped authoring data, with term, class,
+status, and due-date filtering. Leadership can read, create, and edit across
+the school; a teacher is limited to their exact active teaching allocation.
+
+Draft homework and its questions support create, edit, and delete endpoints.
+Only the assigned teacher can publish, close, archive, record completion, or
+remove a completion record. Publishing requires at least one question and
+checks that configured total marks do not fall below question marks. Drafts can
+be deleted; published work must be retained through closure or archiving.
+
+`GET /{homework}/pdf` creates a learner worksheet without answers. `GET
+/{homework}/answer-key/pdf` is a staff-only restricted export with answer keys
+and marking guidance. Assignment deletion and scheme-week deletion are refused
+when homework retains their historical context.
+
+`GET /api/v1/portal/parent/children/{student}/homework` is available only to a
+linked Parent/Guardian account. It returns published homework for the child's
+active current class and current eligible period. The family response includes
+learner questions but excludes answer keys, marking guidance, teacher notes,
+completion records, and every write action.
+
+## UI: Homework
+
+`homework.html` provides responsive filters, allocation-bound draft authoring,
+question editing, a learner worksheet preview, lifecycle actions, separate
+worksheet/answer-key downloads, and explicit completion tracking. The page
+states the distinction between unrecorded and missing completion. The Parent /
+Guardian Portal has a read-only Published homework section with learner-safe
+questions only. Homework is included in Teaching & Learning navigation for
+leadership and teachers.
+
 ## Implementation sequence
 
 1. Add calendar-event and scheme/week migrations, models, relations, scoped
@@ -231,18 +285,16 @@ review. Every significant write and status transition uses the existing
    checkpoint locally. Do not migrate or alter the running MySQL database or
    Docker containers.
 
-Lesson Plans and Records of Work followed the same pattern: one additive
-migration per document set, a shared access service and response presenter,
-allocation-scoped authorization, term/date validation, leadership review
-endpoints, dompdf exports, dedicated responsive pages, and isolated regression
-suites before the local commit.
+Lesson Plans, Records of Work, and Homework follow the same pattern: additive
+migrations, a shared access service and response presenter, allocation-scoped
+authorization, term/date validation, dedicated responsive pages, and isolated
+regression suites before the local commit.
 
 ## Subsequent modules
 
-1. Homework and assignments tied to authorized allocations and learner scope.
-2. Exam Paper Studio, retained artifacts, printing, and PDF export.
-5. AI assistance behind source disclosure, human confirmation, and audit
+1. Exam Paper Studio, retained artifacts, printing, and PDF export.
+2. AI assistance behind source disclosure, human confirmation, and audit
    records; it must not generate or present unverified official curriculum
    content.
-6. Teaching-document versioning, review queues, approval delegation, and
+3. Teaching-document versioning, review queues, approval delegation, and
    notification policy after the school's governance requirements are defined.

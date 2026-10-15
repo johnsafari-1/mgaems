@@ -44,4 +44,9 @@ class ClassSubjectTeacher extends Model
     {
         return $this->hasMany(RecordOfWork::class, 'class_subject_teacher_id');
     }
+
+    public function homeworks()
+    {
+        return $this->hasMany(Homework::class, 'class_subject_teacher_id');
+    }
 }

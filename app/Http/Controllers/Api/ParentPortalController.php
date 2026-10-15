@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AttendanceStudent;
 use App\Models\ClassSubjectTeacher;
 use App\Models\Guardian;
+use App\Models\Homework;
 use App\Models\ReportCard;
 use App\Models\Role;
 use App\Models\Student;
@@ -13,6 +14,7 @@ use App\Models\TimetableEntry;
 use App\Services\AuditLogger;
 use App\Services\ParentReportView;
 use App\Services\TeacherWorkspaceAccess;
+use App\Services\TeachingDocumentData;
 use Illuminate\Validation\ValidationException;
 
 class ParentPortalController extends Controller
@@ -91,6 +93,37 @@ class ParentPortalController extends Controller
             return $this->json(['error' => ['code' => 'FILE_NOT_FOUND', 'message' => 'The report card file could not be found.']], 404);
         }
         return $this->noStore(app(\App\Services\ReportArtifacts::class)->download($card));
+    }
+
+    /**
+     * Read-only homework for a linked child. Only published homework from an
+     * eligible current teaching allocation is returned: active teaching staff,
+     * active learning area, an existing class offering, and a current academic
+     * period for the child's current class. Answer keys, marking guidance and
+     * internal teacher notes are never exposed.
+     */
+    public function childHomework($student, AuditLogger $auditLogger)
+    {
+        if (! $child = $this->ownChild($student, $auditLogger)) return $this->forbidden();
+        $reason = $child->status !== 'active' ? 'not_currently_enrolled' : (! $child->class_id ? 'no_class' : null);
+        $rows = collect();
+        if (! $reason) {
+            $periods = (new TeacherWorkspaceAccess())->periods()->select('terms.id');
+            $rows = Homework::where('status', 'published')
+                ->whereHas('assignment', fn ($assignment) => $assignment->where('class_id', $child->class_id)
+                    ->whereIn('term_id', $periods)
+                    ->whereHas('staff', fn ($staff) => $staff->where('status', 'active')->where('staff_type', 'teaching'))
+                    ->whereHas('subject', fn ($subject) => $subject->where('status', 'active'))
+                    ->whereExists(fn ($offering) => $offering->selectRaw('1')->from('class_subjects')
+                        ->whereColumn('class_subjects.class_id', 'class_subject_teacher.class_id')
+                        ->whereColumn('class_subjects.subject_id', 'class_subject_teacher.subject_id')))
+                ->with('assignment.schoolClass:id,name', 'assignment.subject:id,name', 'assignment.term:id,name',
+                    'questions:id,homework_id,position,question_type,prompt,marks,diagram_reference,options')
+                ->orderBy('due_on')->orderBy('id')->get()
+                ->map(fn ($homework) => (new TeachingDocumentData())->homeworkFamily($homework));
+        }
+
+        return $this->json(['data' => $rows, 'meta' => ['visibility' => 'published_only', 'unavailable_reason' => $reason ?: ($rows->isEmpty() ? 'no_published_homework' : null)]]);
     }
 
     public function childTimetable($student, AuditLogger $auditLogger)

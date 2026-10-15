@@ -28,6 +28,7 @@ function harness({ portal = 'sponsor', role = portal === 'sponsor' ? 'sponsor' :
     if (url.endsWith('/progress') || url.endsWith('/comments')) return { ok: true, data: progress(id) };
     if (url.endsWith('/report-cards')) return { ok: true, data: cards(id) };
     if (url.endsWith('/timetable')) return { ok: true, data: [{ id: 1, day_of_week: 1, start_time: '09:00:00', end_time: '09:40:00', subject: { id: 1, name: 'Lesson ' + id } }] };
+    if (url.endsWith('/homework')) return { ok: true, data: [], meta: { visibility: 'published_only', unavailable_reason: 'no_published_homework' } };
     throw new Error('Unexpected portal request: ' + url);
   };
   h.app.download = async (url, name, options) => { downloads.push({ url, filename: name, options }); return download ? download(url, name, options) : { ok: true }; };

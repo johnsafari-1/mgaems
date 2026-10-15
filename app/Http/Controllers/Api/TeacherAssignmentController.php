@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSubjectTeacher;
+use App\Models\Homework;
 use App\Models\LessonPlan;
 use App\Models\RecordOfWork;
 use App\Models\SchemeOfWork;
@@ -89,6 +90,7 @@ class TeacherAssignmentController extends Controller
     {
         return SchemeOfWork::where('class_subject_teacher_id', $assignment->id)->exists()
             || LessonPlan::where('class_subject_teacher_id', $assignment->id)->exists()
-            || RecordOfWork::where('class_subject_teacher_id', $assignment->id)->exists();
+            || RecordOfWork::where('class_subject_teacher_id', $assignment->id)->exists()
+            || Homework::where('class_subject_teacher_id', $assignment->id)->exists();
     }
 }

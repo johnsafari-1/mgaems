@@ -23,6 +23,7 @@ function harness({ role = 'parent_guardian', children, get, download } = {}) {
       { subject: 'Subject '+id, assessment_type: 'end_term', score: 42 }] };
     if (url.endsWith('/report-cards')) return { ok: true, data: [{ id: Number(id) * 10, term: { name: 'Report '+id }, generated_date: '2026-10-01', overall_remark: '<Published>', download_available: true }] };
     if (url.endsWith('/timetable')) return { ok: true, data: [{ day_of_week: 1, start_time: '09:00:00', end_time: '09:40:00', subject: { name: 'Lesson '+id } }] };
+    if (url.endsWith('/homework')) return { ok: true, data: [{ id: 5, title: '<Published homework>', status: 'published', due_on: '2026-10-09', submission_method: 'exercise_book', total_marks: 20, instructions: '<Instructions>', learning_outcomes: '<Outcomes>', assignment: { subject: { name: '<Area>' } }, questions: [{ id: 1, position: 1, prompt: '<Question>', marks: 10, options: [] }] }], meta: { visibility: 'published_only', unavailable_reason: null } };
     throw new Error('Unexpected API '+url);
   };
   h.app.download = async (url, filename) => { downloads.push({ url, filename }); return download ? download(url, filename) : { ok: true }; };
@@ -42,6 +43,7 @@ test('multiple-child selector keeps all sections on the selected child with educ
   assert.match(h.ids.get('familyProgress').innerHTML, /&lt;Subject 2&gt;/);
   assert.match(h.ids.get('familyCards').innerHTML, /Report 2/);
   assert.match(h.ids.get('familyTimetable').innerHTML, /Lesson 2/);
+  assert.match(h.ids.get('familyHomework').innerHTML, /&lt;Published homework&gt;|&lt;Question&gt;/);
 });
 test('delayed overview attendance progress report and timetable responses cannot cross child selection', async () => {
   const releases = [];
@@ -116,10 +118,19 @@ test('family selector announces the selected child and each mobile section link 
   const h = harness(); await flush();
   assert.match(h.ids.get('childSelector').innerHTML, /2 linked children|Choose a child/);
   assert.equal(h.ids.get('familySelectionStatus').attrs.role, 'status');
-  const links = h.ids.get('familyChild').querySelectorAll('a'); assert.equal(links.length, 6);
+  const links = h.ids.get('familyChild').querySelectorAll('a'); assert.equal(links.length, 7);
   for (const link of links) { const target = h.ids.get(link.attrs.href.slice(1)); assert.ok(target); assert.equal(target.attrs.tabindex, '-1'); assert.ok(target.attrs['aria-labelledby']); }
   switchChild(h, '2'); await flush(); assert.equal(h.ids.get('familySelectionStatus').textContent, 'Viewing Child B Family · B2');
   assert.equal(h.ids.get('familyLearner').attrs['aria-describedby'], 'familySelectorHint');
+});
+
+test('published homework is learner-safe and rejects answer keys or marking guidance', async () => {
+  const h = harness(); await flush();
+  assert.match(h.ids.get('familyHomework').innerHTML, /&lt;Question&gt;/);
+  assert.doesNotMatch(h.ids.get('familyHomework').innerHTML, /answer key|marking guidance/i);
+  const unsafe = harness({ get: url => url.endsWith('/homework') ? { ok: true, data: [{ id: 5, title: 'Unsafe', due_on: '2026-10-09', questions: [{ prompt: 'Question', answer_key: 'Private' }] }] } : undefined });
+  await flush();
+  assert.match(unsafe.ids.get('familyHomework').innerHTML, /unexpected child information/i);
 });
 
 test('invalid attendance ranges send no request and clear dates restores the selected-child query', async () => {

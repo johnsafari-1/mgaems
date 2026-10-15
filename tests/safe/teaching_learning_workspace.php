@@ -21,12 +21,15 @@ $app->bootstrapWith([
 
 use App\Http\Controllers\Api\AcademicCalendarController;
 use App\Http\Controllers\Api\AcademicEventController;
+use App\Http\Controllers\Api\HomeworkController;
 use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\RecordOfWorkController;
 use App\Http\Controllers\Api\SchemeOfWorkController;
 use App\Http\Controllers\Api\TeacherAssignmentController;
 use App\Models\AcademicYear;
 use App\Models\ClassSubjectTeacher;
+use App\Models\Homework;
+use App\Models\HomeworkCompletion;
 use App\Models\LessonPlan;
 use App\Models\RecordOfWork;
 use App\Models\Role;
@@ -40,6 +43,7 @@ use App\Services\AuditLogger;
 use App\Services\TeachingDocumentAccess;
 use App\Services\TeachingDocumentData;
 use App\Services\TeachingDocumentExport;
+use App\Services\HomeworkExport;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
@@ -79,10 +83,14 @@ Schema::create('assessments', function (Blueprint $table) { $table->id(); $table
 Schema::create('report_cards', function (Blueprint $table) { $table->id(); $table->foreignId('term_id')->constrained('terms'); });
 Schema::create('promotions_transfers', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained('students'); $table->foreignId('term_id')->constrained('terms'); $table->foreignId('from_class_id')->nullable()->constrained('classes'); $table->foreignId('to_class_id')->nullable()->constrained('classes'); });
 // Assignment removal inspects the existing recurring timetable and legacy learner placements.
-Schema::create('students', function (Blueprint $table) { $table->id(); $table->foreignId('class_id')->constrained('classes'); });
+Schema::create('students', function (Blueprint $table) {
+    $table->id(); $table->string('admission_no')->unique(); $table->string('first_name'); $table->string('last_name');
+    $table->foreignId('class_id')->constrained('classes'); $table->string('status'); $table->timestamps();
+});
 Schema::create('timetable_entries', function (Blueprint $table) { $table->id(); $table->foreignId('class_id')->constrained('classes'); $table->foreignId('subject_id')->constrained('subjects'); $table->foreignId('staff_id')->constrained('staff'); });
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000038_create_teaching_learning_workspace.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000039_create_lesson_plans_and_records_of_work_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000040_create_homework_and_assignments_tables.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {
@@ -114,6 +122,7 @@ $integrity = new AcademicIntegrity(); $events = new AcademicEventController($int
 $access = new TeachingDocumentAccess(); $documentData = new TeachingDocumentData();
 $lessonPlans = new LessonPlanController($access, $documentData, new TeachingDocumentExport());
 $records = new RecordOfWorkController($access, $documentData, new TeachingDocumentExport());
+$homeworks = new HomeworkController($access, $documentData, new HomeworkExport());
 
 check('calendar events are contained by their school periods and audited', function () use ($events, $admin, $year, $term, $otherYear) {
     $request = requestFor($admin, ['academic_year_id' => $year->id, 'term_id' => $term->id, 'title' => 'Staff entered activity', 'event_type' => 'academic_activity', 'starts_on' => '2026-02-02', 'ends_on' => '2026-02-03']);
@@ -151,6 +160,13 @@ function recordInput(array $replace = []): array {
         'learning_activities_conducted' => 'Conducted activities', 'work_completed' => 'Completed work',
         'work_not_completed' => 'One exercise', 'reasons_for_deviations' => 'Time',
         'teacher_observations' => 'Observations', 'follow_up_actions' => 'Review next lesson',
+    ], $replace);
+}
+function homeworkInput(array $replace = []): array {
+    return array_replace([
+        'class_subject_teacher_id' => 0, 'title' => 'Staff entered homework', 'assigned_on' => '2026-02-03',
+        'due_on' => '2026-02-06', 'submission_method' => 'exercise_book', 'instructions' => 'Complete the questions.',
+        'learning_outcomes' => 'Demonstrate the planned learning outcome.', 'total_marks' => 10,
     ], $replace);
 }
 
@@ -228,6 +244,35 @@ check('leadership review returns a submitted scheme and preserves the audit trai
     $scheme = App\Models\SchemeOfWork::firstOrFail(); $request = requestFor($admin, ['action' => 'returned', 'review_notes' => 'Please clarify the weekly resources.']);
     $response = $schemes->review($request, $scheme, new AuditLogger($request)); ensure($response->getData(true)['data']['status'] === 'returned', 'Returned for revision');
     ensure(DB::table('audit_logs')->where('action', 'RETURNED_SCHEME_OF_WORK')->exists(), 'Review audit');
+});
+check('homework is allocation-scoped, teacher-published, and records only explicit completion evidence', function () use ($homeworks, $teacher, $otherTeacher, $admin, $assignment, $class) {
+    $first = App\Models\Student::create(['admission_no' => 'HW-001', 'first_name' => 'Ada', 'last_name' => 'Learner', 'class_id' => $class->id, 'status' => 'active']);
+    $second = App\Models\Student::create(['admission_no' => 'HW-002', 'first_name' => 'Ben', 'last_name' => 'Learner', 'class_id' => $class->id, 'status' => 'active']);
+    $create = requestFor($teacher, homeworkInput(['class_subject_teacher_id' => $assignment->id]));
+    $created = $homeworks->store($create, new AuditLogger($create));
+    ensure($created->getStatusCode() === 201, 'Homework draft created');
+    $homework = Homework::findOrFail($created->getData(true)['data']['id']);
+    ensure($homework->status === 'draft' && $homework->assigned_on->toDateString() === '2026-02-03', 'Homework dates are cast and retained');
+    $foreign = requestFor($otherTeacher, homeworkInput(['class_subject_teacher_id' => $assignment->id]));
+    try { $homeworks->store($foreign, new AuditLogger($foreign)); throw new RuntimeException('Expected foreign homework denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign teacher denied'); }
+    $question = requestFor($teacher, ['position' => 1, 'question_type' => 'multiple_choice', 'prompt' => 'Staff entered question', 'marks' => 10,
+        'options' => ['Correct answer', 'Other answer'], 'answer_key' => 'Correct answer', 'marking_guidance' => 'Award the recorded mark.']);
+    ensure($homeworks->storeQuestion($question, $homework, new AuditLogger($question))->getStatusCode() === 201, 'Question created');
+    $family = (new TeachingDocumentData())->homeworkFamily($homework->fresh('questions'));
+    ensure(isset($family['questions'][0]) && ! array_key_exists('answer_key', $family['questions'][0]) && ! array_key_exists('marking_guidance', $family['questions'][0]), 'Family homework omits assessment keys');
+    try { $homeworks->publish(requestFor($admin), $homework, new AuditLogger(requestFor($admin))); throw new RuntimeException('Expected leadership publish denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Leadership cannot publish teacher homework'); }
+    $publish = requestFor($teacher); ensure($homeworks->publish($publish, $homework, new AuditLogger($publish))->getData(true)['data']['status'] === 'published', 'Teacher published homework');
+    $record = requestFor($teacher, ['student_id' => $first->id, 'status' => 'missing', 'notes' => 'Teacher checked the exercise book.']);
+    ensure($homeworks->recordCompletion($record, $homework, new AuditLogger($record))->getData(true)['data']['status'] === 'missing', 'Missing requires an explicit teacher record');
+    $rows = $homeworks->completions(requestFor($teacher), $homework)->getData(true)['data']['learners'];
+    ensure(collect($rows)->firstWhere('student_id', $first->id)['status'] === 'missing', 'Recorded learner has evidence status');
+    ensure(collect($rows)->firstWhere('student_id', $second->id)['status'] === null, 'No completion row remains not yet recorded');
+    $completion = HomeworkCompletion::where('homework_id', $homework->id)->where('student_id', $first->id)->firstOrFail();
+    $remove = requestFor($teacher); $homeworks->destroyCompletion($remove, $homework, $completion, new AuditLogger($remove));
+    ensure($homeworks->completions(requestFor($teacher), $homework)->getData(true)['data']['learners'][0]['status'] === null, 'Removing a record restores not yet recorded');
+    ensure(DB::table('audit_logs')->where('action', 'PUBLISH_HOMEWORK')->exists() && DB::table('audit_logs')->where('action', 'RECORD_HOMEWORK_COMPLETION')->exists(), 'Homework audit trail');
 });
 check('teaching documents block assignment deletion and are exportable as PDFs', function () use ($lessonPlans, $records, $schemes, $teacher, $otherTeacher, $admin, $assignment) {
     $plan = LessonPlan::firstOrFail();

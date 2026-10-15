@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassSubjectTeacher;
+use App\Models\Homework;
 use App\Models\LessonPlan;
 use App\Models\SchemeOfWork;
 use App\Models\SchemeOfWorkWeek;
@@ -149,10 +150,10 @@ class SchemeOfWorkController extends Controller
             abort_unless((int) $week->scheme_of_work_id === (int) $scheme->id, 404);
             $this->assertEditable($scheme);
             $week = SchemeOfWorkWeek::whereKey($week->id)->lockForUpdate()->firstOrFail();
-            // A planned lesson keeps its link to this weekly entry; deleting the
+            // Planned teaching keeps its link to this weekly entry; deleting the
             // entry would silently discard teaching history.
-            if (LessonPlan::where('scheme_of_work_week_id', $week->id)->exists()) {
-                return $this->conflict('WEEK_IN_USE', 'A lesson plan is linked to this weekly plan. Remove or re-link that lesson plan before deleting the week.');
+            if (LessonPlan::where('scheme_of_work_week_id', $week->id)->exists() || Homework::where('scheme_of_work_week_id', $week->id)->exists()) {
+                return $this->conflict('WEEK_IN_USE', 'A lesson plan or homework is linked to this weekly plan. Remove or re-link it before deleting the week.');
             }
             $week->delete();
             $auditLogger->log('DELETE_SCHEME_OF_WORK_WEEK', 'SchemeOfWorkWeek', $week->id, ['scheme_of_work_id' => $scheme->id]);

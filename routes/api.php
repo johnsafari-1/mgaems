@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
 use App\Http\Controllers\Api\GuardianController;
+use App\Http\Controllers\Api\HomeworkController;
 use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
@@ -167,6 +168,27 @@ Route::prefix('v1')->group(function () {
         Route::post('/records-of-work/{recordOfWork}/review', [RecordOfWorkController::class, 'review'])
             ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
 
+        // --- Teaching & Learning: Homework and Assignments ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/homework/context', [HomeworkController::class, 'context']);
+            Route::get('/homework', [HomeworkController::class, 'index']);
+            Route::get('/homework/{homework}', [HomeworkController::class, 'show']);
+            Route::get('/homework/{homework}/completions', [HomeworkController::class, 'completions']);
+            Route::get('/homework/{homework}/pdf', [HomeworkController::class, 'pdf']);
+            Route::get('/homework/{homework}/answer-key/pdf', [HomeworkController::class, 'answerKeyPdf']);
+            Route::post('/homework', [HomeworkController::class, 'store']);
+            Route::patch('/homework/{homework}', [HomeworkController::class, 'update']);
+            Route::delete('/homework/{homework}', [HomeworkController::class, 'destroy']);
+            Route::post('/homework/{homework}/questions', [HomeworkController::class, 'storeQuestion']);
+            Route::patch('/homework/{homework}/questions/{question}', [HomeworkController::class, 'updateQuestion']);
+            Route::delete('/homework/{homework}/questions/{question}', [HomeworkController::class, 'destroyQuestion']);
+            Route::post('/homework/{homework}/completions', [HomeworkController::class, 'recordCompletion']);
+            Route::delete('/homework/{homework}/completions/{completion}', [HomeworkController::class, 'destroyCompletion']);
+            Route::post('/homework/{homework}/publish', [HomeworkController::class, 'publish']);
+            Route::post('/homework/{homework}/close', [HomeworkController::class, 'close']);
+            Route::post('/homework/{homework}/archive', [HomeworkController::class, 'archive']);
+        });
+
         // --- Academic Management: Classes, Subjects (SRS FR-ACAD-02/03) ---
         // Coordinator operations use minimal sponsorship references, not school academics.
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher,parent_guardian,sponsor,student')->group(function () {
@@ -287,6 +309,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/children/{student}', [ParentPortalController::class, 'childOverview']);
             Route::get('/children/{student}/timetable', [ParentPortalController::class, 'childTimetable']);
             Route::get('/children/{student}/attendance', [ParentPortalController::class, 'childAttendance']);
+            Route::get('/children/{student}/homework', [ParentPortalController::class, 'childHomework']);
             Route::get('/children/{student}/report-cards', [ParentPortalController::class, 'childReportCards']);
             Route::get('/children/{student}/report-cards/{reportCard}/download', [ParentPortalController::class, 'downloadReportCard']);
             Route::get('/children/{student}/progress', [ParentPortalController::class, 'childProgress']);
