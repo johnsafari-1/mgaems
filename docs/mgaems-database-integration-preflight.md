@@ -102,6 +102,31 @@ Downtime: the app was unavailable for roughly 1–3 minutes during the image bui
 
 Note: the five new tables are additive and do not alter existing data, so a code-only rollback to the previous commit is safe even if the migrations remain applied.
 
+## Approval commands
+
+### Approved and executed (2026-10-15)
+
+Approval was granted by the operator before execution. The exact command block run is recorded in the "Live upgrade (executed 2026-10-15)" section above: `docker compose build app`, `docker compose up -d --force-recreate app`, in-container `composer install`, `php artisan migrate --force`, and the three verification commands. Post-verification results: Laravel 13.35.0, 44/44 migrations ran, HTTP 200, 13/13 tests passed.
+
+### Requires approval before running (NOT executed)
+
+These remain unexecuted and must be individually approved:
+
+```bash
+# 1. Push the two local commits to the remote (nothing has been pushed yet).
+git push origin feature/production-ui
+
+# 2. Optional cleanup of superseded local images (no longer referenced by any container).
+docker rmi mgaems-upgrade-php83:ef501378 mgaems-staging:checkpoint2c
+
+# 3. Optional cleanup of the local rehearsal image built during preflight.
+docker rmi mgaems-preflight-php83:rehearsal
+```
+
+### Emergency rollback (approval required; never run preemptively)
+
+See the Rollback section above for the full ordered procedure. In summary: `docker compose stop mgaems-app`, `docker volume rm mgaems_mgaems_vendor`, `git checkout f5b09eb`, `docker compose up -d mgaems-app`, and if the schema must be reverted, restore `D:\mgaems-backups\mgaems-preflight-20261015-160235.sql` into `mgaems-mysql`.
+
 ## Status
 
 - [x] Task 1 — source checkpoint committed locally (`f5b09eb`)
