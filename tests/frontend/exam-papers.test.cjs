@@ -10,11 +10,13 @@ const css = fs.readFileSync(path.join(root, 'public/assets/exam-papers.css'), 'u
 
 test('Exam Studio has a responsive outline, authoring, and A4 preview workspace', () => {
   assert.match(source, /exam-studio/);
+  assert.match(source, /exam-setup/);
+  assert.match(source, /exam-paper-composer/);
   assert.match(source, /exam-outline/);
   assert.match(source, /exam-preview-paper/);
   assert.match(source, /Learner view/);
   assert.match(source, /Staff marking view/);
-  assert.match(css, /grid-template-columns: minmax\(190px/);
+  assert.match(css, /grid-template-columns: minmax\(220px/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(css, /@media print/);
   assert.match(source, /Version/);
@@ -30,6 +32,12 @@ test('Exam Studio preserves staff-only answers and existing paper APIs', () => {
   assert.match(source, /duplicate/);
   assert.match(source, /delete-question/);
   assert.match(source, /'essay'/);
+  assert.match(source, /questions\/reorder/);
+  assert.match(source, /data-question-drag/);
+  assert.match(source, /\/revisions/);
+  assert.match(source, /examDiagramCanvas/);
+  assert.match(source, /Save sketch/);
+  assert.match(source, /preview-attachment/);
   assert.doesNotMatch(source, /\/storage\/exam-papers/);
 });
 

@@ -198,7 +198,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/exam-papers/{examPaper}/sections', [ExamPaperController::class, 'storeSection']);
             Route::patch('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'updateSection']);
             Route::delete('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'destroySection']);
+            Route::get('/exam-papers/{examPaper}/revisions', [ExamPaperController::class, 'revisions']);
             Route::post('/exam-papers/{examPaper}/questions', [ExamPaperController::class, 'storeQuestion']);
+            Route::post('/exam-papers/{examPaper}/questions/reorder', [ExamPaperController::class, 'reorderQuestions']);
             Route::patch('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'updateQuestion']);
             Route::post('/exam-papers/{examPaper}/questions/{question}/duplicate', [ExamPaperController::class, 'duplicateQuestion']);
             Route::delete('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'destroyQuestion']);

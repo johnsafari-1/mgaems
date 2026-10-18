@@ -306,7 +306,7 @@ check('teaching documents block assignment deletion and are exportable as PDFs',
     try { $lessonPlans->pdf(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign export denial'); }
     catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot export'); }
 });
-check('exam papers enforce allocation, preserve staff-only keys, and retain reviewed revisions', function () use ($examPapers, $reviewQueue, $teacher, $otherTeacher, $admin, $assignment) {
+ check('exam papers enforce allocation, persist drag-ordering, preserve staff-only keys, and retain reviewed revisions', function () use ($examPapers, $teacher, $otherTeacher, $admin, $assignment) {
     $create = requestFor($teacher, ['class_subject_teacher_id' => $assignment->id, 'examination_type' => 'end_term', 'title' => 'Staff entered assessment', 'instructions' => 'Answer all questions.', 'duration_minutes' => 45, 'exam_date' => '2026-02-20']);
     $created = $examPapers->store($create, new AuditLogger($create)); ensure($created->getStatusCode() === 201, 'Exam draft created');
     $paper = ExamPaper::findOrFail($created->getData(true)['data']['id']);
@@ -319,9 +319,18 @@ check('exam papers enforce allocation, preserve staff-only keys, and retain revi
     $essay = requestFor($teacher, ['position' => 2, 'question_type' => 'essay', 'prompt' => 'Explain the staff-entered reasoning.', 'marks' => 10, 'exam_paper_section_id' => $section['id'], 'options' => [], 'answer_key' => 'Staff reviewed response.', 'marking_guidance' => 'Use the approved marking points.']);
     ensure($examPapers->storeQuestion($essay, $paper, new AuditLogger($essay))->getStatusCode() === 201, 'Essay question and section supported');
     $paperView = $examPapers->show(requestFor($teacher), $paper)->getData(true)['data']; ensure($paperView['questions'][0]['answer_key'] === 'Correct option', 'Staff workspace retains answer key');
+    $ids = collect($paperView['questions'])->keyBy('prompt');
+    $reorder = requestFor($teacher, ['question_ids' => [$ids['Explain the staff-entered reasoning.']['id'], $ids['Staff entered assessment item']['id']]]);
+    ensure($examPapers->reorderQuestions($reorder, $paper, new AuditLogger($reorder))->getStatusCode() === 200, 'Question reordering persists atomically');
+    ensure($paper->fresh()->questions()->orderBy('position')->pluck('prompt')->all() === ['Explain the staff-entered reasoning.', 'Staff entered assessment item'], 'Reordered positions are retained');
+    try { $foreignReorder = requestFor($otherTeacher, ['question_ids' => [$ids['Explain the staff-entered reasoning.']['id'], $ids['Staff entered assessment item']['id']]]); $examPapers->reorderQuestions($foreignReorder, $paper, new AuditLogger($foreignReorder)); throw new RuntimeException('Expected foreign reorder denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'Foreign teacher cannot reorder another allocation paper'); }
     $submit = requestFor($teacher); ensure($examPapers->submit($submit, $paper, new AuditLogger($submit))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted examination paper');
-    $review = requestFor($admin, ['action' => 'approved']); ensure($reviewQueue->review($review, 'exam_paper', $paper->id, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Central review approved examination paper');
-    ensure(DB::table('teaching_document_revisions')->where('document_type', 'exam_paper')->where('document_id', $paper->id)->where('status', 'approved')->exists(), 'Approved exam revision retained');
+    $review = requestFor($admin, ['action' => 'approved']); ensure($examPapers->review($review, $paper, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Leadership approved examination paper');
+    $revisions = $examPapers->revisions(requestFor($teacher), $paper)->getData(true)['data'];
+    ensure(count($revisions) === 2 && $revisions[0]['status'] === 'approved' && $revisions[0]['has_workspace_snapshot'] && count($revisions[0]['snapshot']['questions']) === 2, 'Authorized revision navigation returns complete paper snapshots');
+    try { $examPapers->revisions(requestFor($otherTeacher), $paper); throw new RuntimeException('Expected foreign revision denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'Foreign teacher cannot read revisions'); }
     $export = (new ExamPaperExport())->paper($paper->fresh(['assignment.schoolClass', 'assignment.subject', 'assignment.term.academicYear', 'questions', 'sections']), false);
     ensure($export['unsectioned_questions'][0]['answer_key'] === null, 'Learner paper export omits answer key');
 });

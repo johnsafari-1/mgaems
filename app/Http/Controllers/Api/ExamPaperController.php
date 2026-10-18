@@ -64,6 +64,23 @@ class ExamPaperController extends Controller
         return response()->json(['data' => $this->workspace($paper)]);
     }
 
+    public function revisions(Request $request, ExamPaper $examPaper)
+    {
+        $user = $this->access->user($request->user());
+        $paper = $this->access->document($user, ExamPaper::class, $examPaper->id);
+        $revisions = ExamPaperRevision::where('exam_paper_id', $paper->id)->orderByDesc('revision_number')->get();
+
+        return response()->json(['data' => $revisions->map(fn ($revision) => [
+            'id' => $revision->id,
+            'revision_number' => $revision->revision_number,
+            'status' => $revision->status,
+            'created_at' => $revision->created_at?->toISOString(),
+            'snapshot_sha256' => $revision->snapshot_sha256,
+            'snapshot' => $revision->snapshot,
+            'has_workspace_snapshot' => is_array($revision->snapshot) && is_array($revision->snapshot['questions'] ?? null),
+        ])->values()]);
+    }
+
     public function store(Request $request, AuditLogger $auditLogger)
     {
         $validated = $request->validate($this->paperRules());
@@ -113,6 +130,24 @@ class ExamPaperController extends Controller
 
     public function storeQuestion(Request $request, ExamPaper $examPaper, AuditLogger $auditLogger) { return $this->questionWrite($request, $examPaper, null, $auditLogger); }
     public function updateQuestion(Request $request, ExamPaper $examPaper, ExamPaperQuestion $question, AuditLogger $auditLogger) { return $this->questionWrite($request, $examPaper, $question, $auditLogger); }
+
+    public function reorderQuestions(Request $request, ExamPaper $examPaper, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate(['question_ids' => ['required', 'array', 'min:1', 'max:200'], 'question_ids.*' => ['required', 'integer', 'distinct']]);
+        return DB::transaction(function () use ($request, $examPaper, $auditLogger, $validated) {
+            $paper = $this->editableDocument($request, $examPaper);
+            $actual = $paper->questions()->lockForUpdate()->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
+            $requested = collect($validated['question_ids'])->map(fn ($id) => (int) $id)->sort()->values();
+            if ($actual->all() !== $requested->all()) throw ValidationException::withMessages(['question_ids' => 'Reordering must include every question in this paper exactly once.']);
+
+            // Shift first so the database uniqueness constraint cannot collide during the reorder.
+            $paper->questions()->update(['position' => DB::raw('position + 1000')]);
+            foreach ($validated['question_ids'] as $index => $id) ExamPaperQuestion::whereKey($id)->update(['position' => $index + 1]);
+            $auditLogger->log('REORDER_EXAM_PAPER_QUESTIONS', 'ExamPaper', $paper->id, ['class_subject_teacher_id' => $paper->class_subject_teacher_id]);
+
+            return response()->json(['data' => $this->workspace($paper->fresh($this->relations()))]);
+        }, 3);
+    }
 
     public function duplicateQuestion(Request $request, ExamPaper $examPaper, ExamPaperQuestion $question, AuditLogger $auditLogger)
     {
