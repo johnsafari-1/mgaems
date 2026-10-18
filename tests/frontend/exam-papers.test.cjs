@@ -21,6 +21,12 @@ test('Exam Studio has a responsive outline, authoring, and A4 preview workspace'
   assert.match(css, /@media print/);
   assert.match(source, /Version/);
   assert.match(source, /revision_number/);
+  assert.match(source, /capabilities/);
+  assert.match(source, /header_template/);
+  assert.match(source, /exam-template-switch/);
+  assert.match(source, /exam-version-lineage/);
+  assert.match(source, /create-version/);
+  assert.match(source, /open-version/);
 });
 
 test('Exam Studio preserves staff-only answers and existing paper APIs', () => {
@@ -54,8 +60,10 @@ test('paper-outline rendering completes with representative data and no exceptio
   const assignment = { school_class: { name: 'Grade 7A' }, subject: { name: 'Mathematics' }, term: { academic_year: { name: '2026' }, name: 'Term 2' } };
   const paper = {
     id: 1, class_subject_teacher_id: 1, examination_type: 'end_term', title: 'Mathematics Mid-Term',
-    status: 'draft', exam_date: '2026-05-01', duration_minutes: 90, revision_number: 3, question_count: 2, total_marks: 15,
+    status: 'draft', exam_date: '2026-05-01', duration_minutes: 90, revision_number: 3, version_number: 3, header_template: 'branded', question_count: 2, total_marks: 15,
     instructions: 'Answer all questions.', review_notes: null, submitted_at: null, reviewed_at: null, published_at: null,
+    source: { id: 9, title: 'Original sitting', version_number: 1, status: 'published' },
+    derived_versions: [{ id: 11, title: 'Mathematics Mid-Term', version_number: 4, status: 'draft', exam_date: null }],
     assignment,
     sections: [{ id: 10, position: 1, title: 'Section A', instructions: 'Multiple choice' }],
     questions: [
@@ -65,7 +73,7 @@ test('paper-outline rendering completes with representative data and no exceptio
     attachments: [],
   };
   h.app.get = async (url) => {
-    if (url.endsWith('/context')) return { ok: true, data: { scope: 'assigned', assignments: [{ id: 1, ...assignment }], examination_types: ['end_term'] } };
+    if (url.endsWith('/context')) return { ok: true, data: { scope: 'assigned', assignments: [{ id: 1, ...assignment }], examination_types: ['end_term'], capabilities: { header_templates: true, versions: true } } };
     if (url === '/api/v1/exam-papers') return { ok: true, data: [{ id: 1, title: paper.title, status: 'draft', examination_type: 'end_term', question_count: 2, total_marks: 15, revision_number: 3, assignment }] };
     if (url.endsWith('/exam-papers/1')) return { ok: true, data: paper };
     return { ok: false, error: 'unexpected url: ' + url };
@@ -84,5 +92,11 @@ test('paper-outline rendering completes with representative data and no exceptio
   assert.match(html, /What is 2 \+ 2\?/);
   assert.match(html, /Explain linear equations\./);
   assert.match(html, /Version 3/);
+  assert.match(html, /Header template/);
+  assert.match(html, /Branded/);
+  assert.match(html, /exam-template-switch/);
+  assert.match(html, /Versions/);
+  assert.match(html, /Original sitting/);
+  assert.match(html, /exam-preview-header is-branded/);
   assert.doesNotMatch(html, /undefined|\[object Object\]/);
 });

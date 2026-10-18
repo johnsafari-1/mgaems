@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Homework;
-use App\Models\SchoolSetting;
 
 /**
  * Builds printable homework documents. The learner worksheet never contains
@@ -64,14 +63,6 @@ class HomeworkExport
 
     private function school(): array
     {
-        $school = ['name' => 'MGAEMS', 'motto' => null];
-        try {
-            $settings = SchoolSetting::query()->first();
-            if ($settings) $school = ['name' => $settings->school_name ?: $school['name'], 'motto' => $settings->motto];
-        } catch (\Throwable $exception) {
-            return $school;
-        }
-
-        return $school;
+        return (new SchoolExportIdentity())->current();
     }
 }

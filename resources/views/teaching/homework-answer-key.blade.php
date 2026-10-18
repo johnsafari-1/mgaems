@@ -3,7 +3,7 @@
 <head><meta charset="utf-8">
 <style>
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #222; }
-h1 { font-size: 16px; margin-bottom: 3px; } .muted { color: #555; }
+h1 { font-size: 16px; margin-bottom: 3px; } .muted { color: #555; } .school-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; } .school-logo { max-width: 70px; max-height: 55px; }
 table { width: 100%; border-collapse: collapse; margin-top: 12px; }
 th, td { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
 th { background: #1F3864; color: white; width: 24%; }
@@ -14,7 +14,7 @@ th { background: #1F3864; color: white; width: 24%; }
 .answer { margin-top: 6px; white-space: pre-wrap; }
 </style></head>
 <body>
-<h1>{{ $document['school']['name'] }}</h1>
+@include('teaching.partials.school-header')
 <div class="restricted">Restricted staff document — contains answer keys and marking guidance. Do not distribute to learners or guardians.</div>
 <p><strong>{{ $document['document_type'] }}</strong> — {{ $document['title'] }}</p>
 <table>

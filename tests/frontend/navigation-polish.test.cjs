@@ -72,7 +72,7 @@ function harness({ role = 'head_teacher', mobile = false, settings = null, schoo
 }
 
 const approved = {
-  system_admin: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'lesson-plans', 'records-of-work', 'homework', 'exam-papers', 'teaching-review', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration'],
+  system_admin: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'lesson-plans', 'records-of-work', 'homework', 'exam-papers', 'teaching-review', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'administration', 'curriculum-library'],
   head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'lesson-plans', 'records-of-work', 'homework', 'exam-papers', 'teaching-review', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare', 'administration'],
   deputy_head_teacher: ['dashboard', 'students', 'guardians', 'academic', 'schemes-of-work', 'lesson-plans', 'records-of-work', 'homework', 'exam-papers', 'teaching-review', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports', 'health-welfare'],
   teacher: ['dashboard', 'students', 'teacher-timetable', 'schemes-of-work', 'lesson-plans', 'records-of-work', 'homework', 'exam-papers', 'attendance', 'assessment', 'communication'],
