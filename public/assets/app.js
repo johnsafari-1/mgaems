@@ -451,6 +451,118 @@ const MGAEMS = (() => {
     });
   }
 
+  const GROUNDED_NOTICE = 'Draft from approved curriculum records. Output is labelled AI-generated and must be reviewed and edited before saving. It never changes this document on its own.';
+
+  function draftRowMatches(row, values) {
+    const text = value => String(value ?? '').trim();
+    return Object.entries(values).every(([key, value]) => Array.isArray(value)
+      ? JSON.stringify((row[key] || []).map(text)) === JSON.stringify(value.map(text))
+      : typeof value === 'boolean' ? Boolean(row[key]) === value : text(row[key]) === text(value));
+  }
+
+  function groundedDraft(options = {}) {
+    const operation = options.operation;
+    if (!operation) throw new Error('groundedDraft requires an operation.');
+    const seeds = options.selection || {}, constraintSeeds = options.constraints || {};
+    const constraintNames = Object.keys(constraintSeeds);
+    const assignmentId = Number(options.classSubjectTeacherId);
+    const label = name => ({ total_marks: 'Total marks', duration_minutes: 'Duration (minutes)', total_duration_minutes: 'Scheme duration (minutes)' }[name] || name.replace(/_/g, ' '));
+    const field = (name, text, value, type, extra = '') => `<div class="field"><label>${escapeHTML(text)}</label><input name="${escapeHTML(name)}" type="${escapeHTML(type)}" value="${escapeHTML(value)}" ${extra}></div>`;
+    const body = `<form class="grounded-draft-form" data-grounded-form novalidate><div data-form-error role="alert"></div><p class="academic-form-note">${escapeHTML(GROUNDED_NOTICE)}</p><div class="form-grid">${field('grade', 'Grade (1-12) *', seeds.grade ?? '', 'number', 'min="1" max="12" required')}${field('learning_area', 'Learning area *', seeds.learning_area ?? '', 'text', 'maxlength="160" required')}${field('strand', 'Strand', seeds.strand ?? '', 'text', 'maxlength="200"')}${field('sub_strand', 'Sub-strand', seeds.sub_strand ?? '', 'text', 'maxlength="200"')}${field('topic', 'Topic', seeds.topic ?? '', 'text', 'maxlength="160"')}${constraintNames.map(name => field(name, label(name), constraintSeeds[name] ?? '', 'number', 'min="1" step="1"')).join('')}</div></form><div class="grounded-draft-result" data-draft-result hidden></div>`;
+    const footer = `<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="button" class="btn btn-primary" data-grounded-request>Generate draft</button><button type="button" class="btn btn-primary" data-grounded-import hidden>${escapeHTML(options.importLabel || 'Import reviewed draft')}</button>`;
+    const modal = MGAEMS.openModal({ title: options.title || 'Curriculum-grounded AI draft', trigger: options.trigger, body, footer });
+    const form = modal.body.querySelector('[data-grounded-form]'), resultBox = modal.body.querySelector('[data-draft-result]');
+    const requestBtn = modal.overlay.querySelector('[data-grounded-request]'), importBtn = modal.overlay.querySelector('[data-grounded-import]');
+    let currentRunId = null, busy = false, importStarted = false, importedOutcome = null;
+    const importState = {};
+    const notify = (message, type) => { try { MGAEMS.toast(message, type); } catch { /* Feedback is optional. */ } };
+    const read = name => String(form.elements[name]?.value ?? '').trim();
+    const readSelection = () => {
+      const selection = {}, grade = Number(read('grade'));
+      if (Number.isInteger(grade) && grade >= 1 && grade <= 12) selection.grade = grade;
+      ['learning_area', 'strand', 'sub_strand', 'topic'].forEach(name => { const value = read(name); if (value) selection[name] = value; });
+      if (Number.isInteger(assignmentId) && assignmentId > 0) selection.class_subject_teacher_id = assignmentId;
+      return selection;
+    };
+    const readConstraints = () => { const out = {}; constraintNames.forEach(name => { const value = Number(read(name)); if (Number.isInteger(value) && value > 0) out[name] = value; }); return out; };
+    const unavailable = data => {
+      resultBox.hidden = false;
+      resultBox.innerHTML = `<div class="alert alert-warning" role="status"><i data-lucide="alert-circle" aria-hidden="true"></i><span>${escapeHTML(!data?.available ? 'AI drafting is disabled or not configured.' : 'Verified curriculum content is not installed yet.')} Author this document manually; your work is unaffected.</span></div>`;
+      MGAEMS.initIcons();
+    };
+    const renderDraft = data => {
+      const draft = data?.draft || {}, refs = Array.isArray(draft.curriculum_references) ? draft.curriculum_references : [];
+      resultBox.hidden = false;
+      resultBox.innerHTML = `<div class="alert alert-info" role="status"><i data-lucide="alert-circle" aria-hidden="true"></i><span>${escapeHTML(data?.label || 'AI-generated draft')}. ${escapeHTML(data?.disclosure || 'Review and edit before saving.')}</span></div>${refs.length ? `<details class="grounded-references"><summary>Verified curriculum references (${refs.length})</summary><ul>${refs.map(ref => `<li>Record ${escapeHTML(ref.record_id)} · source v${escapeHTML(ref.source_version_id)} · page ${escapeHTML(ref.page_reference)}</li>`).join('')}</ul></details>` : ''}<div class="field full"><label>Editable draft JSON</label><textarea data-draft-json rows="16" spellcheck="false"></textarea></div>`;
+      resultBox.querySelector('[data-draft-json]').value = JSON.stringify(draft, null, 2);
+      currentRunId = data?.run_id ?? null;
+      requestBtn.textContent = 'Generate again';
+      if (typeof options.onImport === 'function') importBtn.hidden = false;
+      MGAEMS.initIcons();
+    };
+    requestBtn.addEventListener('click', async () => {
+      if (modal.closed || busy || importStarted) return;
+      const selection = readSelection();
+      if (!selection.grade || !selection.learning_area) { MGAEMS.showFormErrors(form, { error: 'Choose the grade and learning area before generating.' }); return; }
+      importBtn.hidden = true; currentRunId = null; resultBox.hidden = true; resultBox.innerHTML = '';
+      busy = true; modal.setBusy(true); requestBtn.textContent = 'Checking availability…';
+      try {
+        const status = await MGAEMS.get('/api/v1/ai-teaching/status');
+        const statusCache = status.ok ? status.data : { available: false };
+        if (modal.closed) return;
+        if (!statusCache.available || !statusCache.capabilities?.grounded) { unavailable(statusCache); return; }
+        requestBtn.textContent = 'Generating draft…';
+        const payload = { operation, input: { selection, constraints: readConstraints() } };
+        if (options.documentType) payload.document_type = options.documentType;
+        if (Number.isInteger(options.documentId)) payload.document_id = options.documentId;
+        const result = await MGAEMS.post('/api/v1/ai-teaching/drafts', payload);
+        if (modal.closed) return;
+        if (!result.ok) { MGAEMS.showFormErrors(form, result); return; }
+        renderDraft(result.data);
+      } catch {
+        MGAEMS.showFormErrors(form, { error: 'AI drafting could not be reached. Retry availability or continue authoring manually.' });
+      } finally {
+        busy = false; modal.setBusy(false);
+        if (!currentRunId) requestBtn.textContent = 'Generate draft';
+      }
+    });
+    importBtn.addEventListener('click', async () => {
+      if (typeof options.onImport !== 'function' || modal.closed || busy) return;
+      let draft;
+      try { draft = JSON.parse(resultBox.querySelector('[data-draft-json]').value); }
+      catch { MGAEMS.showFormErrors(form, { error: 'The draft is not valid JSON. Correct it before importing.' }); return; }
+      if (!draft || typeof draft !== 'object' || Array.isArray(draft)) { MGAEMS.showFormErrors(form, { error: 'The draft must be a JSON object matching the contract.' }); return; }
+      if (!currentRunId) { MGAEMS.showFormErrors(form, { error: 'Generate a tracked draft before importing.' }); return; }
+      const snapshot = JSON.stringify(draft);
+      if (importState.snapshot && importState.snapshot !== snapshot) { MGAEMS.showFormErrors(form, { error: 'A partial import has started. Retry the same reviewed draft, or close and review the saved document manually.' }); return; }
+      importState.snapshot = snapshot; importStarted = true;
+      resultBox.querySelector('[data-draft-json]').readOnly = true;
+      requestBtn.hidden = true;
+      busy = true; modal.setBusy(true);
+      try {
+        if (!importedOutcome) {
+          const outcome = await options.onImport(draft, { runId: currentRunId, operation, importState });
+          if (outcome?.ok === false) { MGAEMS.showFormErrors(form, { ...outcome, error: [outcome.message, outcome.error].filter(Boolean).join(' ') }); return; }
+          importedOutcome = outcome || { ok: true };
+        }
+        const acceptance = await MGAEMS.post('/api/v1/ai-teaching/runs/' + currentRunId + '/accept', {});
+        if (!acceptance.ok) {
+          importBtn.textContent = 'Retry acceptance';
+          MGAEMS.showFormErrors(form, { error: 'The document was imported, but AI run acceptance was not confirmed. Retry acceptance; document content will not be imported again.' });
+          return;
+        }
+        notify(importedOutcome.message || 'Reviewed draft imported and acceptance recorded.', 'success');
+        modal.setBusy(false);
+        if (importedOutcome.modal !== false) modal.close();
+      } catch {
+        MGAEMS.showFormErrors(form, { error: importedOutcome ? 'The document was imported. Retry acceptance; document content will not be imported again.' : 'Import stopped. Saved items are retained. Retry this same draft to reconcile saved items and continue.' });
+      } finally {
+        busy = false; modal.setBusy(false);
+      }
+    });
+    return modal;
+  }
+
   function initSidebar() {
     const user = currentUser();
     if (!user) return;
@@ -466,5 +578,5 @@ const MGAEMS = (() => {
     if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, put, patch, del, upload, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, put, patch, del, upload, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, groundedDraft, draftRowMatches, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
 })();

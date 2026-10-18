@@ -51,6 +51,7 @@ use App\Services\TeachingDocumentData;
 use App\Services\TeachingDocumentExport;
 use App\Services\HomeworkExport;
 use App\Services\ExamPaperExport;
+use App\Contracts\TeachingAssistantProvider;
 use App\Services\MockTeachingAssistantProvider;
 use App\Services\TeachingAssistant;
 use App\Services\TeachingDocumentVersions;
@@ -390,6 +391,79 @@ check('AI teaching drafts are labelled, structured, and never auto-save a paper'
     ensure(DB::table('ai_generation_runs')->where('id', $data['run_id'])->where('state', 'generated')->exists(), 'AI generation run audited without document mutation');
     try { $teachingAi->draft(requestFor($teacher, ['operation' => 'exam_question', 'input' => ['student_name' => 'Must not leave MGAEMS']]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected sensitive AI input denial'); }
     catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 422, 'Sensitive AI input denied'); }
+});
+check('AI status lists grounded operations and gates them behind the curriculum library', function () use ($teachingAi, $teacher) {
+    $data = $teachingAi->status(requestFor($teacher))->getData(true)['data'];
+    ensure($data['available'] === true && $data['provider'] === 'mock', 'Configured provider reported as available');
+    ensure($data['grounded_operations'] === ['scheme_of_work', 'lesson_plan', 'homework', 'exam_paper'], 'Grounded operations advertised');
+    ensure($data['capabilities']['curriculum_library'] === false && $data['capabilities']['grounded'] === false, 'Grounded drafting stays gated until verified curriculum is installed');
+});
+check('AI input keeps nested selection and constraints and records refused or unavailable runs', function () use ($access, $teacher) {
+    $recording = new class implements TeachingAssistantProvider {
+        public array $seen = [];
+        public function name(): string { return 'recording'; }
+        public function available(): bool { return true; }
+        public function draft(string $operation, array $input): array { $this->seen = $input; return ['label' => 'AI-generated draft', 'disclosure' => 'Review required.', 'draft' => ['ok' => true]]; }
+    };
+    $controller = new AiTeachingAssistantController($access, new TeachingAssistant($recording));
+    $request = requestFor($teacher, ['operation' => 'scheme_of_work', 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics', 'strand' => 'Numbers'], 'constraints' => ['total_duration_minutes' => 80]]]);
+    $controller->draft($request, new AuditLogger($request));
+    ensure($recording->seen === ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics', 'strand' => 'Numbers'], 'constraints' => ['total_duration_minutes' => 80]], 'Nested AI input keys and scalar types are preserved');
+
+    $down = new class implements TeachingAssistantProvider {
+        public function name(): string { return 'down'; }
+        public function available(): bool { return false; }
+        public function draft(string $operation, array $input): array { throw new RuntimeException('AI drafting is not configured.'); }
+    };
+    $offline = new AiTeachingAssistantController($access, new TeachingAssistant($down));
+    $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Fractions']]);
+    $response = $offline->draft($request, new AuditLogger($request));
+    ensure($response->getStatusCode() === 503 && $response->getData(true)['error']['code'] === 'AI_UNAVAILABLE', 'Unavailable provider reports a labelled 503');
+    ensure(DB::table('ai_generation_runs')->where('state', 'unavailable')->where('provider', 'down')->exists(), 'Unavailable run recorded without a document mutation');
+
+    $refusing = new class implements TeachingAssistantProvider {
+        public function name(): string { return 'refusing'; }
+        public function available(): bool { return true; }
+        public function draft(string $operation, array $input): array { throw ValidationException::withMessages(['draft' => 'Generated content failed the grounded contract.']); }
+    };
+    $strict = new AiTeachingAssistantController($access, new TeachingAssistant($refusing));
+    $request = requestFor($teacher, ['operation' => 'lesson_plan', 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics']]]);
+    try { $strict->draft($request, new AuditLogger($request)); throw new RuntimeException('Expected a rejected draft'); }
+    catch (ValidationException $exception) { ensure(array_key_exists('draft', $exception->errors()), 'Rejected draft surfaces validation errors'); }
+    ensure(DB::table('ai_generation_runs')->where('state', 'rejected')->where('provider', 'refusing')->exists(), 'Rejected run recorded for audit');
+});
+check('AI input refuses sponsorship and financial fields and honours document linkage', function () use ($access, $teacher) {
+    $controller = new AiTeachingAssistantController($access, new TeachingAssistant(new MockTeachingAssistantProvider()));
+    foreach (['sponsor_name', 'bank_account', 'medical_notes', 'guardian_phone', 'salary'] as $field) {
+        try { $controller->draft(requestFor($teacher, ['operation' => 'exam_question', 'input' => [$field => 'Must never be sent']]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected sensitive AI input denial for '.$field); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 422, 'Sensitive field denied: '.$field); }
+    }
+    try { $controller->draft(requestFor($teacher, ['operation' => 'exam_paper', 'document_type' => 'exam_paper', 'document_id' => 999999, 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics']]]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected document linkage denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'AI drafts cannot target a paper outside the caller allocation'); }
+});
+
+check('AI acceptance is owner-authorized, atomic, audited once and safe to retry', function () use ($teachingAi, $teacher, $otherTeacher) {
+    $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Synthetic acceptance test']]);
+    $generated = $teachingAi->draft($request, new AuditLogger($request))->getData(true)['data'];
+    $run = App\Models\AiGenerationRun::findOrFail($generated['run_id']);
+    try { $foreign = requestFor($otherTeacher); $teachingAi->accept($foreign, $run, new AuditLogger($foreign)); throw new RuntimeException('Expected foreign acceptance denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign acceptance denied'); }
+    $request = requestFor($teacher);
+    $brokenAudit = new class($request) extends AuditLogger {
+        public function log(string $action, ?string $entityType = null, ?int $entityId = null, array $details = []): App\Models\AuditLog { throw new RuntimeException('Synthetic audit failure'); }
+    };
+    try { $teachingAi->accept($request, $run, $brokenAudit); throw new LogicException('Expected audit failure'); }
+    catch (RuntimeException $exception) { ensure($exception->getMessage() === 'Synthetic audit failure', 'Audit failure surfaces'); }
+    ensure($run->fresh()->state === 'generated' && $run->fresh()->accepted_at === null, 'Acceptance rolls back when its audit cannot be saved');
+    $first = $teachingAi->accept($request, $run, new AuditLogger($request))->getData(true)['data'];
+    $again = $teachingAi->accept($request, $run, new AuditLogger($request))->getData(true)['data'];
+    ensure($first === $again && $first['state'] === 'accepted', 'Retry returns original acceptance');
+    ensure((int) $run->fresh()->accepted_by === $teacher->id, 'Actual accepting teacher retained');
+    ensure(DB::table('audit_logs')->where('action', 'ACCEPT_AI_TEACHING_DRAFT')->where('entity_id', $run->id)->count() === 1, 'Exactly one acceptance audit event');
+
+    $run->update(['state' => 'failed', 'accepted_by' => null, 'accepted_at' => null]);
+    try { $teachingAi->accept($request, $run, new AuditLogger($request)); throw new RuntimeException('Expected failed-run rejection'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 409, 'Failed run cannot be accepted'); }
 });
 
 echo $passed.' Teaching & Learning Workspace checks passed on in-memory SQLite only.'.PHP_EOL;

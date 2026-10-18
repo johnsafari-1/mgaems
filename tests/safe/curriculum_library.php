@@ -326,8 +326,8 @@ try {
     $links = ['curriculum_record_ids' => [$r['record_id']], 'learning_outcome_ids' => [$o['id']]];
     $question = $links + ['position' => 1, 'question_type' => 'short_answer', 'prompt' => 'Synthetic question', 'marks' => 5, 'options' => [], 'answer_key' => 'Synthetic answer', 'marking_guidance' => 'Synthetic guidance'];
     $drafts = [
-        'scheme_of_work' => $common + ['total_duration_minutes' => 80, 'weeks' => [$links + ['week_number' => 1, 'lessons_per_week' => 2, 'lesson_duration_minutes' => 40, 'total_duration_minutes' => 80, 'learning_activities' => ['Synthetic activity'], 'assessment_approach' => 'Synthetic observation']]],
-        'lesson_plan' => $common + ['duration_minutes' => 40, 'resources' => ['Synthetic resource'], 'assessment_approach' => 'Synthetic observation', 'stages' => array_map(fn ($phase, $duration) => $links + ['phase' => $phase, 'duration_minutes' => $duration, 'activities' => ['Synthetic activity']], ['introduction', 'development', 'conclusion'], [5, 30, 5])],
+        'scheme_of_work' => $common + ['total_duration_minutes' => 80, 'weeks' => [$links + ['week_number' => 1, 'strand' => 'Synthetic strand', 'sub_strand' => 'Synthetic sub-strand', 'lessons_per_week' => 2, 'lesson_duration_minutes' => 40, 'total_duration_minutes' => 80, 'learning_activities' => ['Synthetic activity'], 'resources' => ['Synthetic resource'], 'assessment_approach' => 'Synthetic observation']]],
+        'lesson_plan' => $common + ['duration_minutes' => 40, 'key_inquiry_questions' => ['Synthetic inquiry?'], 'resources' => ['Synthetic resource'], 'assessment_approach' => 'Synthetic observation', 'stages' => array_map(fn ($phase, $duration) => $links + ['phase' => $phase, 'duration_minutes' => $duration, 'activities' => ['Synthetic activity']], ['introduction', 'development', 'conclusion'], [5, 30, 5])],
         'homework' => $common + ['instructions' => 'Synthetic instructions', 'total_marks' => 5, 'questions' => [$question]],
         'exam_paper' => $common + ['instructions' => 'Synthetic instructions', 'duration_minutes' => 40, 'total_marks' => 5, 'sections' => [['position' => 1, 'title' => 'Synthetic section', 'total_marks' => 5, 'questions' => [$question]]]],
     ];
@@ -362,7 +362,8 @@ try {
         $adapter = app(OllamaTeachingAssistantProvider::class);
         $result = $adapter->draft('lesson_plan', ['selection' => $selection, 'constraints' => ['duration_minutes' => '40']]);
         ensure($result['draft'] === $drafts['lesson_plan'] && str_contains($result['label'], 'Ollama'));
-        Http::assertSent(fn ($request) => $request->method() === 'POST' && $request->url() === 'http://ollama.test:11434/api/chat');
+        Http::assertSent(fn ($request) => $request->method() === 'POST' && $request->url() === 'http://ollama.test:11434/api/chat'
+            && json_decode($request['messages'][1]['content'], true)['constraints'] === ['duration_minutes' => 40]);
         invalid(fn () => $adapter->draft('lesson_plan', ['selection' => $selection, 'student_name' => 'Must never be sent']));
         try { $adapter->draft('lesson_plan', ['selection' => $selection]); throw new RuntimeException('Invalid model JSON was accepted.'); }
         catch (RuntimeException $exception) { ensure(str_contains($exception->getMessage(), 'Ollama')); }
@@ -396,6 +397,12 @@ try {
         $bad = $drafts['homework'];
         $bad['questions'][0]['question_type'] = 'multiple_choice';
         $bad['questions'][0]['options'] = ['One', 'Two'];
+        invalid(fn () => $contract->validate('homework', $bad, $selection));
+        $bad['questions'][0]['options'] = [str_repeat('x', 256), 'Two'];
+        $bad['questions'][0]['answer_key'] = $bad['questions'][0]['options'][0];
+        invalid(fn () => $contract->validate('homework', $bad, $selection));
+        $bad = $drafts['homework'];
+        $bad['questions'][0]['position'] = 101;
         invalid(fn () => $contract->validate('homework', $bad, $selection));
     });
     check('tampered verified content is excluded from retrieval and prompt building', function () use ($record, $selection, $retrieval) {

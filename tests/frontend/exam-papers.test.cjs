@@ -6,6 +6,7 @@ const path = require('node:path');
 const createDOM = require('./helpers/dom.cjs');
 const root = path.resolve(__dirname, '../..');
 const source = fs.readFileSync(path.join(root, 'public/assets/exam-papers.js'), 'utf8');
+const appSource = fs.readFileSync(path.join(root, 'public/assets/app.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'public/assets/exam-papers.css'), 'utf8');
 
 test('Exam Studio has a responsive outline, authoring, and A4 preview workspace', () => {
@@ -47,12 +48,23 @@ test('Exam Studio preserves staff-only answers and existing paper APIs', () => {
   assert.doesNotMatch(source, /\/storage\/exam-papers/);
 });
 
-test('Curriculum-grounded AI drafts require a checked provider and never auto-save a paper', () => {
-  assert.match(source, /\/api\/v1\/ai-teaching\/status/);
+test('Curriculum-grounded AI drafts reuse the shared helper and import through existing paper APIs', () => {
+  assert.match(source, /MGAEMS\.groundedDraft\(/);
   assert.match(source, /operation: 'exam_paper'/);
-  assert.match(source, /Curriculum-grounded AI is disabled or unavailable/);
-  assert.match(source, /never overwrites this paper/);
-  assert.match(source, /selection, constraints/);
+  assert.match(source, /documentType: 'exam_paper'/);
+  assert.match(source, /data-exam="grounded-draft"/);
+  assert.match(source, /\/sections/);
+  assert.match(source, /\/questions/);
+  assert.match(source, /ai_generated: true/);
+  assert.match(source, /Import sections & questions/);
+});
+
+test('shared grounded helper checks provider capability and never auto-saves', () => {
+  assert.match(appSource, /\/api\/v1\/ai-teaching\/status/);
+  assert.match(appSource, /capabilities\?\.grounded/);
+  assert.match(appSource, /AI drafting is disabled or not configured/);
+  assert.match(appSource, /never changes this document on its own/);
+  assert.match(appSource, /groundedDraft/);
 });
 
 test('paper-outline rendering completes with representative data and no exceptions', async () => {

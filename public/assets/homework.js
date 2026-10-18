@@ -58,6 +58,7 @@
       else loadDetail(item.id).then(() => { if (state.detail?.id === item.id) openHomeworkForm(state.detail, control); });
     }
     if (action === 'question') openQuestionForm(item, null, control);
+    if (action === 'ai') openGroundedHomework(item, control);
     if (action === 'editQuestion') openQuestionForm(item, item.questions?.find(question => String(question.id) === control.dataset.questionId), control);
     if (action === 'deleteQuestion') deleteQuestion(item, control.dataset.questionId, control);
     if (action === 'publish') transition(item, 'publish', control);
@@ -120,7 +121,7 @@
     const item = result.data, canEdit = item.status === 'draft', canRecord = item.status === 'published' || item.status === 'closed';
     show(target, `<div class="homework-detail-heading"><div><span class="eyebrow">${esc(assignmentLabel(item.assignment))}</span><h2>${esc(item.title)}</h2></div>${badge(item.status)}</div>
       <dl class="homework-meta"><div><dt>Assigned</dt><dd>${date(item.assigned_on)}</dd></div><div><dt>Due date</dt><dd>${date(item.due_on)}</dd></div><div><dt>Submission method</dt><dd>${esc(methodLabel(item.submission_method))}</dd></div><div><dt>Total marks</dt><dd>${item.total_marks ? esc(item.total_marks) + ' marks' : 'Not specified'}</dd></div><div><dt>Question marks</dt><dd>${esc(item.questions.reduce((sum, question) => sum + (question.marks || 0), 0))}</dd></div>${item.lesson_plan ? `<div><dt>Linked lesson plan</dt><dd>${esc(item.lesson_plan.title)}</dd></div>` : ''}${item.scheme_week ? `<div><dt>Scheme week</dt><dd>Week ${esc(item.scheme_week.week_number)}</dd></div>` : ''}</dl>
-      <div class="homework-actions">${canEdit ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="edit" data-id="${esc(item.id)}">Edit homework</button><button type="button" class="btn btn-primary btn-sm" data-homework-action="question" data-id="${esc(item.id)}">Add question</button>` : ''}${canRecord ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="completions" data-id="${esc(item.id)}">Track completion</button>` : ''}${!leader && own(item) && item.status === 'draft' ? `<button type="button" class="btn btn-primary btn-sm" data-homework-action="publish" data-id="${esc(item.id)}">Publish</button>` : ''}${!leader && own(item) && item.status === 'published' ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="close" data-id="${esc(item.id)}">Close</button><button type="button" class="btn btn-secondary btn-sm" data-homework-action="archive" data-id="${esc(item.id)}">Archive</button>` : ''}${!leader && own(item) && item.status === 'closed' ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="archive" data-id="${esc(item.id)}">Archive</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" data-homework-action="pdf" data-id="${esc(item.id)}">Download worksheet PDF</button><button type="button" class="btn btn-secondary btn-sm" data-homework-action="answerKey" data-id="${esc(item.id)}">Restricted answer key PDF</button><button type="button" class="btn btn-secondary btn-sm" id="closeHomeworkDetail">Close</button></div>
+      <div class="homework-actions">${canEdit ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="edit" data-id="${esc(item.id)}">Edit homework</button><button type="button" class="btn btn-primary btn-sm" data-homework-action="question" data-id="${esc(item.id)}">Add question</button><button type="button" class="btn btn-secondary btn-sm" data-homework-action="ai" data-id="${esc(item.id)}">Curriculum AI draft</button>` : ''}${canRecord ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="completions" data-id="${esc(item.id)}">Track completion</button>` : ''}${!leader && own(item) && item.status === 'draft' ? `<button type="button" class="btn btn-primary btn-sm" data-homework-action="publish" data-id="${esc(item.id)}">Publish</button>` : ''}${!leader && own(item) && item.status === 'published' ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="close" data-id="${esc(item.id)}">Close</button><button type="button" class="btn btn-secondary btn-sm" data-homework-action="archive" data-id="${esc(item.id)}">Archive</button>` : ''}${!leader && own(item) && item.status === 'closed' ? `<button type="button" class="btn btn-secondary btn-sm" data-homework-action="archive" data-id="${esc(item.id)}">Archive</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" data-homework-action="pdf" data-id="${esc(item.id)}">Download worksheet PDF</button><button type="button" class="btn btn-secondary btn-sm" data-homework-action="answerKey" data-id="${esc(item.id)}">Restricted answer key PDF</button><button type="button" class="btn btn-secondary btn-sm" id="closeHomeworkDetail">Close</button></div>
       <div class="homework-sections"><section class="homework-section"><h3>Instructions</h3><p>${esc(item.instructions || 'Not recorded')}</p></section><section class="homework-section"><h3>Learning outcomes</h3><p>${esc(item.learning_outcomes || 'Not recorded')}</p></section>${item.teacher_notes ? `<section class="homework-section"><h3>Teacher notes (staff only)</h3><p>${esc(item.teacher_notes)}</p></section>` : ''}</div>
       <div class="homework-questions">${item.questions.length ? item.questions.map(question => `<article class="homework-question${question.answer_key ? ' homework-answer-key' : ''}"><header><h3>${esc(question.position)}. ${esc(questionType(question.question_type))}${question.marks ? ' · ' + esc(question.marks) + ' marks' : ''}</h3><span class="badge badge-gray">Question ${esc(question.position)}</span></header><dl><div><dt>Question</dt><dd>${esc(question.prompt)}</dd></div>${question.diagram_reference ? `<div><dt>Diagram</dt><dd>${esc(question.diagram_reference)}</dd></div>` : ''}${question.options.length ? `<div><dt>Options</dt><dd>${question.options.map((option, index) => esc(String.fromCharCode(65 + index)) + '. ' + esc(option)).join('<br>')}</dd></div>` : ''}<div><dt class="restricted">Answer key (staff only)</dt><dd>${esc(question.answer_key || 'Not recorded')}</dd></div><div><dt>Marking guidance</dt><dd>${esc(question.marking_guidance || 'Not recorded')}</dd></div></dl>${canEdit ? `<div class="homework-actions"><button type="button" class="btn btn-secondary btn-sm" data-homework-action="editQuestion" data-id="${esc(item.id)}" data-question-id="${esc(question.id)}">Edit question</button><button type="button" class="btn btn-danger btn-sm" data-homework-action="deleteQuestion" data-id="${esc(item.id)}" data-question-id="${esc(question.id)}">Delete question</button></div>` : ''}</article>`).join('') : MGAEMS.emptyStateHTML('No questions yet', canEdit ? 'Add at least one question before publishing this homework.' : 'This homework has no recorded questions.', 'help-circle')}</div>
       <section class="homework-preview" aria-label="Printable worksheet preview"><h3>Worksheet preview (learner view)</h3><p class="text-muted">Learner name: ____________________ &nbsp; Admission number: ____________________</p><ol>${item.questions.map(question => `<li><div>${esc(question.prompt)}${question.marks ? ' (' + esc(question.marks) + ' marks)' : ''}</div>${question.options.length ? `<ul>${question.options.map(option => `<li>${esc(option)}</li>`).join('')}</ul>` : ''}<div class="answer-space"></div></li>`).join('')}</ol></section>`);
@@ -152,6 +153,52 @@
       if (!result.ok) { MGAEMS.showFormErrors(form, result); return; }
       modal.close(); MGAEMS.toast(item ? 'Homework updated.' : 'Draft homework created.', 'success');
       await loadHomework(); if (result.data?.id) loadDetail(result.data.id);
+    });
+  }
+  function openGroundedHomework(item, trigger) {
+    return MGAEMS.groundedDraft({
+      operation: 'homework', title: 'Curriculum-grounded homework questions', trigger, importLabel: 'Import questions',
+      documentType: 'homework', documentId: item.id, classSubjectTeacherId: item.class_subject_teacher_id,
+      selection: { learning_area: item.assignment?.subject?.name || '' },
+      constraints: { total_marks: item.total_marks || 10 },
+      onImport: async (draft, { importState }) => {
+        const questions = Array.isArray(draft.questions) ? draft.questions : [];
+        if (!questions.length) return { ok: false, error: 'The draft has no questions to import.' };
+        const current = await MGAEMS.get('/api/v1/homework/' + item.id);
+        if (!current.ok || !Array.isArray(current.data?.questions)) return { ok: false, error: 'Could not verify current questions. No content was written. Retry when the document can be read.' };
+        const saved = [...current.data.questions];
+        if (!importState.questions) {
+          let offset = saved.reduce((max, question) => Math.max(max, Number(question.position) || 0), 0);
+          importState.questions = [];
+          for (const question of questions) {
+            const values = { question_type: question.question_type, prompt: question.prompt, marks: question.marks,
+              options: question.question_type === 'multiple_choice' ? question.options : [], answer_key: question.answer_key || '', marking_guidance: question.marking_guidance || '' };
+            if ([...saved, ...importState.questions].some(row => MGAEMS.draftRowMatches(row, values))) continue;
+            importState.questions.push({ position: ++offset, ...values });
+          }
+          importState.totalMarks = [...saved, ...importState.questions].reduce((sum, question) => sum + (Number(question.marks) || 0), 0);
+        }
+        if (!importState.questions.length) return { ok: false, error: 'Every question in the draft already exists on this homework. Nothing new was imported.' };
+        const patch = await MGAEMS.patch('/api/v1/homework/' + item.id, {
+          instructions: draft.instructions || 'Complete the questions below.',
+          learning_outcomes: (draft.specific_learning_outcomes || []).map(outcome => outcome.text).join('\n') || 'AI-generated draft for teacher review.',
+          total_marks: importState.totalMarks || draft.total_marks || null,
+        });
+        if (!patch.ok) return { ok: false, error: patch.error, fields: patch.fields };
+        let added = 0, skipped = 0;
+        for (const values of importState.questions) {
+          const existing = saved.find(row => Number(row.position) === values.position);
+          if (existing) {
+            if (!MGAEMS.draftRowMatches(existing, values)) return { ok: false, error: `Question position ${values.position} changed during import. Review the saved homework before continuing.` };
+            skipped += 1; continue;
+          }
+          const result = await MGAEMS.post('/api/v1/homework/' + item.id + '/questions', values);
+          if (!result.ok) return { ok: false, error: result.error, fields: result.fields, message: `Saved or verified ${added + skipped} of ${importState.questions.length} questions before stopping. Retry the same draft to continue.` };
+          saved.push(values); added += 1;
+        }
+        await loadHomework(); loadDetail(item.id);
+        return { ok: true, message: `${added} question${added === 1 ? '' : 's'} imported into this draft homework${skipped ? ` (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)` : ''}. Review and edit before publishing.` };
+      },
     });
   }
   function openQuestionForm(item, question, trigger) {

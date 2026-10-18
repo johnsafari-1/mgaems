@@ -345,7 +345,7 @@ class HomeworkController extends Controller
             'prompt' => [...$required, 'string', 'max:4000'],
             'marks' => [...$required, 'integer', 'min:1', 'max:1000'],
             'diagram_reference' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'options' => ['sometimes', 'nullable', 'array', 'min:2'],
+            'options' => ['sometimes', 'nullable', 'array'],
             'options.*' => ['string', 'max:255'],
             'answer_key' => ['sometimes', 'nullable', 'string', 'max:4000'],
             'marking_guidance' => ['sometimes', 'nullable', 'string', 'max:4000'],

@@ -147,8 +147,64 @@
     redraw();
   }
   function groundedDraft(paper, trigger) {
-    const modal = MGAEMS.openModal({ title: 'Curriculum-grounded AI draft', trigger, body: `<form class="exam-dialog"><div data-form-error></div><p>Only approved curriculum records can be used. The returned draft is displayed for manual review and never overwrites this paper.</p><div class="form-grid"><div class="field"><label>Grade *</label><input name="grade" type="number" min="1" max="12" required></div><div class="field"><label>Learning area *</label><input name="learning_area" required maxlength="160"></div><div class="field"><label>Strand</label><input name="strand" maxlength="200"></div><div class="field"><label>Sub-strand</label><input name="sub_strand" maxlength="200"></div></div></form>`, footer: '<button class="btn btn-secondary" data-dialog-close>Cancel</button><button class="btn btn-primary" id="requestGroundedDraft">Request draft</button>' });
-    const form = modal.body.querySelector('form'); modal.overlay.querySelector('#requestGroundedDraft').addEventListener('click', async () => { if (!form.reportValidity()) return; const status = await MGAEMS.get('/api/v1/ai-teaching/status'); if (!status.ok || !status.data?.available) { MGAEMS.showFormErrors(form, { fields: { selection: ['Curriculum-grounded AI is disabled or unavailable. Manual authoring remains available.'] } }); return; } const selection = values(form); selection.grade = Number(selection.grade); Object.keys(selection).forEach(key => { if (!selection[key]) delete selection[key]; }); modal.setBusy(true); const result = await MGAEMS.post('/api/v1/ai-teaching/drafts', { operation: 'exam_paper', input: { selection, constraints: { total_marks: paper.total_marks || 1, duration_minutes: paper.duration_minutes || 40 } }, document_type: 'exam_paper', document_id: paper.id }); modal.setBusy(false); if (!result.ok) return MGAEMS.showFormErrors(form, result); modal.body.innerHTML = '<p><strong>Draft generated for manual review only.</strong> It has not changed this paper.</p><pre class="exam-preview-paper" id="groundedDraftOutput"></pre>'; modal.body.querySelector('#groundedDraftOutput').textContent = JSON.stringify(result.data.draft, null, 2); });
+    return MGAEMS.groundedDraft({
+      operation: 'exam_paper', title: 'Curriculum-grounded examination draft', trigger, importLabel: 'Import sections & questions',
+      documentType: 'exam_paper', documentId: paper.id, classSubjectTeacherId: paper.class_subject_teacher_id,
+      selection: { learning_area: paper.assignment?.subject?.name || '' },
+      constraints: { total_marks: paper.total_marks || 40, duration_minutes: paper.duration_minutes || 40 },
+      onImport: async (draft, { importState }) => {
+        const sections = Array.isArray(draft.sections) ? draft.sections : [];
+        if (!sections.length) return { ok: false, error: 'The draft has no sections to import.' };
+        const fresh = await MGAEMS.get('/api/v1/exam-papers/' + paper.id);
+        if (!fresh.ok || !Array.isArray(fresh.data?.sections) || !Array.isArray(fresh.data?.questions)) return { ok: false, error: 'Could not verify the current paper. No content was written. Retry when the document can be read.' };
+        const latest = fresh.data;
+        if (!importState.sections) {
+          let nextSection = latest.sections.reduce((max, section) => Math.max(max, Number(section.position) || 0), 0);
+          let nextQuestion = latest.questions.reduce((max, question) => Math.max(max, Number(question.position) || 0), 0);
+          const seen = [...latest.questions];
+          importState.sections = [];
+          for (const section of sections) {
+            const planned = [];
+            for (const question of section.questions || []) {
+              const values = { question_type: question.question_type, prompt: question.prompt, marks: question.marks || null,
+                options: question.question_type === 'multiple_choice' ? (question.options || []) : [], answer_key: question.answer_key || '', marking_guidance: question.marking_guidance || '', ai_generated: true };
+              if (seen.some(row => MGAEMS.draftRowMatches(row, values))) continue;
+              planned.push({ position: ++nextQuestion, ...values }); seen.push(values);
+            }
+            if (planned.length) importState.sections.push({ values: { position: ++nextSection, title: section.title || 'Imported section', instructions: null }, questions: planned });
+          }
+        }
+        if (!importState.sections.length) return { ok: false, error: 'Every question in the draft already exists on this paper. Nothing new was imported.' };
+        let created = 0, skipped = 0;
+        const total = importState.sections.reduce((sum, row) => sum + row.questions.length, 0);
+        const existingSections = [...latest.sections], existingQuestions = [...latest.questions];
+        for (const section of importState.sections) {
+          const { position } = section.values;
+          let createdSection = existingSections.find(row => Number(row.position) === position);
+          if (createdSection && !MGAEMS.draftRowMatches(createdSection, section.values)) return { ok: false, error: `Section position ${position} changed during import. Review the saved paper before continuing.` };
+          if (!createdSection) {
+            const sectionResult = await MGAEMS.post('/api/v1/exam-papers/' + paper.id + '/sections', section.values);
+            if (!sectionResult.ok) return { ok: false, error: sectionResult.error, fields: sectionResult.fields, message: `Saved or verified ${created + skipped} of ${total} questions before stopping. Retry the same draft to continue.` };
+            createdSection = (sectionResult.data?.sections || []).find(row => Number(row.position) === position);
+            if (!createdSection?.id) return { ok: false, error: 'The saved section could not be confirmed. Retry to reconcile the saved paper before adding questions.' };
+            existingSections.push(createdSection);
+          }
+          for (const question of section.questions) {
+            const values = { ...question, exam_paper_section_id: createdSection.id };
+            const existing = existingQuestions.find(row => Number(row.position) === values.position);
+            if (existing) {
+              if (!MGAEMS.draftRowMatches(existing, values)) return { ok: false, error: `Question position ${values.position} changed during import. Review the saved paper before continuing.` };
+              skipped += 1; continue;
+            }
+            const result = await MGAEMS.post('/api/v1/exam-papers/' + paper.id + '/questions', values);
+            if (!result.ok) return { ok: false, error: result.error, fields: result.fields, message: `Saved or verified ${created + skipped} of ${total} questions before stopping. Retry the same draft to continue.` };
+            existingQuestions.push(values); created += 1;
+          }
+        }
+        await load(); open(paper.id);
+        return { ok: true, message: `${created} question${created === 1 ? '' : 's'} imported into this draft paper${skipped ? ` (${skipped} duplicate${skipped === 1 ? '' : 's'} skipped)` : ''}. Review and edit every item before submitting.` };
+      },
+    });
   }
   async function action(event) {
     const button = event.target.closest?.('[data-exam]'); if (!button) return; const p = state.paper, action = button.dataset.exam;
