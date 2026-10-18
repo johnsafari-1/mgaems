@@ -133,6 +133,22 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Teaching & Learning: Schemes of Work ---
+        Route::middleware('role:system_admin')->prefix('curriculum-library')->where(['source' => '[1-9][0-9]*', 'version' => '[1-9][0-9]*', 'record' => '[1-9][0-9]*'])->group(function () {
+            Route::get('/sources', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'index']);
+            Route::post('/sources', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'store']);
+            Route::put('/sources/{source}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'updateSource']);
+            Route::post('/sources/{source}/versions', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'storeVersion']);
+            Route::get('/versions/{version}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'showVersion']);
+            Route::put('/versions/{version}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'updateVersion']);
+            Route::get('/versions/{version}/document', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'document']);
+            Route::post('/versions/{version}/records', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'import']);
+            Route::put('/versions/{version}/records/{record}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'correct']);
+            Route::post('/versions/{version}/approve', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'approve']);
+            Route::post('/versions/{version}/withdraw', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'withdraw']);
+        });
+        Route::get('/curriculum-library/retrieve', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'retrieve'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher');
+
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
             Route::get('/schemes-of-work/context', [SchemeOfWorkController::class, 'context']);
             Route::get('/schemes-of-work', [SchemeOfWorkController::class, 'index']);

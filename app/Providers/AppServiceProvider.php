@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Contracts\TeachingAssistantProvider;
 use App\Services\HttpTeachingAssistantProvider;
 use App\Services\MockTeachingAssistantProvider;
+use App\Services\OllamaTeachingAssistantProvider;
 use App\Services\UnavailableTeachingAssistantProvider;
 use Illuminate\Support\ServiceProvider;
 
@@ -16,6 +17,7 @@ class AppServiceProvider extends ServiceProvider
             return match (config('services.ai.driver')) {
                 'mock' => new MockTeachingAssistantProvider,
                 'http' => new HttpTeachingAssistantProvider,
+                'ollama' => $this->app->make(OllamaTeachingAssistantProvider::class),
                 default => new UnavailableTeachingAssistantProvider,
             };
         });

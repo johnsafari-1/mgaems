@@ -22,6 +22,7 @@ const MGAEMS_NAV_ITEMS = {
   visitors: { href: '/visitors.html', icon: 'clipboard-list', label: 'Visitors' },
   reports: { href: '/reports.html', icon: 'bar-chart-3', label: 'Reports' },
   administration: { href: '/administration.html', icon: 'settings', label: 'Administration' },
+  curriculumLibrary: { href: '/curriculum-library.html', icon: 'book-marked', label: 'Curriculum Library' },
   parent: { href: '/parent-portal.html', icon: 'home', label: 'Parent Portal' },
   sponsor: { href: '/sponsor-portal.html', icon: 'heart-handshake', label: 'Sponsor Portal' },
   teacher: { href: '/dashboard.html', icon: 'layout-dashboard', label: 'Teacher Workspace' },
@@ -34,7 +35,7 @@ const MGAEMS_NAV_ITEMS = {
 // Page visibility follows current APIs. Laravel remains the authorization boundary.
 const MGAEMS_LEADERSHIP_NAV = ['dashboard', 'students', 'guardians', 'academic', 'attendance', 'assessment', 'sponsorship', 'staff', 'communication', 'visitors', 'reports'];
 const MGAEMS_ROLE_NAV = {
-  system_admin: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'homework', 'examPapers', 'teachingReview', 'administration'],
+  system_admin: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'homework', 'examPapers', 'teachingReview', 'administration', 'curriculumLibrary'],
   head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'homework', 'examPapers', 'teachingReview', 'health', 'administration'],
   deputy_head_teacher: [...MGAEMS_LEADERSHIP_NAV, 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'homework', 'examPapers', 'teachingReview', 'health'],
   teacher: ['teacher', 'myLearners', 'myTimetable', 'schemesOfWork', 'lessonPlans', 'recordsOfWork', 'homework', 'examPapers', 'attendance', 'assessment', 'communication'],
@@ -53,7 +54,7 @@ const MGAEMS_NAV_GROUPS = [
   { label: 'School Operations', keys: ['sponsorship', 'health', 'staff', 'visitors'] },
   { label: 'Communication', keys: ['communication'] },
   { label: 'Reporting', keys: ['reports'] },
-  { label: 'Administration', keys: ['administration'] },
+  { label: 'Administration', keys: ['administration', 'curriculumLibrary'] },
 ];
 
 function renderAppShell(activeHref) {

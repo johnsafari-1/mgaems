@@ -1,0 +1,28 @@
+{
+  "status": "awaiting_authorized_document_and_administrator_review",
+  "source_registration_payload": {
+    "identifier": "kicd-regular-grade7-integrated-science",
+    "title": "Integrated Science Grade 7",
+    "official_url": "https://kicd.ac.ke/cbc-materials/curriculum-designs/grade-seven-designs/",
+    "publisher": "Kenya Institute of Curriculum Development (KICD)",
+    "grade": 7,
+    "learning_area": "Integrated Science",
+    "subject_id": null
+  },
+  "version_metadata_candidate": {
+    "edition": "July 2024 (as labelled by the linked file; confirm inside document)",
+    "publication_date": null,
+    "document_url": "https://drive.google.com/file/d/1jbicj1qkLFEV_ZXwO8Kmlw7KzGhZD2ri/preview"
+  },
+  "document_sha256": null,
+  "verification_status": "not_verified",
+  "approval_status": "not_approved",
+  "records": [],
+  "evidence": {
+    "official_link_checked": true,
+    "actual_pdf_bytes_checked": false,
+    "extracted_content_checked": false,
+    "download_result": "Google Drive reports that the owner has not permitted downloads.",
+    "reviewed_on_school_date": "2026-10-18"
+  }
+}

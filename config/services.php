@@ -31,6 +31,13 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // Transport only: generators remain behind the existing AI provider selection.
+    'ollama' => [
+        'base_url' => env('OLLAMA_BASE_URL', 'http://host.docker.internal:11434'),
+        'model' => env('OLLAMA_MODEL', 'qwen3:1.7b'),
+        'timeout' => env('OLLAMA_TIMEOUT', 120),
+    ],
+
     // Kept server-side only. With the default disabled driver, no AI request is made.
     'ai' => [
         'driver' => env('MGAEMS_AI_DRIVER', 'disabled'),

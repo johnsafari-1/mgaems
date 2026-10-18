@@ -314,6 +314,10 @@ check('exam papers enforce allocation, preserve staff-only keys, and retain revi
     catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign teacher denied exam allocation'); }
     $question = requestFor($teacher, ['position' => 1, 'question_type' => 'multiple_choice', 'prompt' => 'Staff entered assessment item', 'marks' => 5, 'options' => ['Correct option', 'Other option'], 'answer_key' => 'Correct option', 'marking_guidance' => 'Award five marks for the correct option.']);
     ensure($examPapers->storeQuestion($question, $paper, new AuditLogger($question))->getStatusCode() === 201, 'Exam question created');
+    $sectionRequest = requestFor($teacher, ['position' => 1, 'title' => 'Structured response', 'instructions' => 'Answer every item.']);
+    $section = $examPapers->storeSection($sectionRequest, $paper, new AuditLogger($sectionRequest))->getData(true)['data']['sections'][0];
+    $essay = requestFor($teacher, ['position' => 2, 'question_type' => 'essay', 'prompt' => 'Explain the staff-entered reasoning.', 'marks' => 10, 'exam_paper_section_id' => $section['id'], 'options' => [], 'answer_key' => 'Staff reviewed response.', 'marking_guidance' => 'Use the approved marking points.']);
+    ensure($examPapers->storeQuestion($essay, $paper, new AuditLogger($essay))->getStatusCode() === 201, 'Essay question and section supported');
     $paperView = $examPapers->show(requestFor($teacher), $paper)->getData(true)['data']; ensure($paperView['questions'][0]['answer_key'] === 'Correct option', 'Staff workspace retains answer key');
     $submit = requestFor($teacher); ensure($examPapers->submit($submit, $paper, new AuditLogger($submit))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted examination paper');
     $review = requestFor($admin, ['action' => 'approved']); ensure($reviewQueue->review($review, 'exam_paper', $paper->id, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Central review approved examination paper');

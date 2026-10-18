@@ -14,7 +14,7 @@ use RuntimeException;
 
 class AiTeachingAssistantController extends Controller
 {
-    private const OPERATIONS = ['scheme_outline', 'lesson_plan', 'homework', 'exam_question', 'alternative_question', 'improve_question', 'marking_guidance'];
+    private const OPERATIONS = ['scheme_outline', 'scheme_of_work', 'lesson_plan', 'homework', 'exam_paper', 'exam_question', 'alternative_question', 'improve_question', 'marking_guidance'];
     private const SENSITIVE = ['learner', 'student', 'parent', 'guardian', 'admission', 'health', 'medical', 'disability', 'phone', 'email', 'address', 'password', 'token'];
 
     public function __construct(private TeachingDocumentAccess $access, private TeachingAssistant $assistant) {}

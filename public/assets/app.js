@@ -173,6 +173,7 @@ const MGAEMS = (() => {
 
   const get = (path) => api(path);
   const post = (path, body) => api(path, { method: 'POST', body: JSON.stringify(body) });
+  const put = (path, body) => api(path, { method: 'PUT', body: JSON.stringify(body) });
   const patch = (path, body) => api(path, { method: 'PATCH', body: JSON.stringify(body) });
   const del = (path) => api(path, { method: 'DELETE' });
   const upload = (path, body) => api(path, { method: 'POST', body });
@@ -465,5 +466,5 @@ const MGAEMS = (() => {
     if (role) role.textContent = String(user.role || '').replace(/_/g, ' ');
   }
 
-  return { requireAuth, landingPage, logout, get, post, patch, del, upload, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
+  return { requireAuth, landingPage, logout, get, post, put, patch, del, upload, schoolSettings, schoolBranding, updateSchoolSettings, schoolLogoURL, schoolLogoHTML, initSchoolLogos, academicContext, academicPeriod, schoolDate, download, toast, loadingHTML, emptyStateHTML, errorHTML, escapeHTML, showFormErrors, openModal, confirmAction, initIcons, initSidebar, currentUser, sessionGuard, setTheme, initThemeControls };
 })();
