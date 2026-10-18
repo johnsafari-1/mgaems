@@ -33,6 +33,11 @@ class Sponsorship extends Model
         return $this->belongsTo(Student::class);
     }
 
+    public function students()
+    {
+        return $this->belongsToMany(Student::class)->withTimestamps();
+    }
+
     public function createdBy()
     {
         return $this->belongsTo(User::class, 'created_by');

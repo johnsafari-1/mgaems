@@ -32,6 +32,7 @@ return [
         // Our own application providers.
         App\Providers\AppServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        App\Providers\StagingServiceProvider::class,
     ])->toArray(),
 
     'aliases' => Facade::defaultAliases()->merge([

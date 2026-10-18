@@ -9,6 +9,12 @@ class TrustProxies extends Middleware
 {
     protected $proxies;
 
+    protected function proxies()
+    {
+        // Railway's edge is the sole public ingress for this staging image.
+        return config('staging.enabled') ? '*' : parent::proxies();
+    }
+
     protected $headers =
         Request::HEADER_X_FORWARDED_FOR |
         Request::HEADER_X_FORWARDED_HOST |

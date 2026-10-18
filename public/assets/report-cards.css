@@ -1,0 +1,31 @@
+/* Assessment publication and retained-report views share the school UI tokens. */
+.report-current-card, .report-revision-card { min-width: 0; }
+.report-current-heading, .report-revision-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.report-current-heading h2, .report-revision-heading h3 { color: var(--navy); font-size: var(--text-lg); overflow-wrap: anywhere; }
+.report-current-heading .badge, .report-revision-heading .badge { flex-shrink: 0; }
+.report-publication-summary, .report-revision-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); margin: var(--space-4) 0; }
+.report-publication-summary > div, .report-revision-meta > div { min-width: 0; }
+.report-publication-summary dt, .report-revision-meta dt { color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+.report-publication-summary dd, .report-revision-meta dd { margin: 0; color: var(--gray-900); font-weight: 600; overflow-wrap: anywhere; }
+.report-state-note, .report-revision-note { color: var(--gray-500); font-size: var(--text-sm); line-height: 1.6; margin: var(--space-3) 0; overflow-wrap: anywhere; }
+.report-card-actions, .report-revision-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
+.report-card-actions .btn, .report-revisions .btn { min-height: var(--touch-target); white-space: normal; }
+.report-card-actions .btn:focus-visible, .report-revisions .btn:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.report-revision-list { list-style: none; display: grid; gap: var(--space-4); padding: 0; margin: var(--space-4) 0; }
+.report-revision-card { padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); }
+.report-revision-actions .report-revision-note { margin: 0; }
+.report-download-feedback { flex-basis: 100%; color: var(--gray-700); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.report-download-feedback:empty { display: none; }
+.report-download-feedback[role="alert"] { color: var(--red); }
+.report-history-pagination { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--gray-200); color: var(--gray-500); font-size: var(--text-sm); }
+.report-history-pagination .form-actions { margin: 0; }
+@media (max-width: 900px) {
+  .report-publication-summary, .report-revision-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .report-publication-summary, .report-revision-meta { grid-template-columns: 1fr; gap: var(--space-3); }
+  .report-card-actions, .report-revision-actions { align-items: stretch; flex-direction: column; }
+  .report-card-actions .btn, .report-revision-actions .btn { width: 100%; }
+  .report-history-pagination { align-items: stretch; flex-direction: column; }
+  .report-history-pagination .form-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

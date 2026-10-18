@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Sponsor;
 use App\Services\AuditLogger;
+use App\Services\SponsorshipView;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 /**
@@ -17,13 +19,13 @@ class SponsorController extends Controller
 {
     public function index(Request $request)
     {
-        $sponsors = Sponsor::when($request->query('sponsor_type'), fn ($q, $t) => $q->where('sponsor_type', $t))
-            ->when($request->query('search'), fn ($q, $s) => $q->where('name', 'like', "%{$s}%"))
+        $filters = $request->validate(SponsorshipView::filters() + ['sponsor_type' => ['sometimes', Rule::in(['individual', 'church', 'ministry', 'ngo', 'foundation', 'general'])]]);
+        $sponsors = Sponsor::when($filters['sponsor_type'] ?? null, fn ($q, $t) => $q->where('sponsor_type', $t))
+            ->when($filters['search'] ?? null, fn ($q, $s) => $q->whereRaw("name LIKE ? ESCAPE '!'", [SponsorshipView::pattern($s)]))
             ->withCount('sponsorships')
-            ->orderBy('name')
-            ->get();
+            ->orderBy('name')->orderBy('id');
 
-        return response()->json(['data' => $sponsors]);
+        return SponsorshipView::listing($sponsors, $request, fn ($sponsor) => SponsorshipView::sponsor($sponsor), $filters);
     }
 
     public function store(Request $request, AuditLogger $auditLogger)
@@ -45,22 +47,26 @@ class SponsorController extends Controller
             ], 409);
         }
 
-        $sponsor = Sponsor::create($validated);
-        $auditLogger->log('CREATE_SPONSOR', 'Sponsor', $sponsor->id, ['name' => $sponsor->name]);
+        $sponsor = DB::transaction(function () use ($validated, $auditLogger) {
+            $sponsor = Sponsor::create($validated);
+            $auditLogger->log('CREATE_SPONSOR', 'Sponsor', $sponsor->id, ['type' => $sponsor->sponsor_type]);
+            return $sponsor;
+        });
 
-        return response()->json(['data' => $sponsor], 201);
+        return response()->json(['data' => SponsorshipView::sponsor($sponsor->loadCount('sponsorships'), true)], 201)->header('Cache-Control', 'private, no-store');
     }
 
     public function show(Sponsor $sponsor)
     {
-        return response()->json(['data' => $sponsor->load('sponsorships.student:id,first_name,last_name,admission_no')]);
+        // Linked sponsorships use the paginated /sponsorships?sponsor_id= endpoint.
+        return response()->json(['data' => SponsorshipView::sponsor($sponsor->loadCount('sponsorships'), true)])->header('Cache-Control', 'private, no-store');
     }
 
     public function update(Request $request, Sponsor $sponsor, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
-            'sponsor_type' => ['sometimes', Rule::in(['individual', 'church', 'ministry', 'ngo', 'foundation', 'general'])],
-            'name' => ['sometimes', 'string', 'max:150'],
+            'sponsor_type' => ['sometimes', 'required', Rule::in(['individual', 'church', 'ministry', 'ngo', 'foundation', 'general'])],
+            'name' => ['sometimes', 'required', 'string', 'max:150'],
             'contact_person' => ['nullable', 'string', 'max:150'],
             'phone' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:150'],
@@ -68,9 +74,21 @@ class SponsorController extends Controller
             'notes' => ['nullable', 'string'],
         ]);
 
-        $sponsor->update($validated);
-        $auditLogger->log('UPDATE_SPONSOR', 'Sponsor', $sponsor->id, $validated);
+        $name = $validated['name'] ?? $sponsor->name;
+        $type = $validated['sponsor_type'] ?? $sponsor->sponsor_type;
+        if (Sponsor::where('name', $name)->where('sponsor_type', $type)->whereKeyNot($sponsor->id)->exists()) {
+            return response()->json([
+                'error' => ['code' => 'DUPLICATE_SPONSOR', 'message' => 'A sponsor with this name and type already exists.'],
+            ], 409);
+        }
 
-        return response()->json(['data' => $sponsor->fresh()]);
+        $sponsor = DB::transaction(function () use ($sponsor, $validated, $auditLogger) {
+            $current = Sponsor::whereKey($sponsor->id)->lockForUpdate()->firstOrFail();
+            $current->update($validated);
+            $auditLogger->log('UPDATE_SPONSOR', 'Sponsor', $current->id, ['fields' => array_keys($validated)]);
+            return $current;
+        });
+
+        return response()->json(['data' => SponsorshipView::sponsor($sponsor->loadCount('sponsorships'), true)])->header('Cache-Control', 'private, no-store');
     }
 }

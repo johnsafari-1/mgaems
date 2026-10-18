@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AcademicCalendarController;
+use App\Http\Controllers\Api\AcademicEventController;
 use App\Http\Controllers\Api\AcademicStructureController;
 use App\Http\Controllers\Api\AnnouncementController;
 use App\Http\Controllers\Api\AssessmentController;
@@ -9,12 +10,20 @@ use App\Http\Controllers\Api\AuditLogController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BackupController;
 use App\Http\Controllers\Api\DepartmentController;
+use App\Http\Controllers\Api\GuardianController;
+use App\Http\Controllers\Api\ExamPaperController;
+use App\Http\Controllers\Api\AiTeachingAssistantController;
+use App\Http\Controllers\Api\TeachingReviewController;
+use App\Http\Controllers\Api\HomeworkController;
+use App\Http\Controllers\Api\LessonPlanController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\ParentPortalController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\RecordOfWorkController;
 use App\Http\Controllers\Api\ReportCardController;
 use App\Http\Controllers\Api\ReportingController;
 use App\Http\Controllers\Api\SchoolSettingController;
+use App\Http\Controllers\Api\SchemeOfWorkController;
 use App\Http\Controllers\Api\SponsorController;
 use App\Http\Controllers\Api\SponsorPortalController;
 use App\Http\Controllers\Api\SponsorshipController;
@@ -50,10 +59,47 @@ Route::prefix('v1')->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout']);
         Route::get('/me', [AuthController::class, 'me']);
 
+        // Operational health content explicitly excludes System Administrator.
+        // Scalar IDs avoid pre-authorization model binding/existence disclosure.
+        Route::prefix('health')->middleware('health.access:manage')->group(function () {
+            Route::get('/profiles', [\App\Http\Controllers\Api\HealthProfileController::class, 'index']);
+            Route::post('/profiles', [\App\Http\Controllers\Api\HealthProfileController::class, 'store']);
+            Route::get('/profiles/{profile}', [\App\Http\Controllers\Api\HealthProfileController::class, 'show']);
+            Route::patch('/profiles/{profile}', [\App\Http\Controllers\Api\HealthProfileController::class, 'update']);
+            Route::post('/profiles/{profile}/review', [\App\Http\Controllers\Api\HealthProfileController::class, 'review']);
+            Route::get('/profiles/{profile}/revisions', [\App\Http\Controllers\Api\HealthProfileController::class, 'revisions']);
+            Route::get('/profiles/{profile}/alerts', [\App\Http\Controllers\Api\HealthAlertController::class, 'index']);
+            Route::post('/profiles/{profile}/alerts', [\App\Http\Controllers\Api\HealthAlertController::class, 'store']);
+            Route::get('/profiles/{profile}/alerts/{alert}', [\App\Http\Controllers\Api\HealthAlertController::class, 'show']);
+            Route::patch('/profiles/{profile}/alerts/{alert}', [\App\Http\Controllers\Api\HealthAlertController::class, 'update']);
+            Route::post('/profiles/{profile}/alerts/{alert}/verify', [\App\Http\Controllers\Api\HealthAlertController::class, 'verify']);
+            Route::get('/profiles/{profile}/alerts/{alert}/revisions', [\App\Http\Controllers\Api\HealthAlertController::class, 'revisions']);
+            Route::get('/incidents', [\App\Http\Controllers\Api\HealthIncidentController::class, 'index']);
+            Route::post('/incidents', [\App\Http\Controllers\Api\HealthIncidentController::class, 'store']);
+            Route::get('/incidents/{incident}', [\App\Http\Controllers\Api\HealthIncidentController::class, 'show']);
+            Route::patch('/incidents/{incident}', [\App\Http\Controllers\Api\HealthIncidentController::class, 'update']);
+            Route::get('/incidents/{incident}/revisions', [\App\Http\Controllers\Api\HealthIncidentController::class, 'revisions']);
+            foreach (['actions' => \App\Http\Controllers\Api\HealthActionController::class,
+                'notifications' => \App\Http\Controllers\Api\HealthNotificationController::class,
+                'referrals' => \App\Http\Controllers\Api\HealthReferralController::class] as $path => $controller) {
+                Route::get('/incidents/{incident}/'.$path, [$controller, 'index']);
+                Route::post('/incidents/{incident}/'.$path, [$controller, 'store']);
+                Route::get('/incidents/{incident}/'.$path.'/{entry}', [$controller, 'show']);
+                Route::patch('/incidents/{incident}/'.$path.'/{entry}', [$controller, 'update']);
+                Route::get('/incidents/{incident}/'.$path.'/{entry}/revisions', [$controller, 'revisions']);
+            }
+            Route::get('/access-log', [\App\Http\Controllers\Api\HealthAccessLogController::class, 'index']);
+        });
+        Route::get('/health/safety/learners/{student}', [\App\Http\Controllers\Api\HealthSafetyController::class, 'show'])
+            ->middleware('health.access:safety');
+
         // --- User Management (SRS FR-ADM-03, API Design §2) ---
         // Gated server-side by role, per FR-AUTH-04 — not just hidden in the UI.
         Route::middleware('role:system_admin')->group(function () {
+            Route::get('/roles', [UserController::class, 'roles']);
             Route::get('/users', [UserController::class, 'index']);
+            Route::get('/users/{user}/staff-link', [UserController::class, 'staffLink'])->where('user', '[1-9][0-9]*');
+            Route::patch('/users/{user}/staff-link', [UserController::class, 'changeStaffLink'])->where('user', '[1-9][0-9]*');
             Route::post('/users', [UserController::class, 'store']);
             Route::get('/users/{user}', [UserController::class, 'show']);
             Route::patch('/users/{user}', [UserController::class, 'update']);
@@ -69,6 +115,7 @@ Route::prefix('v1')->group(function () {
         // --- Academic Calendar: Years & Terms (SRS FR-ACAD-01) ---
         Route::get('/academic-years', [AcademicCalendarController::class, 'indexYears']);
         Route::get('/terms', [AcademicCalendarController::class, 'indexTerms']);
+        Route::get('/academic-events', [AcademicEventController::class, 'index']);
 
         Route::middleware('role:system_admin,head_teacher')->group(function () {
             Route::post('/academic-years', [AcademicCalendarController::class, 'storeYear']);
@@ -80,15 +127,131 @@ Route::prefix('v1')->group(function () {
             Route::patch('/terms/{term}', [AcademicCalendarController::class, 'updateTerm']);
             Route::post('/terms/{term}/activate', [AcademicCalendarController::class, 'activateTerm']);
             Route::delete('/terms/{term}', [AcademicCalendarController::class, 'destroyTerm']);
+            Route::post('/academic-events', [AcademicEventController::class, 'store']);
+            Route::patch('/academic-events/{academicEvent}', [AcademicEventController::class, 'update']);
+            Route::delete('/academic-events/{academicEvent}', [AcademicEventController::class, 'destroy']);
+        });
+
+        // --- Teaching & Learning: Schemes of Work ---
+        Route::middleware('role:system_admin')->prefix('curriculum-library')->where(['source' => '[1-9][0-9]*', 'version' => '[1-9][0-9]*', 'record' => '[1-9][0-9]*'])->group(function () {
+            Route::get('/sources', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'index']);
+            Route::post('/sources', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'store']);
+            Route::put('/sources/{source}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'updateSource']);
+            Route::post('/sources/{source}/versions', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'storeVersion']);
+            Route::get('/versions/{version}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'showVersion']);
+            Route::put('/versions/{version}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'updateVersion']);
+            Route::get('/versions/{version}/document', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'document']);
+            Route::post('/versions/{version}/records', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'import']);
+            Route::put('/versions/{version}/records/{record}', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'correct']);
+            Route::post('/versions/{version}/approve', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'approve']);
+            Route::post('/versions/{version}/withdraw', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'withdraw']);
+        });
+        Route::get('/curriculum-library/retrieve', [\App\Http\Controllers\Api\CurriculumLibraryController::class, 'retrieve'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher');
+
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/schemes-of-work/context', [SchemeOfWorkController::class, 'context']);
+            Route::get('/schemes-of-work', [SchemeOfWorkController::class, 'index']);
+            Route::get('/schemes-of-work/{schemeOfWork}', [SchemeOfWorkController::class, 'show']);
+            Route::post('/schemes-of-work', [SchemeOfWorkController::class, 'store']);
+            Route::patch('/schemes-of-work/{schemeOfWork}', [SchemeOfWorkController::class, 'update']);
+            Route::post('/schemes-of-work/{schemeOfWork}/weeks', [SchemeOfWorkController::class, 'storeWeek']);
+            Route::patch('/schemes-of-work/{schemeOfWork}/weeks/{week}', [SchemeOfWorkController::class, 'updateWeek']);
+            Route::delete('/schemes-of-work/{schemeOfWork}/weeks/{week}', [SchemeOfWorkController::class, 'destroyWeek']);
+            Route::post('/schemes-of-work/{schemeOfWork}/submit', [SchemeOfWorkController::class, 'submit']);
+        });
+        Route::post('/schemes-of-work/{schemeOfWork}/review', [SchemeOfWorkController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+
+        // --- Teaching & Learning: Lesson Plans and Records of Work ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/lesson-plans/context', [LessonPlanController::class, 'context']);
+            Route::get('/lesson-plans', [LessonPlanController::class, 'index']);
+            Route::get('/lesson-plans/{lessonPlan}', [LessonPlanController::class, 'show']);
+            Route::get('/lesson-plans/{lessonPlan}/pdf', [LessonPlanController::class, 'pdf']);
+            Route::post('/lesson-plans', [LessonPlanController::class, 'store']);
+            Route::patch('/lesson-plans/{lessonPlan}', [LessonPlanController::class, 'update']);
+            Route::post('/lesson-plans/{lessonPlan}/duplicate', [LessonPlanController::class, 'duplicate']);
+            Route::post('/lesson-plans/{lessonPlan}/submit', [LessonPlanController::class, 'submit']);
+
+            Route::get('/records-of-work/context', [RecordOfWorkController::class, 'context']);
+            Route::get('/records-of-work', [RecordOfWorkController::class, 'index']);
+            Route::get('/records-of-work/{recordOfWork}', [RecordOfWorkController::class, 'show']);
+            Route::get('/records-of-work/{recordOfWork}/pdf', [RecordOfWorkController::class, 'pdf']);
+            Route::post('/records-of-work', [RecordOfWorkController::class, 'store']);
+            Route::patch('/records-of-work/{recordOfWork}', [RecordOfWorkController::class, 'update']);
+            Route::post('/records-of-work/{recordOfWork}/submit', [RecordOfWorkController::class, 'submit']);
+        });
+        Route::post('/lesson-plans/{lessonPlan}/review', [LessonPlanController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+        Route::post('/records-of-work/{recordOfWork}/review', [RecordOfWorkController::class, 'review'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher');
+
+        // --- Teaching & Learning: Exam Paper Studio ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/exam-papers/context', [ExamPaperController::class, 'context']);
+            Route::get('/exam-papers', [ExamPaperController::class, 'index']);
+            Route::post('/exam-papers', [ExamPaperController::class, 'store']);
+            Route::get('/exam-papers/{examPaper}', [ExamPaperController::class, 'show']);
+            Route::patch('/exam-papers/{examPaper}', [ExamPaperController::class, 'update']);
+            Route::delete('/exam-papers/{examPaper}', [ExamPaperController::class, 'destroy']);
+            Route::post('/exam-papers/{examPaper}/sections', [ExamPaperController::class, 'storeSection']);
+            Route::patch('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'updateSection']);
+            Route::delete('/exam-papers/{examPaper}/sections/{section}', [ExamPaperController::class, 'destroySection']);
+            Route::post('/exam-papers/{examPaper}/questions', [ExamPaperController::class, 'storeQuestion']);
+            Route::patch('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'updateQuestion']);
+            Route::post('/exam-papers/{examPaper}/questions/{question}/duplicate', [ExamPaperController::class, 'duplicateQuestion']);
+            Route::delete('/exam-papers/{examPaper}/questions/{question}', [ExamPaperController::class, 'destroyQuestion']);
+            Route::post('/exam-papers/{examPaper}/attachments', [ExamPaperController::class, 'uploadAttachment']);
+            Route::get('/exam-papers/{examPaper}/attachments/{attachment}', [ExamPaperController::class, 'downloadAttachment']);
+            Route::get('/exam-papers/{examPaper}/pdf', [ExamPaperController::class, 'pdf']);
+            Route::get('/exam-papers/{examPaper}/marking-scheme/pdf', [ExamPaperController::class, 'markingSchemePdf']);
+            Route::post('/exam-papers/{examPaper}/submit', [ExamPaperController::class, 'submit']);
+        });
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::post('/exam-papers/{examPaper}/review', [ExamPaperController::class, 'review']);
+            Route::post('/exam-papers/{examPaper}/publish', [ExamPaperController::class, 'publish']);
+            Route::get('/teaching-review', [TeachingReviewController::class, 'index']);
+            Route::post('/teaching-review/{documentType}/{documentId}', [TeachingReviewController::class, 'review']);
+        });
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/ai-teaching/status', [AiTeachingAssistantController::class, 'status']);
+            Route::post('/ai-teaching/drafts', [AiTeachingAssistantController::class, 'draft']);
+            Route::post('/ai-teaching/runs/{run}/accept', [AiTeachingAssistantController::class, 'accept']);
+        });
+
+        // --- Teaching & Learning: Homework and Assignments ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/homework/context', [HomeworkController::class, 'context']);
+            Route::get('/homework', [HomeworkController::class, 'index']);
+            Route::get('/homework/{homework}', [HomeworkController::class, 'show']);
+            Route::get('/homework/{homework}/completions', [HomeworkController::class, 'completions']);
+            Route::get('/homework/{homework}/pdf', [HomeworkController::class, 'pdf']);
+            Route::get('/homework/{homework}/answer-key/pdf', [HomeworkController::class, 'answerKeyPdf']);
+            Route::post('/homework', [HomeworkController::class, 'store']);
+            Route::patch('/homework/{homework}', [HomeworkController::class, 'update']);
+            Route::delete('/homework/{homework}', [HomeworkController::class, 'destroy']);
+            Route::post('/homework/{homework}/questions', [HomeworkController::class, 'storeQuestion']);
+            Route::patch('/homework/{homework}/questions/{question}', [HomeworkController::class, 'updateQuestion']);
+            Route::delete('/homework/{homework}/questions/{question}', [HomeworkController::class, 'destroyQuestion']);
+            Route::post('/homework/{homework}/completions', [HomeworkController::class, 'recordCompletion']);
+            Route::delete('/homework/{homework}/completions/{completion}', [HomeworkController::class, 'destroyCompletion']);
+            Route::post('/homework/{homework}/publish', [HomeworkController::class, 'publish']);
+            Route::post('/homework/{homework}/close', [HomeworkController::class, 'close']);
+            Route::post('/homework/{homework}/archive', [HomeworkController::class, 'archive']);
         });
 
         // --- Academic Management: Classes, Subjects (SRS FR-ACAD-02/03) ---
-        // Read: broad (staff, teachers, parents, students per User Role Matrix §4).
-        Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
-        Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
+        // Coordinator operations use minimal sponsorship references, not school academics.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher,parent_guardian,sponsor,student')->group(function () {
+            Route::get('/classes', [AcademicStructureController::class, 'indexClasses']);
+            Route::get('/subjects', [AcademicStructureController::class, 'indexSubjects']);
+            Route::get('/class-subjects', [AcademicStructureController::class, 'indexClassSubjects']);
+        });
 
         // Write: system_admin, head_teacher (Full); deputy_head_teacher (Manage).
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/academic/staff-options', [AcademicStructureController::class, 'staffOptions']);
             Route::post('/classes', [AcademicStructureController::class, 'storeClass']);
             Route::patch('/classes/{class}', [AcademicStructureController::class, 'updateClass']);
             Route::delete('/classes/{class}', [AcademicStructureController::class, 'destroyClass']);
@@ -112,6 +275,10 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Student Management (SRS FR-STU-01..04) ---
+        Route::prefix('teacher')->middleware('role:teacher')->group(function () {
+            Route::get('/context', [\App\Http\Controllers\Api\TeacherWorkspaceController::class, 'context']);
+            Route::get('/timetable', [\App\Http\Controllers\Api\TeacherWorkspaceController::class, 'timetable']);
+        });
         // Read: system_admin, head_teacher, deputy_head_teacher, teacher, HR/admin (Full/Read per matrix).
         // NOTE: Parent/Sponsor "own-child-only" access is added when the Parent/Sponsor
         // Portal modules land — deliberately not opened here yet to avoid a
@@ -129,11 +296,22 @@ Route::prefix('v1')->group(function () {
             Route::post('/students/{student}/transfer', [StudentController::class, 'transfer']);
         });
 
+        // --- Parent / Guardian Management ---
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/guardians', [GuardianController::class, 'index']);
+            Route::get('/guardians/accounts', [GuardianController::class, 'accounts']);
+            Route::post('/guardians', [GuardianController::class, 'store']);
+            Route::patch('/guardians/{guardian}', [GuardianController::class, 'update']);
+            Route::post('/guardians/{guardian}/students', [GuardianController::class, 'linkStudents']);
+            Route::delete('/guardians/{guardian}/students/{student}', [GuardianController::class, 'unlinkStudent']);
+        });
+
         // --- Attendance (SRS FR-ATT-01/02/03) ---
-        // Write: system_admin, head_teacher, deputy_head_teacher, teacher (see
-        // AttendanceController note re: teacher-own-class scoping being a follow-up).
+        // Leadership oversees all classes; ordinary teachers require class-teacher ownership.
         // Read: same roles — Parent/Sponsor own-child access added with those portals.
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/attendance/my-classes', [AttendanceController::class, 'myClasses']);
+            Route::get('/attendance/roster', [AttendanceController::class, 'roster']);
             Route::post('/attendance/students', [AttendanceController::class, 'store']);
             Route::get('/attendance/students', [AttendanceController::class, 'index']);
             Route::get('/attendance/students/summary', [AttendanceController::class, 'summary']);
@@ -141,13 +319,19 @@ Route::prefix('v1')->group(function () {
 
         // --- CBC Assessment (SRS FR-ASM-01..07) ---
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher')->group(function () {
+            Route::get('/assessments/context', [AssessmentController::class, 'context']);
+            Route::get('/assessments/learners', [AssessmentController::class, 'learners']);
             Route::post('/assessments', [AssessmentController::class, 'store']);
             Route::get('/assessments', [AssessmentController::class, 'index']);
-            Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
-            Route::get('/report-cards/{reportCard}/download', [ReportCardController::class, 'download']);
         });
 
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher')->group(function () {
+            Route::get('/assessments/{assessment}/revisions', [AssessmentController::class, 'revisions']);
+            Route::get('/report-cards', [ReportCardController::class, 'index']);
+            Route::get('/report-cards/{reportCard}', [ReportCardController::class, 'show']);
+            Route::get('/report-cards/{reportCard}/download', [ReportCardController::class, 'download']);
+            Route::get('/report-cards/{reportCard}/revisions', [ReportCardController::class, 'revisions']);
+            Route::get('/report-cards/{reportCard}/revisions/{revision}/download', [ReportCardController::class, 'downloadRevision']);
             Route::post('/students/{student}/report-cards/generate', [ReportCardController::class, 'generate']);
         });
 
@@ -158,6 +342,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/sponsors', [SponsorController::class, 'index']);
             Route::get('/sponsors/{sponsor}', [SponsorController::class, 'show']);
             Route::get('/sponsorships', [SponsorshipController::class, 'index']);
+            Route::get('/sponsorships/summary', [SponsorshipController::class, 'summary']);
+            Route::get('/sponsorships/learners', [SponsorshipController::class, 'learners']);
+            Route::get('/sponsorships/{sponsorship}', [SponsorshipController::class, 'show']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}', [SponsorshipController::class, 'learner']);
         });
 
         Route::middleware('role:system_admin,sponsor_coordinator')->group(function () {
@@ -170,17 +358,27 @@ Route::prefix('v1')->group(function () {
         // --- Parent Portal (SRS FR-PAR-01..06) ---
         Route::middleware('role:parent_guardian')->prefix('portal/parent')->group(function () {
             Route::get('/children', [ParentPortalController::class, 'myChildren']);
+            Route::get('/children/{student}', [ParentPortalController::class, 'childOverview']);
+            Route::get('/children/{student}/timetable', [ParentPortalController::class, 'childTimetable']);
             Route::get('/children/{student}/attendance', [ParentPortalController::class, 'childAttendance']);
+            Route::get('/children/{student}/homework', [ParentPortalController::class, 'childHomework']);
             Route::get('/children/{student}/report-cards', [ParentPortalController::class, 'childReportCards']);
+            Route::get('/children/{student}/report-cards/{reportCard}/download', [ParentPortalController::class, 'downloadReportCard']);
             Route::get('/children/{student}/progress', [ParentPortalController::class, 'childProgress']);
         });
 
         // --- Sponsor Portal (SRS FR-SPP-01..06) ---
         Route::middleware('role:sponsor')->prefix('portal/sponsor')->group(function () {
             Route::get('/sponsorships', [SponsorPortalController::class, 'mySponsorships']);
+            Route::get('/sponsorships/{sponsorship}/learners', [SponsorPortalController::class, 'learners']);
             Route::get('/sponsorships/{sponsorship}/attendance', [SponsorPortalController::class, 'sponsorshipAttendance']);
             Route::get('/sponsorships/{sponsorship}/report-cards', [SponsorPortalController::class, 'sponsorshipReportCards']);
+            Route::get('/sponsorships/{sponsorship}/report-cards/{reportCard}/download', [SponsorPortalController::class, 'downloadReportCard']);
             Route::get('/sponsorships/{sponsorship}/comments', [SponsorPortalController::class, 'sponsorshipComments']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/attendance', [SponsorPortalController::class, 'learnerAttendance']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/report-cards', [SponsorPortalController::class, 'learnerReportCards']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/report-cards/{reportCard}/download', [SponsorPortalController::class, 'downloadLearnerReportCard']);
+            Route::get('/sponsorships/{sponsorship}/learners/{student}/comments', [SponsorPortalController::class, 'learnerComments']);
         });
 
         // --- Human Resources (SRS FR-HR-01..07, FR-ADM-02) ---
@@ -188,6 +386,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/staff', [StaffController::class, 'index']);
             Route::get('/staff/{staff}', [StaffController::class, 'show']);
             Route::patch('/staff/{staff}', [StaffController::class, 'update']);
+            Route::post('/staff/{staff}/qualifications', [StaffController::class, 'storeQualification']);
+            Route::patch('/staff/{staff}/qualifications/{qualification}', [StaffController::class, 'updateQualification']);
+            Route::delete('/staff/{staff}/qualifications/{qualification}', [StaffController::class, 'destroyQualification']);
+            Route::post('/staff/{staff}/emergency-contacts', [StaffController::class, 'storeEmergencyContact']);
+            Route::patch('/staff/{staff}/emergency-contacts/{contact}', [StaffController::class, 'updateEmergencyContact']);
+            Route::delete('/staff/{staff}/emergency-contacts/{contact}', [StaffController::class, 'destroyEmergencyContact']);
             Route::get('/departments', [DepartmentController::class, 'index']);
         });
 
@@ -197,17 +401,20 @@ Route::prefix('v1')->group(function () {
         });
 
         // --- Communication (SRS FR-COM-01/02/03) ---
-        // Publish: staff-side roles (Teacher scoped to "own class" — same
-        // tracked simplification noted in AttendanceController/AssessmentController).
-        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher')->group(function () {
+        // Teacher publication fails closed at the route and controller until the schema
+        // can persist a verified class target. No announcement update API exists.
+        Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator')->group(function () {
             Route::post('/announcements', [AnnouncementController::class, 'store']);
         });
-        // Receive: every authenticated role (per User Role Matrix — all "R").
-        Route::get('/announcements', [AnnouncementController::class, 'index']);
+        // Receive: canonical roles; Staff-dependent roles require active linkage.
+        Route::get('/announcements', [AnnouncementController::class, 'index'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor,student');
 
-        // Messaging: every role except Student per the User Role Matrix.
+        // Owned message history excludes Student; sends require approved recipient scope.
+        // New Parent and Coordinator sends fail closed pending that policy.
+        Route::post('/messages', [MessageController::class, 'store'])
+            ->middleware('role:system_admin,head_teacher,deputy_head_teacher,teacher,sponsor');
         Route::middleware('role:system_admin,head_teacher,deputy_head_teacher,sponsor_coordinator,teacher,parent_guardian,sponsor')->group(function () {
-            Route::post('/messages', [MessageController::class, 'store']);
             Route::get('/messages', [MessageController::class, 'index']);
             Route::patch('/messages/{message}/read', [MessageController::class, 'markRead']);
         });

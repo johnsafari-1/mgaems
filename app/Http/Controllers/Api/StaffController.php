@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Staff;
+use App\Models\StaffEmergencyContact;
+use App\Models\StaffQualification;
 use App\Services\AuditLogger;
+use App\Services\StaffAccountLinks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -32,8 +35,8 @@ class StaffController extends Controller
 
     public function store(Request $request, AuditLogger $auditLogger)
     {
+        $this->rejectAccountField($request);
         $validated = $request->validate([
-            'user_id' => ['nullable', 'exists:users,id', 'unique:staff,user_id'],
             'department_id' => ['nullable', 'exists:departments,id'],
             'staff_type' => ['required', Rule::in(['teaching', 'non_teaching'])],
             'role_title' => ['required', 'string', 'max:60'],
@@ -79,17 +82,110 @@ class StaffController extends Controller
 
     public function update(Request $request, Staff $staff, AuditLogger $auditLogger)
     {
+        $this->rejectAccountField($request);
         $validated = $request->validate([
             'department_id' => ['nullable', 'exists:departments,id'],
+            'staff_type' => ['sometimes', Rule::in(['teaching', 'non_teaching'])],
             'role_title' => ['sometimes', 'string', 'max:60'],
+            'first_name' => ['sometimes', 'string', 'max:80'],
+            'last_name' => ['sometimes', 'string', 'max:80'],
             'phone' => ['nullable', 'string', 'max:20'],
+            'employment_date' => ['sometimes', 'date'],
             'contract_type' => ['nullable', 'string', 'max:40'],
             'status' => ['sometimes', Rule::in(['active', 'on_leave', 'terminated'])],
         ]);
 
-        $staff->update($validated);
-        $auditLogger->log('UPDATE_STAFF', 'Staff', $staff->id, $validated);
+        $staff = app(StaffAccountLinks::class)->updateEmployment($request, $staff, $validated, $auditLogger);
 
         return response()->json(['data' => $staff->fresh(['department'])]);
+    }
+
+    private function rejectAccountField(Request $request): void
+    {
+        if (array_key_exists('user_id', $request->all())) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['user_id' => 'Manage account links in Administration User Management; HR edits cannot change this relationship.']);
+        }
+    }
+
+    public function storeQualification(Request $request, Staff $staff, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'qualification' => ['required', 'string', 'max:150'],
+            'institution' => ['nullable', 'string', 'max:150'],
+            'year_obtained' => ['nullable', 'digits:4'],
+        ]);
+
+        $qualification = $staff->qualifications()->create($validated);
+        $auditLogger->log('CREATE_STAFF_QUALIFICATION', 'StaffQualification', $qualification->id, ['staff_id' => $staff->id]);
+
+        return response()->json(['data' => $qualification], 201);
+    }
+
+    public function updateQualification(Request $request, Staff $staff, StaffQualification $qualification, AuditLogger $auditLogger)
+    {
+        abort_unless($qualification->staff_id === $staff->id, 404);
+
+        $validated = $request->validate([
+            'qualification' => ['sometimes', 'required', 'string', 'max:150'],
+            'institution' => ['sometimes', 'nullable', 'string', 'max:150'],
+            'year_obtained' => ['sometimes', 'nullable', 'digits:4'],
+        ]);
+
+        $qualification->update($validated);
+        $auditLogger->log('UPDATE_STAFF_QUALIFICATION', 'StaffQualification', $qualification->id, $validated);
+
+        return response()->json(['data' => $qualification->fresh()]);
+    }
+
+    public function destroyQualification(Staff $staff, StaffQualification $qualification, AuditLogger $auditLogger)
+    {
+        abort_unless($qualification->staff_id === $staff->id, 404);
+
+        $id = $qualification->id;
+        $qualification->delete();
+        $auditLogger->log('DELETE_STAFF_QUALIFICATION', 'StaffQualification', $id, ['staff_id' => $staff->id]);
+
+        return response()->json(['data' => ['message' => 'Qualification deleted.']]);
+    }
+
+    public function storeEmergencyContact(Request $request, Staff $staff, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate([
+            'full_name' => ['required', 'string', 'max:150'],
+            'relationship' => ['nullable', 'string', 'max:30'],
+            'phone' => ['required', 'string', 'max:20'],
+        ]);
+
+        $contact = $staff->emergencyContacts()->create($validated);
+        $auditLogger->log('CREATE_STAFF_EMERGENCY_CONTACT', 'StaffEmergencyContact', $contact->id, ['staff_id' => $staff->id]);
+
+        return response()->json(['data' => $contact], 201);
+    }
+
+    public function updateEmergencyContact(Request $request, Staff $staff, StaffEmergencyContact $contact, AuditLogger $auditLogger)
+    {
+        abort_unless($contact->staff_id === $staff->id, 404);
+
+        $validated = $request->validate([
+            'full_name' => ['sometimes', 'required', 'string', 'max:150'],
+            'relationship' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'phone' => ['sometimes', 'required', 'string', 'max:20'],
+        ]);
+
+        $contact->update($validated);
+        $auditLogger->log('UPDATE_STAFF_EMERGENCY_CONTACT', 'StaffEmergencyContact', $contact->id, $validated);
+
+        return response()->json(['data' => $contact->fresh()]);
+    }
+
+    public function destroyEmergencyContact(Staff $staff, StaffEmergencyContact $contact, AuditLogger $auditLogger)
+    {
+        abort_unless($contact->staff_id === $staff->id, 404);
+
+        $id = $contact->id;
+        $contact->delete();
+        $auditLogger->log('DELETE_STAFF_EMERGENCY_CONTACT', 'StaffEmergencyContact', $id, ['staff_id' => $staff->id]);
+
+        return response()->json(['data' => ['message' => 'Emergency contact deleted.']]);
     }
 }

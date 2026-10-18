@@ -33,6 +33,12 @@ class User extends Authenticatable
         return $this->password_hash;
     }
 
+    // Laravel 11+ uses this name when rehashing through its Eloquent provider.
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
+    }
+
     public function role()
     {
         return $this->belongsTo(Role::class);

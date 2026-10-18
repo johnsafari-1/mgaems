@@ -1,0 +1,14 @@
+.login-page { padding: var(--space-4); min-height: 100dvh; }
+.login-card { width: min(100%, 460px); padding: var(--space-6); }
+.login-brand-mark { display: grid; place-items: center; width: 72px; height: 72px; margin: 0 auto var(--space-4); background: var(--teal-light); color: var(--navy); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); font-size: var(--text-2xl); font-weight: 700; }
+.login-introduction { color: var(--gray-500); margin: var(--space-5) 0; }
+.login-card .field { text-align: left; }
+.login-password { display: flex; gap: var(--space-2); }
+.login-password input { min-width: 0; flex: 1; }
+.login-password .btn { width: auto; margin: 0; flex-shrink: 0; }
+.login-card input, .login-card .btn { min-height: var(--touch-target); }
+.login-footer { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-5); color: var(--gray-500); font-size: var(--text-sm); text-align: left; }
+.login-footer p { margin: 0; flex: 1; }
+.login-footer .btn { width: auto; margin: 0; flex-shrink: 0; }
+#loginStatus { font-size: var(--text-sm); color: var(--gray-500); }
+@media (max-width: 480px) { .login-card { padding: var(--space-4); } .login-card h1 { font-size: var(--text-xl); } }

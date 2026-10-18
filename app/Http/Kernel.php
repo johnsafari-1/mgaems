@@ -13,6 +13,7 @@ class Kernel extends HttpKernel
         \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
         \App\Http\Middleware\TrimStrings::class,
         \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        \App\Http\Middleware\AuditStaffAccountLinkFailures::class,
     ];
 
     protected $middlewareGroups = [
@@ -47,5 +48,6 @@ class Kernel extends HttpKernel
 
         // Ours — enforces RBAC per SRS FR-AUTH-04. See app/Http/Middleware/EnsureRole.php.
         'role' => \App\Http\Middleware\EnsureRole::class,
+        'health.access' => \App\Http\Middleware\EnsureHealthAccess::class,
     ];
 }

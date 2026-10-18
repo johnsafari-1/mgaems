@@ -1,0 +1,39 @@
+/* Scheme documents use shared MGAEMS surfaces with a dense, readable weekly plan. */
+.scheme-workspace { min-width: 0; }
+.scheme-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: var(--space-4); margin-bottom: var(--space-5); }
+.scheme-heading h1 { font-size: var(--text-2xl); margin: var(--space-1) 0 0; }
+.scheme-heading p { color: var(--gray-500); max-width: 76ch; margin: var(--space-2) 0 0; }
+.scheme-toolbar { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: end; padding: var(--space-4); margin-bottom: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); }
+.scheme-toolbar .field { flex: 1 1 220px; margin: 0; }
+.scheme-toolbar input, .scheme-toolbar select { min-height: var(--touch-target); }
+.scheme-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-4); }
+.scheme-card, .scheme-detail-card, .scheme-week { min-width: 0; overflow-wrap: anywhere; padding: var(--space-4); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); }
+.scheme-card { display: flex; flex-direction: column; gap: var(--space-3); }
+.scheme-card-heading, .scheme-detail-heading, .scheme-week-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--space-3); }
+.scheme-card h2, .scheme-detail-card h2 { color: var(--navy); font-size: var(--text-lg); line-height: 1.35; }
+.scheme-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin: 0; }
+.scheme-meta > div { min-width: 0; }
+.scheme-meta dt { color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+.scheme-meta dd { color: var(--gray-900); font-weight: 600; margin: 0; }
+.scheme-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: auto; padding-top: var(--space-3); border-top: 1px solid var(--gray-200); }
+.scheme-actions .btn { min-height: var(--touch-target); }
+.scheme-notice { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border-left: 3px solid var(--teal); background: var(--gray-50); color: var(--gray-700); }
+.scheme-detail { margin-top: var(--space-6); }
+.scheme-detail[hidden] { display: none; }
+.scheme-reference { color: var(--gray-500); font-size: var(--text-sm); margin: var(--space-3) 0 0; }
+.scheme-review { margin: var(--space-4) 0 0; padding: var(--space-3); background: var(--gray-50); border-left: 3px solid var(--navy-light); white-space: pre-wrap; }
+.scheme-weeks { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.scheme-week { border-left: 3px solid var(--teal); }
+.scheme-week h3 { color: var(--navy); font-size: var(--text-base); margin: 0; }
+.scheme-week dl { margin: var(--space-3) 0 0; display: grid; gap: var(--space-3); }
+.scheme-week dt { color: var(--gray-500); font-size: var(--text-xs); margin-bottom: var(--space-1); }
+.scheme-week dd { margin: 0; white-space: pre-wrap; }
+.scheme-dialog .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scheme-dialog textarea { min-height: 110px; }
+.scheme-dialog .full { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .scheme-heading { display: block; }
+  .scheme-heading .btn { margin-top: var(--space-4); }
+  .scheme-meta, .scheme-dialog .form-grid { grid-template-columns: 1fr; }
+  .scheme-actions .btn { flex: 1 1 auto; }
+}

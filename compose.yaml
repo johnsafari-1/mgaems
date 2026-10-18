@@ -1,0 +1,48 @@
+# Local development only. Always supply --env-file .env.docker.local.
+# Changing MYSQL_* initialization values never rotates an existing MySQL account.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: mgaems-app
+    working_dir: /var/www/html
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/var/www/html
+      - mgaems_vendor:/var/www/html/vendor
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: mysql
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_DATABASE: ${MGAEMS_DOCKER_DB_DATABASE:-mgaems}
+      DB_USERNAME: ${MGAEMS_DOCKER_DB_USERNAME:?Set MGAEMS_DOCKER_DB_USERNAME in the ignored Docker env file}
+      DB_PASSWORD: ${MGAEMS_DOCKER_DB_PASSWORD:?Set MGAEMS_DOCKER_DB_PASSWORD in the ignored Docker env file}
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mysql:
+    image: mysql:8.0
+    container_name: mgaems-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${MGAEMS_DOCKER_DB_DATABASE:-mgaems}
+      MYSQL_USER: ${MGAEMS_DOCKER_DB_USERNAME:?Set MGAEMS_DOCKER_DB_USERNAME in the ignored Docker env file}
+      MYSQL_PASSWORD: ${MGAEMS_DOCKER_DB_PASSWORD:?Set MGAEMS_DOCKER_DB_PASSWORD in the ignored Docker env file}
+      MYSQL_ROOT_PASSWORD: ${MGAEMS_DOCKER_ROOT_PASSWORD:?Set MGAEMS_DOCKER_ROOT_PASSWORD in the ignored Docker env file}
+    ports:
+      - "127.0.0.1:${MGAEMS_DOCKER_MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mgaems_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_ROOT_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=root --batch --skip-column-names -e 'SELECT 1' > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  mgaems_mysql_data:
+  mgaems_vendor:

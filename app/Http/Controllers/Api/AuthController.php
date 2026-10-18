@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 /**
  * Implements docs/MGAEMS_APIDesign.docx §2 (Authentication & User Management)
@@ -49,37 +52,69 @@ class AuthController extends Controller
             ]);
         }
 
-        if ($user->status !== 'active') {
-            $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
+        // Serialize token issuance with deactivation and password recovery.
+        $verifiedHash = $user->password_hash;
+        $response = DB::transaction(function () use ($user, $verifiedHash, $credentials, $throttleKey, $auditLogger) {
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+
+            if ($user->password_hash !== $verifiedHash && ! Hash::check($credentials['password'], $user->password_hash)) {
+                RateLimiter::hit($throttleKey, 60);
+                $auditLogger->log('LOGIN_FAILED', 'User', $user->id, ['attempted_username' => $credentials['username']]);
+
+                return null;
+            }
+
+            if ($user->status !== 'active') {
+                $auditLogger->log('LOGIN_BLOCKED_INACTIVE', 'User', $user->id);
+
+                return response()->json([
+                    'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
+                ], 403);
+            }
+
+            // Rehash only the verified current password, inside the issuance lock.
+            // This changes the work factor, not the credential or revocation epoch.
+            if (version_compare(app()->version(), '11.0.0', '>=') && config('hashing.rehash_on_login', true)
+                && Hash::needsRehash($user->password_hash)) {
+                $user->forceFill(['password_hash' => Hash::make($credentials['password'])])->save();
+            }
+            RateLimiter::clear($throttleKey);
+
+            $token = $user->createToken('mgaems-web')->plainTextToken;
+            $user->forceFill(['last_login_at' => now()])->save();
+            $auditLogger->log('LOGIN_SUCCESS', 'User', $user->id);
 
             return response()->json([
-                'error' => ['code' => 'ACCOUNT_INACTIVE', 'message' => 'This account is not active.'],
-            ], 403);
+                'data' => [
+                    'token' => $token,
+                    'user' => [
+                        'id' => $user->id,
+                        'username' => $user->username,
+                        'email' => $user->email,
+                        'role' => $user->role?->name,
+                    ],
+                ],
+            ]);
+        });
+        if ($response === null) {
+            throw ValidationException::withMessages(['username' => ['The provided credentials are incorrect.']]);
         }
 
-        RateLimiter::clear($throttleKey);
-
-        $token = $user->createToken('mgaems-web')->plainTextToken;
-        $user->forceFill(['last_login_at' => now()])->save();
-        $auditLogger->log('LOGIN_SUCCESS', 'User', $user->id);
-
-        return response()->json([
-            'data' => [
-                'token' => $token,
-                'user' => [
-                    'id' => $user->id,
-                    'username' => $user->username,
-                    'email' => $user->email,
-                    'role' => $user->role?->name,
-                ],
-            ],
-        ]);
+        return $response;
     }
 
     public function logout(Request $request, AuditLogger $auditLogger)
     {
         $auditLogger->log('LOGOUT', 'User', $request->user()->id);
-        $request->user()->currentAccessToken()->delete();
+        $token = $request->user()->currentAccessToken();
+        if ($token instanceof PersonalAccessToken) {
+            // Token logout keeps other devices signed in, as before.
+            $token->delete();
+        } elseif ($request->hasSession()) {
+            Auth::guard('web')->logoutCurrentDevice();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json(['data' => ['message' => 'Logged out.']]);
     }

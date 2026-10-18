@@ -1,0 +1,64 @@
+/* Learner and guardian workspaces reuse the Phase 1 theme tokens. */
+.directory-card { padding: 0; overflow: hidden; }
+.directory-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(150px, 1fr)) auto; gap: var(--space-3); align-items: end; padding: var(--space-5); background: var(--gray-50); border-bottom: 1px solid var(--gray-200); }
+.directory-filters .field { margin: 0; min-width: 0; }
+.directory-summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-bottom: 1px solid var(--gray-200); font-size: var(--text-sm); color: var(--gray-500); }
+.directory-card .table-scroll { padding: 0; }
+.directory-table { min-width: 660px; }
+.directory-table td:first-child { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.directory-name { font-weight: 700; color: var(--navy); }
+.directory-table .actions { flex-wrap: wrap; }
+.directory-card .table-scroll:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: -3px; }
+.directory-card > [aria-busy] > .empty-state, .directory-card > [aria-busy] > .error-banner { margin: var(--space-4); }
+.directory-card > [aria-busy] > .btn { margin: 0 var(--space-4) var(--space-4); }
+.learner-profile .modal { max-width: 960px; }
+.learner-profile .modal-body { max-height: none; }
+.profile-identity { display: flex; align-items: center; gap: var(--space-4); padding: var(--space-4); margin-bottom: var(--space-5); border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--gray-50); }
+.profile-identity > div { flex: 1; min-width: 0; }
+.profile-identity h3 { font-size: var(--text-xl); color: var(--navy); overflow-wrap: anywhere; }
+.profile-identity p { margin-top: var(--space-1); color: var(--gray-500); }
+.profile-avatar { display: grid; place-items: center; width: 52px; height: 52px; flex-shrink: 0; border-radius: var(--radius-lg); background: var(--teal-light); color: var(--navy); font-weight: 700; font-size: var(--text-lg); }
+.learner-profile .tabs { overflow-x: auto; }
+.learner-profile .tab { white-space: nowrap; min-height: var(--touch-target); }
+.learner-profile .tab-panel:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 3px; }
+.profile-section { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--gray-200); }
+.profile-section h3 { margin-bottom: var(--space-2); }
+.profile-section p { margin-bottom: var(--space-3); }
+.profile-contacts .record-item { align-items: flex-start; }
+.profile-contacts strong { overflow-wrap: anywhere; }
+.workflow-form fieldset { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); margin: var(--space-4) 0; min-width: 0; }
+.workflow-form legend { padding: 0 var(--space-2); font-weight: 700; color: var(--navy); }
+.workflow-form .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workflow-form .field { min-width: 0; }
+.workflow-form .field input, .workflow-form .field select { min-height: var(--touch-target); }
+.workflow-form .form-hint { margin-top: var(--space-2); font-size: var(--text-sm); color: var(--gray-500); }
+.workflow-form .check-label { display: flex; align-items: flex-start; gap: var(--space-3); cursor: pointer; }
+.workflow-form input[type="checkbox"] { width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px; }
+.guardian-filters { grid-template-columns: minmax(220px, 1fr) auto; }
+.guardian-table { min-width: 760px; }
+.guardian-table td { vertical-align: top; }
+.guardian-table .record-item { padding: var(--space-2) 0; }
+.guardian-table .record-item > div { min-width: 0; overflow-wrap: anywhere; }
+.guardian-table .icon-control { flex-shrink: 0; }
+.guardian-context { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-4); background: var(--info-bg); border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.guardian-context p { flex: 1; min-width: 0; }
+.guardian-workspace #learnerChoices { max-height: 280px; overflow-y: auto; }
+.guardian-workspace #learnerChoices .record-item { flex-direction: row; justify-content: flex-start; }
+.guardian-workspace #learnerChoices .record-item span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .directory-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .directory-filters > .field:first-child { grid-column: 1 / -1; }
+  .guardian-filters { grid-template-columns: minmax(0, 1fr) auto; }
+  .guardian-filters > .field:first-child { grid-column: auto; }
+}
+@media (max-width: 640px) {
+  .directory-filters, .guardian-filters, .workflow-form .form-grid { grid-template-columns: 1fr; }
+  .directory-filters, .directory-summary { padding: var(--space-4); }
+  .directory-summary { flex-wrap: wrap; }
+  .directory-summary .text-meta { display: none; }
+  .profile-identity { flex-wrap: wrap; gap: var(--space-3); }
+  .profile-identity .badge { margin-left: 0; }
+  .profile-section .form-actions .btn { flex: 1 1 auto; }
+  .workflow-form fieldset { padding: var(--space-3); }
+  .guardian-table .record-item { flex-direction: row; align-items: flex-start; }
+}

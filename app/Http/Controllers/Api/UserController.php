@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AuditLogger;
+use App\Services\StaffAccountLinks;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -17,11 +19,16 @@ use Illuminate\Validation\Rule;
  */
 class UserController extends Controller
 {
+    public function roles()
+    {
+        return response()->json(['data' => Role::orderBy('name')->get(['id', 'name'])]);
+    }
+
     public function index(Request $request)
     {
         $perPage = min((int) $request->query('per_page', 15), 100);
 
-        $users = User::with('role')
+        $users = User::with('role', 'staff')
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
             ->when($request->query('role'), fn ($q, $roleName) => $q->whereHas('role', fn ($r) => $r->where('name', $roleName)))
             ->orderBy('username')
@@ -43,7 +50,7 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:100', 'unique:users,username'],
             'email' => ['required', 'email', 'max:150', 'unique:users,email'],
             'password' => ['required', 'string', 'min:10'],
-            'role' => ['required', Rule::in($this->validRoleNames())],
+            'role' => ['required', Rule::in(array_values(array_diff($this->validRoleNames(), [Role::STUDENT])))],
         ]);
 
         $role = Role::where('name', $validated['role'])->firstOrFail();
@@ -66,6 +73,16 @@ class UserController extends Controller
         return response()->json(['data' => $this->transform($user)]);
     }
 
+    public function staffLink(Request $request, $user)
+    {
+        return response()->json(['data' => app(StaffAccountLinks::class)->context($request, (int) $user)])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function changeStaffLink(Request $request, $user, AuditLogger $auditLogger)
+    {
+        return response()->json(['data' => app(StaffAccountLinks::class)->change($request, (int) $user, $auditLogger)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function update(Request $request, User $user, AuditLogger $auditLogger)
     {
         $validated = $request->validate([
@@ -74,45 +91,74 @@ class UserController extends Controller
             'status' => ['sometimes', Rule::in(['active', 'inactive', 'locked'])],
         ]);
 
-        // Guard rail: never allow the last active System Administrator to be
-        // demoted/deactivated, per UC-AUTH-04's "prevent lockout" rule.
-        if ($this->wouldRemoveLastAdmin($user, $validated)) {
-            return response()->json([
-                'error' => [
-                    'code' => 'LAST_ADMIN_PROTECTED',
-                    'message' => 'Cannot change the role/status of the last active System Administrator.',
-                ],
-            ], 409);
-        }
+        return DB::transaction(function () use ($user, $validated, $auditLogger) {
+            // Serialize administrator changes, preserving the last-admin guard
+            // even when two administrators are changed concurrently.
+            Role::where('name', Role::SYSTEM_ADMIN)->lockForUpdate()->firstOrFail();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
 
-        if (isset($validated['role'])) {
-            $validated['role_id'] = Role::where('name', $validated['role'])->firstOrFail()->id;
-            unset($validated['role']);
-        }
+            if (($validated['role'] ?? null) === Role::STUDENT && ! $user->hasRole(Role::STUDENT)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['role' => 'New Student-role accounts are not supported in this release.']);
+            }
 
-        $user->update($validated);
-        $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
+            // Guard rail: never allow the last active System Administrator to be
+            // demoted/deactivated, per UC-AUTH-04's "prevent lockout" rule.
+            if ($this->wouldRemoveLastAdmin($user, $validated)) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'LAST_ADMIN_PROTECTED',
+                        'message' => 'Cannot change the role/status of the last active System Administrator.',
+                    ],
+                ], 409);
+            }
 
-        return response()->json(['data' => $this->transform($user->fresh('role'))]);
+            if (isset($validated['role'])) {
+                if ($staff = $user->staff()->lockForUpdate()->first()) {
+                    app(StaffAccountLinks::class)->assertRoleCompatible($validated['role'], $staff);
+                }
+                $validated['role_id'] = Role::where('name', $validated['role'])->firstOrFail()->id;
+                unset($validated['role']);
+            }
+
+            // Health sessions cannot regain access after reactivation or a role grant.
+            $roleChanged = isset($validated['role_id']) && (int) $validated['role_id'] !== (int) $user->role_id;
+            if (($validated['status'] ?? $user->status) !== 'active' || $roleChanged) {
+                $user->session_version = (int) $user->session_version + 1;
+            }
+            $user->update($validated);
+            if ($user->status !== 'active' || $roleChanged) {
+                $user->tokens()->delete();
+            }
+            $auditLogger->log('UPDATE_USER', 'User', $user->id, ['changes' => array_keys($validated)]);
+
+            return response()->json(['data' => $this->transform($user->fresh('role'))]);
+        });
     }
 
     public function destroy(User $user, AuditLogger $auditLogger)
     {
-        if ($this->wouldRemoveLastAdmin($user, ['status' => 'inactive'])) {
-            return response()->json([
-                'error' => [
-                    'code' => 'LAST_ADMIN_PROTECTED',
-                    'message' => 'Cannot deactivate the last active System Administrator.',
-                ],
-            ], 409);
-        }
+        return DB::transaction(function () use ($user, $auditLogger) {
+            Role::where('name', Role::SYSTEM_ADMIN)->lockForUpdate()->firstOrFail();
+            $user = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
 
-        // Soft deactivation, not a hard delete — preserves audit/history integrity
-        // per Database Schema §4 (Referential Integrity Notes).
-        $user->update(['status' => 'inactive']);
-        $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
+            if ($this->wouldRemoveLastAdmin($user, ['status' => 'inactive'])) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'LAST_ADMIN_PROTECTED',
+                        'message' => 'Cannot deactivate the last active System Administrator.',
+                    ],
+                ], 409);
+            }
 
-        return response()->json(['data' => ['message' => 'User deactivated.']]);
+            // Soft deactivation, not a hard delete — preserves audit/history integrity
+            // per Database Schema §4 (Referential Integrity Notes).
+            $user->session_version = (int) $user->session_version + 1;
+            $user->update(['status' => 'inactive']);
+            $user->tokens()->delete();
+            $auditLogger->log('DEACTIVATE_USER', 'User', $user->id);
+
+            return response()->json(['data' => ['message' => 'User deactivated.']]);
+        });
     }
 
     private function wouldRemoveLastAdmin(User $user, array $changes): bool
@@ -148,6 +194,7 @@ class UserController extends Controller
             'status' => $user->status,
             'last_login_at' => $user->last_login_at,
             'created_at' => $user->created_at,
+            'account_link' => app(StaffAccountLinks::class)->summary($user),
         ];
     }
 }

@@ -29,4 +29,29 @@ class ClassSubjectTeacher extends Model
     {
         return $this->belongsTo(Term::class);
     }
+
+    public function schemeOfWork()
+    {
+        return $this->hasOne(SchemeOfWork::class, 'class_subject_teacher_id');
+    }
+
+    public function lessonPlans()
+    {
+        return $this->hasMany(LessonPlan::class, 'class_subject_teacher_id');
+    }
+
+    public function recordsOfWork()
+    {
+        return $this->hasMany(RecordOfWork::class, 'class_subject_teacher_id');
+    }
+
+    public function homeworks()
+    {
+        return $this->hasMany(Homework::class, 'class_subject_teacher_id');
+    }
+
+    public function examPapers()
+    {
+        return $this->hasMany(ExamPaper::class, 'class_subject_teacher_id');
+    }
 }

@@ -2,90 +2,28 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MGAEMS — Sign In</title>
-<link rel="stylesheet" href="/assets/app.css">
-<script src="https://unpkg.com/lucide@latest"></script>
-<style>
-  body { display: flex; align-items: center; justify-content: center; height: 100vh; }
-  .login-card { width: 380px; text-align: center; }
-  .login-card img { width: 72px; height: 72px; object-fit: cover; border-radius: 50%; margin-bottom: var(--space-3); }
-  .login-card .sub { color: var(--gray-500); font-size: var(--text-sm); margin-bottom: var(--space-6); }
-  .login-card .btn-primary { width: 100%; margin-top: var(--space-2); }
-  .login-card .theme-toggle { margin-top: var(--space-5); font-size: var(--text-xs); color: var(--gray-500); }
-</style>
-</head>
-<body>
-  <div class="card login-card">
-    <img src="/storage/school/DsN4QKTH9nHqIbLiOM7ha8HIjUHyUfOPjcKnBdgq.jpg" onerror="this.style.display='none'">
-    <h1>Manna Goodnews Academy</h1>
-    <div class="sub">Education Management System</div>
-
-    <div id="alertBox"></div>
-
-    <div class="field" style="text-align:left">
-      <label>Username</label>
-      <input type="text" id="username" autocomplete="username">
-    </div>
-    <div class="field" style="text-align:left">
-      <label>Password</label>
-      <input type="password" id="password" autocomplete="current-password">
-    </div>
-
-    <button class="btn btn-primary" id="loginBtn" onclick="login()">
-      <i data-lucide="log-in"></i> <span id="loginBtnLabel">Sign In</span>
-    </button>
-  </div>
-
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MGAEMS ? Sign In</title>
 <script src="/assets/app.js"></script>
-<script>
-lucide.createIcons();
-
-async function login() {
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value;
-  const btn = document.getElementById('loginBtn');
-  const btnLabel = document.getElementById('loginBtnLabel');
-  const alertBox = document.getElementById('alertBox');
-  alertBox.innerHTML = '';
-
-  if (!username || !password) {
-    alertBox.innerHTML = MGAEMS.errorHTML('Please enter both your username and password.');
-    lucide.createIcons();
-    return;
-  }
-
-  btn.disabled = true;
-  btnLabel.textContent = 'Signing in…';
-
-  try {
-    const res = await fetch('/api/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      const message = data.message || (data.error && data.error.message) || 'Login failed. Check your details and try again.';
-      alertBox.innerHTML = MGAEMS.errorHTML(message);
-      lucide.createIcons();
-      btn.disabled = false;
-      btnLabel.textContent = 'Sign In';
-      return;
-    }
-
-    localStorage.setItem('mgaems_token', data.data.token);
-    localStorage.setItem('mgaems_user', JSON.stringify(data.data.user));
-    window.location.href = '/dashboard.html';
-  } catch (e) {
-    alertBox.innerHTML = MGAEMS.errorHTML('Could not reach the server. Is it running?');
-    lucide.createIcons();
-    btn.disabled = false;
-    btnLabel.textContent = 'Sign In';
-  }
-}
-
-document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
-</script>
+<link rel="stylesheet" href="/assets/app.css">
+<link rel="stylesheet" href="/assets/login.css">
+<script defer src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="login-page">
+<main class="card login-card" aria-labelledby="loginHeading">
+  <div class="login-brand-mark" role="img" aria-label="Manna Goodnews Academy">MG</div>
+  <h1 id="loginHeading">Manna Goodnews Academy</h1>
+  <p class="sub">Education Management System</p>
+  <p class="login-introduction">Sign in to your authorized school workspace.</p>
+  <form id="loginForm">
+    <div id="alertBox" data-form-error role="alert" tabindex="-1"></div>
+    <div class="field"><label for="username">Username</label><input type="text" id="username" name="username" maxlength="100" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+    <div class="field"><label for="password">Password</label><div class="login-password"><input type="password" id="password" name="password" autocomplete="current-password" required><button class="btn btn-secondary" type="button" id="passwordToggle" aria-controls="password" aria-pressed="false">Show</button></div></div>
+    <button class="btn btn-primary" type="submit" id="loginBtn"><i data-lucide="log-in" aria-hidden="true"></i><span id="loginBtnLabel">Sign In</span></button>
+    <p id="loginStatus" role="status"></p>
+  </form>
+  <div class="login-footer"><p>For account access or recovery, contact an authorized school administrator.</p><button type="button" class="btn btn-secondary icon-control" data-theme-toggle aria-label="Switch theme"></button></div>
+</main>
+<script src="/assets/login.js"></script>
 </body>
 </html>

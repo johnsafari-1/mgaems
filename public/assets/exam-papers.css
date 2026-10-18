@@ -1,0 +1,40 @@
+.exam-workspace { min-width: 0; }
+.exam-heading, .exam-actions, .exam-meta { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.exam-heading { justify-content: space-between; align-items: flex-start; margin-bottom: var(--space-4); }
+.exam-heading h1 { margin: var(--space-1) 0; font-size: var(--text-2xl); }
+.exam-notice { border-left: 3px solid var(--teal); background: var(--gray-50); padding: var(--space-3) var(--space-4); }
+.exam-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-4); }
+.exam-card, .exam-studio-panel, .exam-question-editor, .exam-preview-paper { border: 1px solid var(--gray-200); border-radius: var(--radius-lg); background: var(--surface); min-width: 0; overflow-wrap: anywhere; }
+.exam-card { padding: var(--space-4); display: grid; gap: var(--space-3); }
+.exam-card h2, .exam-studio-panel h2, .exam-question-editor h2 { color: var(--navy); margin: 0; }
+.exam-meta { margin: var(--space-3) 0; color: var(--gray-500); }
+.exam-studio { display: grid; grid-template-columns: minmax(190px, .72fr) minmax(320px, 1.2fr) minmax(270px, .9fr); gap: var(--space-4); align-items: start; }
+.exam-studio-panel { padding: var(--space-4); }
+.exam-outline { position: sticky; top: var(--space-4); }
+.exam-preview { position: sticky; top: var(--space-4); }
+.exam-outline-list, .exam-outline-list ul { list-style: none; padding: 0; margin: var(--space-3) 0; }
+.exam-outline-list li { margin-top: var(--space-1); }
+.exam-outline-button { width: 100%; display: flex; justify-content: space-between; text-align: left; border: 0; border-radius: var(--radius); background: transparent; padding: var(--space-2); color: var(--gray-900); cursor: pointer; }
+.exam-outline-button:hover, .exam-outline-button[aria-current="true"] { background: var(--gray-100); color: var(--navy); }
+.exam-outline-section { font-weight: 700; color: var(--navy); padding: var(--space-2); }
+.exam-question-editor { padding: var(--space-4); }
+.exam-question-editor textarea { min-height: 110px; }
+.exam-question-editor .full { grid-column: 1 / -1; }
+.exam-preview-controls { display: flex; gap: var(--space-2); margin-bottom: var(--space-3); }
+.exam-preview-paper { background: #fff; color: #1b1b1b; padding: clamp(16px, 3vw, 30px); box-shadow: 0 8px 30px rgba(0, 0, 0, .08); font-family: Georgia, serif; }
+.exam-preview-paper h3, .exam-preview-paper h4 { margin: var(--space-2) 0; color: #14213d; }
+.exam-preview-header { border-bottom: 2px solid #14213d; text-align: center; padding-bottom: var(--space-3); }
+.exam-preview-badge { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 2px solid #14213d; border-radius: 50%; font: 700 12px sans-serif; }
+.exam-preview-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px; border-bottom: 1px solid #aaa; padding: var(--space-3) 0; font: 12px sans-serif; }
+.exam-preview-identification { margin: var(--space-3) 0; border: 1px solid #aaa; padding: var(--space-2); font: 12px sans-serif; }
+.exam-preview-question { margin-top: var(--space-4); page-break-inside: avoid; }
+.exam-preview-question p { white-space: pre-wrap; margin: var(--space-1) 0; }
+.exam-preview-options { margin: var(--space-2) 0 0 var(--space-4); }
+.exam-preview-space { height: 28px; border-bottom: 1px dotted #777; }
+.exam-preview-answer { margin-top: var(--space-2); padding: var(--space-2); background: #fff3f1; border-left: 3px solid #9d2f24; font: 12px sans-serif; white-space: pre-wrap; }
+.exam-attachment { font-size: var(--text-sm); color: var(--gray-500); }
+.exam-dialog textarea { min-height: 100px; }
+.exam-dialog .full { grid-column: 1 / -1; }
+@media (max-width: 1120px) { .exam-studio { grid-template-columns: minmax(180px, .65fr) minmax(300px, 1fr); } .exam-preview { grid-column: 1 / -1; position: static; } .exam-preview-paper { max-width: 760px; margin: auto; } }
+@media (max-width: 760px) { .exam-heading { display: block; } .exam-heading .btn { margin-top: var(--space-3); } .exam-studio { grid-template-columns: 1fr; } .exam-outline, .exam-preview { position: static; } .exam-preview-facts { grid-template-columns: 1fr; } .exam-actions .btn { flex: 1 1 auto; } .exam-dialog .form-grid { grid-template-columns: 1fr; } }
+@media print { .app-sidebar, .app-header, .exam-heading, .exam-notice, .exam-outline, .exam-question-editor, .exam-preview-controls { display: none !important; } .app-main, .exam-studio, .exam-preview { display: block; padding: 0; } .exam-preview-paper { border: 0; box-shadow: none; max-width: none; } }

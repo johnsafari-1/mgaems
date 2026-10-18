@@ -15,10 +15,12 @@ class ReportCard extends Model
         'file_path',
         'generated_at',
         'generated_by',
+        'revision_number',
     ];
 
     protected $casts = [
         'generated_at' => 'datetime',
+        'revision_number' => 'integer',
     ];
 
     public function student()
@@ -34,5 +36,13 @@ class ReportCard extends Model
     public function generatedBy()
     {
         return $this->belongsTo(User::class, 'generated_by');
+    }
+
+    public function revisions() { return $this->hasMany(ReportCardRevision::class); }
+
+    public function publishedSnapshot(): ?array
+    {
+        if (! $this->revision_number) return null;
+        return $this->revisions()->where('revision_number', $this->revision_number)->first()?->input_snapshot;
     }
 }

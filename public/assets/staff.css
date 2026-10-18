@@ -1,0 +1,57 @@
+/* Staff workspace uses shared light/dark tokens and dialog behavior. */
+.staff-workspace { min-width: 0; }
+.staff-heading p { max-width: 78ch; }
+.staff-policy-note, .staff-form-note { color: var(--gray-500); font-size: var(--text-sm); line-height: 1.6; }
+.staff-policy-note { margin-bottom: var(--space-5); }
+.staff-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); margin-bottom: var(--space-5); }
+.staff-stats .stat-card { min-width: 0; border-top: 3px solid var(--teal); }
+.staff-panel-heading { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-4); }
+.staff-panel-heading h2 { color: var(--navy); font-size: var(--text-xl); }
+.staff-panel-heading p { margin: var(--space-2) 0 0; }
+.staff-toolbar { display: grid; grid-template-columns: minmax(200px, 2fr) repeat(2, minmax(150px, 1fr)) auto; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
+.staff-toolbar .field { margin: 0; }
+.staff-workspace .btn, .staff-workspace input, .staff-workspace select, .staff-profile .btn, .staff-profile .tab { min-height: var(--touch-target); }
+.staff-meta { display: block; margin: var(--space-1) 0 0; font-size: var(--text-xs); color: var(--gray-500); overflow-wrap: anywhere; }
+.staff-type-teaching { color: var(--navy); background: var(--teal-light); }
+.staff-workspace .staff-table { min-width: 900px; }
+.staff-table th { white-space: nowrap; }
+.staff-table td { vertical-align: top; }
+.staff-table td:first-child strong { color: var(--navy); }
+.staff-table-scroll { border: 1px solid var(--gray-200); border-radius: var(--radius); }
+.staff-profile-heading { flex-wrap: wrap; }
+.staff-profile-heading h3 { color: var(--navy); font-size: var(--text-xl); overflow-wrap: anywhere; }
+.staff-profile-heading p { margin: var(--space-1) 0 0; }
+.staff-avatar { flex-shrink: 0; background: var(--teal-light); }
+.staff-profile-tabs { overflow-x: auto; margin-bottom: var(--space-4); gap: var(--space-2); }
+.staff-profile-tabs .tab { white-space: nowrap; flex-shrink: 0; }
+.staff-profile-tabs .tab[aria-selected="true"] { border-bottom-color: var(--teal); }
+.staff-profile-panel[hidden] { display: none; }
+.staff-detail-grid dd { overflow-wrap: anywhere; }
+.staff-profile .record-item { align-items: flex-start; flex-wrap: wrap; }
+.staff-profile .record-item > div:first-child { flex: 1; min-width: 170px; overflow-wrap: anywhere; }
+.staff-profile .record-item .actions { flex-wrap: wrap; }
+.staff-form-group { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: var(--space-4); margin: var(--space-4) 0; min-width: 0; }
+.staff-form-group legend, .staff-extra-row legend { color: var(--navy); font-weight: 700; padding-inline: var(--space-2); }
+.staff-form-group .field { min-width: 0; }
+.staff-form-group input, .staff-form-group select, .staff-profile .inline-editor input { min-height: var(--touch-target); }
+.staff-extra-row { min-width: 0; border: 1px solid var(--gray-200); border-radius: var(--radius); background: var(--gray-50); margin-bottom: var(--space-3); padding: var(--space-3); }
+.staff-form-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.staff-profile .inline-editor h4 { margin-bottom: var(--space-3); color: var(--navy); }
+.staff-info { margin-block: var(--space-4); }
+.staff-workspace [role="alert"], .staff-profile [role="alert"] { overflow-wrap: anywhere; }
+.staff-profile :focus-visible, .staff-extra-row button:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+@media (max-width: 1100px) { .staff-toolbar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 768px) { .staff-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .staff-toolbar, .staff-form-group .form-grid, .staff-extra-row .form-grid, .staff-profile .form-grid, .staff-detail-grid { grid-template-columns: 1fr; }
+  .staff-workspace .staff-table { min-width: 0; }
+  .staff-workspace .staff-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .staff-workspace .staff-table, .staff-workspace .staff-table tbody { display: block; }
+  .staff-workspace .staff-table tr { display: block; border-bottom: 1px solid var(--gray-200); padding: var(--space-3); }
+  .staff-workspace .staff-table td { display: grid; grid-template-columns: minmax(95px, 34%) minmax(0, 1fr); gap: var(--space-2); border: 0; padding: var(--space-2) 0; overflow-wrap: anywhere; }
+  .staff-workspace .staff-table td::before { content: attr(data-label); font-weight: 600; color: var(--gray-500); font-size: var(--text-xs); }
+  .staff-workspace .staff-table td > .staff-meta { grid-column: 2; }
+  .staff-profile-heading > div:nth-child(2) { min-width: 160px; }
+  .staff-profile .record-item .actions, .staff-form-actions { width: 100%; }
+  .staff-form-actions .btn { flex: 1; }
+}

@@ -20,4 +20,9 @@ class Term extends Model
     {
         return $this->belongsTo(AcademicYear::class);
     }
+
+    public function academicEvents()
+    {
+        return $this->hasMany(AcademicEvent::class);
+    }
 }
