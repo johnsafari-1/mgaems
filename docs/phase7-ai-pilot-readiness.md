@@ -2,6 +2,11 @@
 
 Audit date: 19 October 2026. Workspace: `D:\mgaems`.
 
+**Historical Phase 6 snapshot:** the inventory and no-write statements below
+describe that audit. The subsequently approved Grade 7 academic changes, selected
+teacher/term, audit IDs and remaining blockers are recorded in
+[Phase 7 Grade 7 Science setup](phase7-grade7-science-setup.md).
+
 **Engineering readiness: isolated synthetic pilot passes. Real-content pilot:
 blocked by source authorization/content and school mapping.** The active
 `MGAEMS_AI_DRIVER` remains `disabled`. Existing Phase 6 generators were retained

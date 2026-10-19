@@ -1,0 +1,9 @@
+body { padding-bottom: 88px; }
+.synthetic-demo-banner { position: fixed; bottom: 0; left: 0; right: 0; z-index: 200; padding: 12px 20px; background: #173447; color: #fff; font: 14px/1.5 system-ui, sans-serif; border-top: 3px solid #f1bd45; }
+.synthetic-demo-banner strong { margin-right: 12px; }
+.synthetic-demo-banner a { color: #fff; text-decoration: underline; margin-left: 12px; }
+.demo-guide { max-width: 900px; margin: 32px auto; padding: 24px; font: 16px/1.6 system-ui, sans-serif; }
+.demo-guide h1 { font-size: 28px; }
+.demo-guide li { margin-bottom: 10px; }
+.demo-guide code { padding: 3px 6px; background: #edf2f5; color: #173447; }
+.demo-guide a { color: #174f88; }

@@ -242,6 +242,18 @@ try {
         $version = $library->updateVersion($version, array_replace($versionData, ['edition' => 'Corrected synthetic edition']), $audit);
         ensure($before !== $library->contentChecksum($version));
     });
+    check('source edits preserve omitted subject links and validate the retained mapping', function () use ($library, $source, $metadata, $area, $audit) {
+        $edit = $metadata;
+        unset($edit['subject_id']);
+        $saved = $library->updateSource($source, $edit, $audit);
+        ensure($saved->subject_id === $area->id, 'An omitted optional link must not clear the existing subject.');
+        invalid(fn () => $library->updateSource($source, array_replace($edit, ['learning_area' => 'Different area']), $audit));
+        ensure($source->fresh()->subject_id === $area->id && $source->fresh()->learning_area === $metadata['learning_area'], 'A mismatched edit must not change saved metadata.');
+        $saved = $library->updateSource($source, $edit + ['subject_id' => null], $audit);
+        ensure($saved->subject_id === null, 'Explicit null intentionally unlinks a draft source.');
+        $library->updateSource($source, $metadata, $audit);
+        ensure($source->fresh()->subject_id === $area->id, 'The existing subject can be explicitly linked again.');
+    });
     check('malformed extraction imports are atomic and cannot carry private columns', function () use ($library, $version, $audit) {
         invalid(fn () => $library->import($version, ['records' => [recordInput(), ['record_key' => 'bad']]], $audit));
         invalid(fn () => $library->import($version, ['records' => [recordInput() + ['student_name' => 'Must never be imported']]], $audit));

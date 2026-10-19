@@ -43,10 +43,49 @@
     target.innerHTML = `<div class="plan-grid">${rows.map(source => `<article class="plan-card"><div class="plan-card-heading"><h2>${esc(source.title)}</h2><span class="badge badge-navy">Grade ${esc(source.grade)}</span></div><dl class="plan-meta"><div><dt>Learning area</dt><dd>${esc(source.learning_area)}</dd></div><div><dt>Publisher</dt><dd>${esc(source.publisher)}</dd></div><div><dt>Official URL</dt><dd><a href="${esc(source.official_url)}" target="_blank" rel="noopener noreferrer">Open source</a></dd></div><div><dt>Versions</dt><dd>${esc(source.versions?.length || 0)}</dd></div></dl><div class="plan-actions"><button type="button" class="btn btn-secondary btn-sm" data-curriculum-action="edit-source" data-source="${esc(source.id)}">Edit source</button><button type="button" class="btn btn-primary btn-sm" data-curriculum-action="upload-version" data-source="${esc(source.id)}">Upload authorized PDF</button></div>${(source.versions || []).map(version => `<p><button type="button" class="btn btn-secondary btn-sm" data-curriculum-action="version-detail" data-source="${esc(source.id)}" data-version="${esc(version.id)}">${esc(version.edition)} · ${esc(versionState(version))}</button></p>`).join('')}</article>`).join('')}</div>`;
     target.setAttribute('aria-busy', 'false'); MGAEMS.initIcons();
   }
-  function sourceForm(source, trigger) {
+  async function sourceForm(source, trigger) {
     const official = source || { identifier: 'kicd-integrated-science-grade7-april-2024', title: 'Integrated Science Grade 7 - April 2024', official_url: 'https://kicd.ac.ke/wp-content/uploads/2024/06/Integrated-Science-Grade-7-Design-Formatted-April-2024.pdf', publisher: 'Kenya Institute of Curriculum Development (KICD)', grade: 7, learning_area: 'Integrated Science' };
     const modal = MGAEMS.openModal({ title: source ? 'Edit curriculum source' : 'Register source metadata', trigger, body: `<form id="curriculumSourceForm" class="plan-dialog"><div data-form-error></div><p class="academic-form-note">This stores only provenance metadata. It does not download, index, reproduce, verify, or approve the linked document.</p><div class="form-grid">${source ? '' : input('identifier', 'Stable identifier', official.identifier, 'text', true, 'maxlength="120" pattern="[a-z0-9][a-z0-9._-]*"')}${input('title', 'Source title / edition', official.title, 'text', true, 'maxlength="200"')}${input('official_url', 'Official source URL', official.official_url, 'url', true, 'maxlength="1000"')}${input('publisher', 'Publisher', official.publisher, 'text', true, 'maxlength="160"')}${input('grade', 'Grade', official.grade, 'number', true, 'min="1" max="12"')}${input('learning_area', 'Learning area', official.learning_area, 'text', true, 'maxlength="160"')}</div></form>`, footer: `<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="button" class="btn btn-primary" id="saveCurriculumSource">${source ? 'Save source' : 'Register source'}</button>` });
-    const form = modal.body.querySelector('form'); modal.overlay.querySelector('#saveCurriculumSource').addEventListener('click', async () => { if (!form.reportValidity()) return; const body = formValues(form); body.grade = Number(body.grade); modal.setBusy(true); const result = source ? await MGAEMS.put('/api/v1/curriculum-library/sources/' + source.id, body) : await MGAEMS.post('/api/v1/curriculum-library/sources', body); modal.setBusy(false); if (!result.ok) { MGAEMS.showFormErrors(form, result); return; } modal.close(); MGAEMS.toast(source ? 'Curriculum source updated.' : 'Source provenance registered without document ingestion.', 'success'); load(); });
+    const form = modal.body.querySelector('form');
+    const subjectField = document.createElement('div');
+    subjectField.className = 'field full';
+    subjectField.innerHTML = `<label for="curriculum_subject_id">Linked school subject (optional)</label><select id="curriculum_subject_id" name="subject_id" disabled aria-describedby="curriculumSubjectNotice"><option value="">Not linked</option>${official.subject_id ? `<option value="${esc(official.subject_id)}" selected>Subject #${esc(official.subject_id)} (current link)</option>` : ''}</select><p id="curriculumSubjectNotice" class="academic-form-note" role="status">Loading subjects; the existing link will be preserved.</p>`;
+    form.appendChild(subjectField);
+    const subjectControl = form.elements.subject_id, subjectNotice = subjectField.querySelector('#curriculumSubjectNotice');
+    let saving = false;
+    modal.overlay.querySelector('#saveCurriculumSource').addEventListener('click', async () => {
+      if (modal.closed || saving || !form.reportValidity()) return;
+      const body = formValues(form);
+      body.grade = Number(body.grade);
+      if (subjectControl.disabled) body.subject_id = official.subject_id ?? null;
+      else {
+        body.subject_id = subjectControl.value === '' ? null : Number(subjectControl.value);
+        if (body.subject_id !== null && (!Number.isInteger(body.subject_id) || body.subject_id < 1)) { MGAEMS.showFormErrors(form, { fields: { subject_id: ['Choose an existing school subject.'] } }); return; }
+      }
+      saving = true; modal.setBusy(true);
+      try {
+        const result = source ? await MGAEMS.put('/api/v1/curriculum-library/sources/' + source.id, body) : await MGAEMS.post('/api/v1/curriculum-library/sources', body);
+        if (modal.closed) return;
+        if (!result.ok) { MGAEMS.showFormErrors(form, result); return; }
+        modal.setBusy(false); modal.close();
+        MGAEMS.toast(source ? 'Curriculum source updated.' : 'Source provenance registered without document ingestion.', 'success');
+        load();
+      } catch {
+        MGAEMS.showFormErrors(form, { error: 'The source could not be saved. Your entries are retained; check the library before retrying an uncertain save.' });
+      } finally { saving = false; modal.setBusy(false); }
+    });
+    try {
+      const result = await MGAEMS.get('/api/v1/subjects');
+      if (modal.closed || saving) return;
+      const subjects = result.ok && Array.isArray(result.data) ? result.data : null;
+      if (!subjects || !subjects.every(subject => Number.isInteger(subject?.id) && subject.id > 0 && typeof subject.name === 'string') || new Set(subjects.map(subject => subject.id)).size !== subjects.length) throw new Error('Unavailable subjects');
+      subjectControl.innerHTML = '<option value="">Not linked</option>' + subjects.map(subject => `<option value="${esc(subject.id)}">${esc(subject.name)}${subject.code ? ' (' + esc(subject.code) + ')' : ''}</option>`).join('') + (official.subject_id && !subjects.some(subject => subject.id === official.subject_id) ? `<option value="${esc(official.subject_id)}">Subject #${esc(official.subject_id)} (current link)</option>` : '');
+      subjectControl.value = official.subject_id == null ? '' : String(official.subject_id);
+      subjectControl.disabled = false;
+      subjectNotice.textContent = 'Choose the matching existing subject. Select Not linked only to intentionally remove the link.';
+    } catch {
+      if (!modal.closed) subjectNotice.textContent = 'Subject list unavailable. You can save metadata; the existing subject link will be preserved.';
+    }
   }
   function versionForm(source, trigger) {
     const modal = MGAEMS.openModal({ title: 'Upload authorized source PDF', trigger, body: `<form id="curriculumVersionForm" class="plan-dialog"><div data-form-error></div><p class="academic-form-note">The PDF is stored privately and checksummed by the server. Upload only where the school has an explicit right to retain and review it.</p><div class="form-grid">${input('edition', 'Edition', '', 'text', true, 'maxlength="120"')}${input('publication_date', 'Publication date', '', 'date', false)}${input('document_url', 'Official document URL', source.official_url, 'url', true, 'maxlength="1000"')}${textarea('authorization_basis', 'Rights / authorization basis', '', true, 'minlength="20" maxlength="2000"')}<div class="field full"><label for="curriculum_document">Authorized PDF *</label><input id="curriculum_document" name="document" type="file" accept="application/pdf,.pdf" required><p class="academic-form-note">Maximum 20 MiB. Actual PDF bytes are checked server-side.</p></div><div class="field full"><label><input name="rights_confirmed" type="checkbox" required> I confirm authorized private retention and review.</label></div></div></form>`, footer: `<button type="button" class="btn btn-secondary" data-dialog-close>Cancel</button><button type="button" class="btn btn-primary" id="uploadCurriculumVersion">Upload private PDF</button>` });
@@ -55,9 +94,20 @@
   async function versionDetail(id, trigger) {
     const modal = MGAEMS.openModal({ title: 'Curriculum version review', trigger, body: MGAEMS.loadingHTML('Loading source evidence...') });
     const result = await MGAEMS.get('/api/v1/curriculum-library/versions/' + encodeURIComponent(id));
+    if (modal.closed) return;
     if (!result.ok || !result.data?.version) { modal.body.innerHTML = MGAEMS.errorHTML(result.error || 'The source version could not be loaded.'); return; }
     const version = result.data.version, source = version.source || {}, canEdit = editable(version);
-    modal.body.innerHTML = `<div data-form-error></div><dl class="plan-meta"><div><dt>Source</dt><dd>${esc(source.title || '')}</dd></div><div><dt>Edition</dt><dd>${esc(version.edition)}</dd></div><div><dt>Status</dt><dd>${esc(versionState(version))}</dd></div><div><dt>Document SHA-256</dt><dd><code>${esc(version.document_sha256)}</code></dd></div><div><dt>Structured content SHA-256</dt><dd><code>${esc(result.data.review_content_sha256)}</code></dd></div></dl>${canEdit ? `<div class="plan-actions"><button type="button" class="btn btn-secondary btn-sm" id="downloadCurriculumPdf">Download private PDF</button><button type="button" class="btn btn-secondary btn-sm" id="showImport">Import reviewed records</button><button type="button" class="btn btn-primary btn-sm" id="showApproval">Verify and approve</button></div><section id="importRecords" hidden><label for="curriculumRecords">Reviewed JSON records</label><textarea id="curriculumRecords" rows="14" placeholder='{"records":[{"record_key":"...","strand":"...","sub_strand":"...","specific_learning_outcomes":["..."],"suggested_learning_experiences":[],"key_inquiry_questions":[],"assessment_approaches":[],"page_reference":"p. 1"}]}'></textarea><button type="button" class="btn btn-primary" id="submitImport">Validate and import</button></section>` : ''}${['approved', 'superseded'].includes(version.approval_status) ? '<div class="plan-actions"><button type="button" class="btn btn-secondary btn-sm" id="withdrawCurriculumVersion">Withdraw verified edition</button></div>' : ''}${version.records?.length ? `<h3>Structured records</h3>${version.records.map(record => `<section class="plan-section"><h4>${esc(record.strand)} - ${esc(record.sub_strand)}</h4><p>Page reference: ${esc(record.page_reference)}</p><ul>${(record.outcomes || []).map(outcome => `<li>${esc(outcome.description)}</li>`).join('')}</ul></section>`).join('')}` : '<p>No structured records imported.</p>'}`;
+    modal.body.innerHTML = `<div data-form-error></div><dl class="plan-meta">
+      <div><dt>Source</dt><dd>${esc(source.title || '')}</dd></div><div><dt>Edition</dt><dd>${esc(version.edition)}</dd></div>
+      <div><dt>Grade / learning area</dt><dd>${esc(source.grade)} / ${esc(source.learning_area)}</dd></div><div><dt>Linked subject</dt><dd>${source.subject_id ? 'Subject #' + esc(source.subject_id) : 'Not linked'}</dd></div>
+      <div><dt>Status</dt><dd>${esc(versionState(version))}</dd></div><div><dt>Authorization basis</dt><dd>${esc(version.authorization_basis || 'Not recorded')}</dd></div>
+      <div><dt>Verification notes</dt><dd>${esc(version.verification_notes || 'Not reviewed')}</dd></div>
+      <div><dt>Document SHA-256</dt><dd><code>${esc(version.document_sha256)}</code></dd></div><div><dt>Structured content SHA-256</dt><dd><code>${esc(result.data.review_content_sha256)}</code></dd></div></dl>
+      <div class="plan-actions"><button type="button" class="btn btn-secondary btn-sm" id="downloadCurriculumPdf">Download private PDF</button>${canEdit ? '<button type="button" class="btn btn-secondary btn-sm" id="showImport">Import reviewed records</button><button type="button" class="btn btn-primary btn-sm" id="showApproval">Verify and approve</button>' : ''}</div>
+      ${canEdit ? `<section id="importRecords" hidden><label for="curriculumRecords">Reviewed JSON records</label><textarea id="curriculumRecords" rows="14" placeholder='{"records":[{"record_key":"...","strand":"...","sub_strand":"...","specific_learning_outcomes":["..."],"suggested_learning_experiences":[],"key_inquiry_questions":[],"assessment_approaches":[],"page_reference":"p. 1"}]}'></textarea><button type="button" class="btn btn-primary" id="submitImport">Validate and import</button></section>` : ''}
+      ${['approved', 'superseded'].includes(version.approval_status) ? '<div class="plan-actions"><button type="button" class="btn btn-secondary btn-sm" id="withdrawCurriculumVersion">Withdraw verified edition</button></div>' : ''}
+      ${version.records?.length ? `<h3>Structured records</h3><div class="plan-sections">${version.records.map(recordReview).join('')}</div>` : '<p>No structured records imported.</p>'}`;
+    modal.body.querySelector('#downloadCurriculumPdf').addEventListener('click', () => MGAEMS.download('/api/v1/curriculum-library/versions/' + version.id + '/document', 'curriculum-source-' + version.id + '.pdf'));
     const withdraw = modal.body.querySelector('#withdrawCurriculumVersion');
     if (withdraw) withdraw.addEventListener('click', async () => {
       const reason = window.prompt('State why this verified edition must be withdrawn (at least 20 characters).');
@@ -67,10 +117,13 @@
       modal.close(); MGAEMS.toast('Curriculum edition withdrawn.', 'success'); load();
     });
     if (!canEdit) return;
-    modal.body.querySelector('#downloadCurriculumPdf').addEventListener('click', () => MGAEMS.download('/api/v1/curriculum-library/versions/' + version.id + '/document', 'curriculum-source-' + version.id + '.pdf'));
     modal.body.querySelector('#showImport').addEventListener('click', () => { modal.body.querySelector('#importRecords').hidden = false; });
     modal.body.querySelector('#submitImport').addEventListener('click', async () => { let payload; try { payload = JSON.parse(modal.body.querySelector('#curriculumRecords').value); } catch { MGAEMS.showFormErrors(modal.body, { fields: { records: ['Enter valid JSON with a records array.'] } }); return; } const imported = await MGAEMS.post('/api/v1/curriculum-library/versions/' + version.id + '/records', payload); if (!imported.ok) { MGAEMS.showFormErrors(modal.body, imported); return; } MGAEMS.toast('Records imported as an unverified draft.', 'success'); modal.close(); load(); });
     modal.body.querySelector('#showApproval').addEventListener('click', () => approvalForm(version, result.data.review_content_sha256, modal));
+  }
+  function recordReview(record) {
+    const list = (label, values) => `<h5>${esc(label)}</h5>${values?.length ? `<ul>${values.map(value => `<li>${esc(value)}</li>`).join('')}</ul>` : '<p>None recorded.</p>'}`;
+    return `<section class="plan-section"><h4>${esc(record.strand)} - ${esc(record.sub_strand)}</h4><p>Record key: ${esc(record.record_key)} · Page reference: ${esc(record.page_reference)}</p>${list('Specific learning outcomes', (record.outcomes || []).map(outcome => outcome.description))}${list('Suggested learning experiences', record.suggested_learning_experiences)}${list('Key inquiry questions', record.key_inquiry_questions)}${list('Assessment approaches', record.assessment_approaches)}</section>`;
   }
   function approvalForm(version, contentHash, modal) {
     modal.body.innerHTML = `<form id="curriculumApprovalForm" class="plan-dialog"><div data-form-error></div><p>Approval requires a verified document, accurate extraction, and authorized use. It makes the edition retrievable for grounded drafts.</p>${textarea('verification_notes', 'Verification notes', '', true, 'minlength="20" maxlength="4000"')}<label><input type="checkbox" required> I checked the actual document bytes.</label><label><input type="checkbox" required> I checked every imported record against the document.</label><label><input type="checkbox" required> I confirm authorized use and private retention.</label></form><div class="plan-actions"><button type="button" class="btn btn-secondary" id="cancelApproval">Cancel</button><button type="button" class="btn btn-primary" id="submitApproval">Approve verified edition</button></div>`;

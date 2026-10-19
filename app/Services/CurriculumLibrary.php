@@ -34,12 +34,12 @@ class CurriculumLibrary
             'publisher' => ['required', 'string', 'max:160'], 'grade' => ['required', 'integer', 'between:1,12'],
             'learning_area' => ['required', 'string', 'max:160'], 'subject_id' => ['nullable', 'integer', 'exists:subjects,id'],
         ])->validate();
-        $this->subjectMatches($data['subject_id'] ?? null, $data['learning_area']);
-
         return DB::transaction(function () use ($source, $data, $audit) {
             $source = CurriculumSource::whereKey($source->id)->lockForUpdate()->firstOrFail();
             abort_if($source->versions()->where('approval_status', '!=', 'draft')->exists(), 409, 'Reviewed source metadata is retained. Register a separate source for a different grade or learning area.');
-            $source->update(array_replace(['subject_id' => null], $data));
+            // Omitting the optional link preserves it; explicit null still unlinks.
+            $this->subjectMatches(array_key_exists('subject_id', $data) ? $data['subject_id'] : $source->subject_id, $data['learning_area']);
+            $source->update($data);
             $audit->log('CORRECT_CURRICULUM_SOURCE', 'CurriculumSource', $source->id);
 
             return $source;

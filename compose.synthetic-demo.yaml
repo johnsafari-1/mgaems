@@ -1,0 +1,66 @@
+# Isolated, loopback-only demonstration. All credentials below are public fixtures.
+# Uses separate MySQL/storage volumes; never mounts the school's database/storage.
+name: mgaems-synthetic-demo
+services:
+  demo-app:
+    image: mgaems-app
+    container_name: mgaems-synthetic-demo-app
+    working_dir: /var/www/html
+    ports:
+      - "127.0.0.1:8010:8000"
+    volumes:
+      - .:/var/www/html:ro
+      - vendor:/var/www/html/vendor:ro
+      - synthetic_storage:/synthetic-storage
+    tmpfs:
+      - /var/www/html/bootstrap/cache
+    environment:
+      MGAEMS_SYNTHETIC_DEMO: "1"
+      APP_ENV: synthetic_demo
+      APP_DEBUG: "false"
+      APP_URL: http://localhost:8010
+      APP_KEY: "base64:ZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGRkZGQ="
+      APP_CONFIG_CACHE: /tmp/synthetic-config.php
+      APP_ROUTES_CACHE: /tmp/synthetic-routes.php
+      DB_CONNECTION: mysql
+      DB_URL: ""
+      DB_HOST: synthetic-mysql
+      DB_PORT: "3306"
+      DB_DATABASE: mgaems_synthetic_demo
+      DB_USERNAME: synthetic_demo
+      DB_PASSWORD: synthetic-demo-only
+      SESSION_DRIVER: file
+      SESSION_COOKIE: mgaems_synthetic_demo_session
+      CACHE_STORE: file
+      CACHE_DRIVER: file
+      MAIL_MAILER: log
+      LOG_CHANNEL: stderr
+      MGAEMS_AI_DRIVER: synthetic_demo
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen3:1.7b
+      OLLAMA_TIMEOUT: "120"
+    command: ["sh", "-c", "php docker/synthetic-demo/seed.php && exec php -S 0.0.0.0:8000 -t public docker/synthetic-demo/router.php"]
+    depends_on:
+      synthetic-mysql:
+        condition: service_healthy
+  synthetic-mysql:
+    image: mysql:8.0
+    container_name: mgaems-synthetic-demo-mysql
+    environment:
+      MYSQL_DATABASE: mgaems_synthetic_demo
+      MYSQL_USER: synthetic_demo
+      MYSQL_PASSWORD: synthetic-demo-only
+      MYSQL_ROOT_PASSWORD: synthetic-demo-root-only
+    volumes:
+      - synthetic_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$${MYSQL_PASSWORD}\" mysql --protocol=TCP --host=127.0.0.1 --user=synthetic_demo --database=mgaems_synthetic_demo --batch --skip-column-names -e 'SELECT 1' > /dev/null"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+volumes:
+  vendor:
+    external: true
+    name: mgaems_mgaems_vendor
+  synthetic_storage:
+  synthetic_mysql_data:

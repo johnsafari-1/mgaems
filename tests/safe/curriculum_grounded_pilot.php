@@ -8,8 +8,6 @@ if (!in_array('--synthetic', $argv, true)) {
 }
 require __DIR__.'/teaching_learning_workspace.php';
 
-use App\Models\ClassSubjectTeacher;
-use App\Models\Subject;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -62,13 +60,24 @@ ensure(!$status['available'] && !$status['capabilities']['grounded'], 'Disabled 
 pilotApi($teacher, 'POST', 'ai-teaching/drafts', ['operation' => 'lesson_plan', 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Synthetic Pilot Science']]], 503);
 Http::assertNothingSent();
 
-$area = Subject::create(['name' => 'Synthetic Pilot Science', 'learning_area' => 'Synthetic Pilot Science', 'status' => 'active']);
-DB::table('class_subjects')->insert(['class_id' => $class->id, 'subject_id' => $area->id]);
-$allocation = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $area->id, 'staff_id' => $teacherStaff->id, 'term_id' => $term->id]);
-$source = pilotApi($admin, 'POST', 'curriculum-library/sources', [
-    'identifier' => 'synthetic-phase7-pilot', 'title' => 'Synthetic pilot source; not KICD', 'official_url' => 'https://example.invalid/synthetic',
-    'publisher' => 'Synthetic fixture publisher', 'grade' => 7, 'learning_area' => $area->name, 'subject_id' => $area->id,
-], 201);
+$pilotClass = pilotApi($admin, 'POST', 'classes', ['name' => 'Synthetic Grade 7', 'level' => 'junior', 'sequence' => 7], 201);
+$area = (object) pilotApi($admin, 'POST', 'subjects', ['name' => 'Synthetic Pilot Sciense', 'code' => 'PILOT-SCIE', 'learning_area' => 'Matter'], 201);
+$subjectId = $area->id;
+$area = (object) pilotApi($admin, 'PATCH', 'subjects/'.$area->id, ['name' => 'Synthetic Pilot Science', 'learning_area' => 'Synthetic Pilot Science']);
+ensure($area->id === $subjectId && $area->code === 'PILOT-SCIE', 'Correcting metadata must preserve subject identity and code');
+$offering = ['class_id' => $pilotClass['id'], 'subject_id' => $area->id];
+pilotApi($admin, 'POST', 'class-subjects', $offering, 201);
+pilotApi($admin, 'POST', 'class-subjects', $offering, 409);
+$allocationInput = $offering + ['staff_id' => $teacherStaff->id, 'term_id' => $term->id];
+$allocation = (object) pilotApi($admin, 'POST', 'teacher-assignments', $allocationInput, 201);
+pilotApi($admin, 'POST', 'teacher-assignments', $allocationInput, 409);
+$sourceInput = ['title' => 'Synthetic pilot source; not KICD', 'official_url' => 'https://example.invalid/synthetic',
+    'publisher' => 'Synthetic fixture publisher', 'grade' => 7, 'learning_area' => $area->name];
+$source = pilotApi($admin, 'POST', 'curriculum-library/sources', ['identifier' => 'synthetic-phase7-pilot'] + $sourceInput, 201);
+pilotApi($admin, 'PUT', 'curriculum-library/sources/'.$source['id'], $sourceInput + ['subject_id' => $area->id]);
+$source = pilotApi($admin, 'PUT', 'curriculum-library/sources/'.$source['id'], $sourceInput);
+ensure($source['subject_id'] === $area->id, 'Metadata edits must retain the source subject link');
+echo 'PASS Grade 7 mapping, identity-preserving metadata correction, duplicate-safe offering/allocation and retained source link'.PHP_EOL;
 $version = pilotApi($admin, 'POST', 'curriculum-library/sources/'.$source['id'].'/versions', [
     'edition' => 'Synthetic edition', 'document_url' => 'https://example.invalid/synthetic.pdf', 'authorization_basis' => 'Original synthetic fixture created solely for this isolated automated pilot.',
 ], 201, UploadedFile::fake()->createWithContent('synthetic-pilot.pdf', "%PDF-1.4\n% Synthetic fixture, not official curriculum.\n%%EOF\n"));

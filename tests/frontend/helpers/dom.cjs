@@ -58,6 +58,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
       for (const control of this.descendants().filter(node => node.tag === 'input')) control.value = decode(control.value);
     }
   }
+  document.createElement = tag => new Element(tag);
   document.documentElement = new Element('html');
   const events = {};
   const window = { location: { pathname, href: pathname }, crypto: require('node:crypto').webcrypto, addEventListener(name, callback) { (events[name] ||= []).push(callback); }, matchMedia: () => ({ matches: false, addEventListener() {} }) };
