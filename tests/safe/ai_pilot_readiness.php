@@ -22,6 +22,7 @@ try {
     }
     $report = [
         'read_only' => true,
+        'runtime' => ['php' => PHP_VERSION, 'laravel' => app()->version()],
         'ai_driver' => config('services.ai.driver'),
         'ollama' => ['host' => parse_url((string) config('services.ollama.base_url'), PHP_URL_HOST), 'model' => config('services.ollama.model'), 'timeout' => config('services.ollama.timeout')],
         'curriculum_tables' => $tables,
@@ -29,6 +30,12 @@ try {
         'classes' => DB::table('classes')->select('id', 'name', 'level', 'sequence')->orderBy('sequence')->get(),
         'subjects' => DB::table('subjects')->select('id', 'name', 'learning_area', 'status')->orderBy('id')->get(),
         'allocation_pairs' => DB::table('class_subject_teacher')->select('class_id', 'subject_id', 'term_id')->distinct()->orderBy('class_id')->orderBy('subject_id')->orderBy('term_id')->get(),
+        'grade7_science_offerings' => DB::table('class_subjects')->where('class_id', 11)->where('subject_id', 4)->get(['id', 'class_id', 'subject_id']),
+        'grade7_science_allocations' => DB::table('class_subject_teacher as a')
+            ->join('staff as s', 's.id', '=', 'a.staff_id')->leftJoin('users as u', 'u.id', '=', 's.user_id')
+            ->join('terms as t', 't.id', '=', 'a.term_id')
+            ->where('a.class_id', 11)->where('a.subject_id', 4)
+            ->select('a.id', 'a.class_id', 'a.subject_id', 'a.staff_id', 'a.term_id', 's.staff_type', 's.status as staff_status', 'u.status as account_status', 't.name as term_name', 't.start_date', 't.end_date', 't.is_current')->get(),
         'pilot_retrieval' => app(CurriculumRetrieval::class)->retrieve(['grade' => 7, 'learning_area' => 'Integrated Science']),
     ];
     if (!in_array(null, $tables, true)) {
