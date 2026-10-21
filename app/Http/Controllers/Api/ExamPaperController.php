@@ -39,7 +39,8 @@ class ExamPaperController extends Controller
 
         return response()->json(['data' => ['scope' => $this->access->leader($user) ? 'school' : 'assigned',
             'assignments' => $assignments->map(fn ($assignment) => $this->data->assignment($assignment)),
-            'examination_types' => self::EXAMINATION_TYPES]]);
+            'examination_types' => self::EXAMINATION_TYPES,
+            'capabilities' => ['header_templates' => ExamPaper::studioSchemaReady(), 'versions' => ExamPaper::studioSchemaReady()]]]);
     }
 
     public function index(Request $request)
@@ -62,6 +63,69 @@ class ExamPaperController extends Controller
         $user = $this->access->user($request->user());
         $paper = $this->access->document($user, ExamPaper::class, $examPaper->id)->load($this->relations());
         return response()->json(['data' => $this->workspace($paper)]);
+    }
+
+    public function revisions(Request $request, ExamPaper $examPaper)
+    {
+        $user = $this->access->user($request->user());
+        $paper = $this->access->document($user, ExamPaper::class, $examPaper->id);
+        $revisions = ExamPaperRevision::where('exam_paper_id', $paper->id)->orderByDesc('revision_number')->get();
+
+        return response()->json(['data' => $revisions->map(fn ($revision) => [
+            'id' => $revision->id,
+            'revision_number' => $revision->revision_number,
+            'status' => $revision->status,
+            'created_at' => $revision->created_at?->toISOString(),
+            'snapshot_sha256' => $revision->snapshot_sha256,
+            'snapshot' => $revision->snapshot,
+            'has_workspace_snapshot' => is_array($revision->snapshot) && is_array($revision->snapshot['questions'] ?? null),
+        ])->values()]);
+    }
+
+    public function createVersion(Request $request, ExamPaper $examPaper, AuditLogger $auditLogger)
+    {
+        abort_unless(ExamPaper::studioSchemaReady(), 409, 'Examination paper versions require the pending database migration.');
+        return DB::transaction(function () use ($request, $examPaper, $auditLogger) {
+            $user = $this->access->user($request->user(), true);
+            $source = $this->access->document($user, ExamPaper::class, $examPaper->id, true)->load($this->relations());
+            abort_if($source->status === 'draft', 409, 'A draft paper is already editable; create a version only from a reviewed or locked paper.');
+
+            $siblingMax = (int) ExamPaper::where('source_exam_paper_id', $source->id)->lockForUpdate()->max('version_number');
+            $version = max($siblingMax, (int) $source->version_number) + 1;
+
+            $copy = ExamPaper::create(['class_subject_teacher_id' => $source->class_subject_teacher_id, 'examination_type' => $source->examination_type,
+                'title' => $source->title, 'instructions' => $source->instructions, 'duration_minutes' => $source->duration_minutes,
+                'exam_date' => $source->exam_date?->toDateString(), 'status' => 'draft', 'revision_number' => 0,
+                'header_template' => $source->header_template ?: 'classic', 'version_number' => $version,
+                'source_exam_paper_id' => $source->id, 'source_revision_number' => (int) $source->revision_number, 'created_by' => $user->id]);
+
+            $sections = [];
+            foreach ($source->sections as $section) {
+                $sections[$section->id] = $copy->sections()->create(['position' => $section->position, 'title' => $section->title, 'instructions' => $section->instructions])->id;
+            }
+
+            $attachments = [];
+            foreach ($source->attachments as $attachment) {
+                $path = 'exam-papers/'.$copy->id.'/attachments/'.basename($attachment->storage_path);
+                $copied = false;
+                try { $copied = Storage::disk('private')->exists($attachment->storage_path) && Storage::disk('private')->copy($attachment->storage_path, $path); } catch (\Throwable) { $copied = false; }
+                $attachments[$attachment->id] = $copy->attachments()->create(['storage_path' => $copied ? $path : $attachment->storage_path,
+                    'original_name' => $attachment->original_name, 'mime_type' => $attachment->mime_type, 'byte_size' => $attachment->byte_size,
+                    'sha256' => $attachment->sha256, 'uploaded_by' => $user->id])->id;
+            }
+
+            foreach ($source->questions as $question) {
+                $copy->questions()->create(['exam_paper_section_id' => $question->exam_paper_section_id ? ($sections[$question->exam_paper_section_id] ?? null) : null,
+                    'exam_paper_attachment_id' => $question->exam_paper_attachment_id ? ($attachments[$question->exam_paper_attachment_id] ?? null) : null,
+                    'position' => $question->position, 'question_type' => $question->question_type, 'prompt' => $question->prompt, 'marks' => $question->marks,
+                    'diagram_reference' => $question->diagram_reference, 'options' => $question->options, 'answer_key' => $question->answer_key,
+                    'marking_guidance' => $question->marking_guidance, 'ai_generated' => $question->ai_generated, 'ai_source' => $question->ai_source]);
+            }
+
+            $auditLogger->log('CREATE_EXAM_PAPER_VERSION', 'ExamPaper', $copy->id, ['source_exam_paper_id' => $source->id, 'source_revision_number' => (int) $source->revision_number, 'version_number' => $version]);
+
+            return response()->json(['data' => $this->workspace($copy->fresh($this->relations()))], 201);
+        }, 3);
     }
 
     public function store(Request $request, AuditLogger $auditLogger)
@@ -113,6 +177,24 @@ class ExamPaperController extends Controller
 
     public function storeQuestion(Request $request, ExamPaper $examPaper, AuditLogger $auditLogger) { return $this->questionWrite($request, $examPaper, null, $auditLogger); }
     public function updateQuestion(Request $request, ExamPaper $examPaper, ExamPaperQuestion $question, AuditLogger $auditLogger) { return $this->questionWrite($request, $examPaper, $question, $auditLogger); }
+
+    public function reorderQuestions(Request $request, ExamPaper $examPaper, AuditLogger $auditLogger)
+    {
+        $validated = $request->validate(['question_ids' => ['required', 'array', 'min:1', 'max:200'], 'question_ids.*' => ['required', 'integer', 'distinct']]);
+        return DB::transaction(function () use ($request, $examPaper, $auditLogger, $validated) {
+            $paper = $this->editableDocument($request, $examPaper);
+            $actual = $paper->questions()->lockForUpdate()->pluck('id')->map(fn ($id) => (int) $id)->sort()->values();
+            $requested = collect($validated['question_ids'])->map(fn ($id) => (int) $id)->sort()->values();
+            if ($actual->all() !== $requested->all()) throw ValidationException::withMessages(['question_ids' => 'Reordering must include every question in this paper exactly once.']);
+
+            // Shift first so the database uniqueness constraint cannot collide during the reorder.
+            $paper->questions()->update(['position' => DB::raw('position + 1000')]);
+            foreach ($validated['question_ids'] as $index => $id) ExamPaperQuestion::whereKey($id)->update(['position' => $index + 1]);
+            $auditLogger->log('REORDER_EXAM_PAPER_QUESTIONS', 'ExamPaper', $paper->id, ['class_subject_teacher_id' => $paper->class_subject_teacher_id]);
+
+            return response()->json(['data' => $this->workspace($paper->fresh($this->relations()))]);
+        }, 3);
+    }
 
     public function duplicateQuestion(Request $request, ExamPaper $examPaper, ExamPaperQuestion $question, AuditLogger $auditLogger)
     {
@@ -240,14 +322,44 @@ class ExamPaperController extends Controller
         $user = $this->access->user($request->user(), true); $paper = $this->access->document($user, ExamPaper::class, $examPaper->id, true)->load('assignment'); $this->editable($paper); return $paper;
     }
     private function editable(ExamPaper $paper): void { abort_unless(in_array($paper->status, ['draft', 'returned'], true), 409, 'Submitted, approved, published and archived papers are read-only.'); }
-    private function paperRules(bool $updating = false): array { $required = $updating ? ['sometimes', 'required'] : ['required']; return ['class_subject_teacher_id' => $updating ? ['prohibited'] : ['required', 'integer', 'exists:class_subject_teacher,id'], 'examination_type' => [...$required, Rule::in(self::EXAMINATION_TYPES)], 'title' => [...$required, 'string', 'max:160'], 'instructions' => ['sometimes', 'nullable', 'string', 'max:8000'], 'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:600'], 'exam_date' => ['sometimes', 'nullable', 'date']]; }
+    private function paperRules(bool $updating = false): array
+    {
+        $required = $updating ? ['sometimes', 'required'] : ['required'];
+        $rules = ['class_subject_teacher_id' => $updating ? ['prohibited'] : ['required', 'integer', 'exists:class_subject_teacher,id'], 'examination_type' => [...$required, Rule::in(self::EXAMINATION_TYPES)], 'title' => [...$required, 'string', 'max:160'], 'instructions' => ['sometimes', 'nullable', 'string', 'max:8000'], 'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:600'], 'exam_date' => ['sometimes', 'nullable', 'date']];
+        if (ExamPaper::studioSchemaReady()) $rules['header_template'] = ['sometimes', Rule::in(ExamPaper::HEADER_TEMPLATES)];
+
+        return $rules;
+    }
     private function questionRules(): array { return ['exam_paper_section_id' => ['sometimes', 'nullable', 'integer', 'exists:exam_paper_sections,id'], 'exam_paper_attachment_id' => ['sometimes', 'nullable', 'integer', 'exists:exam_paper_attachments,id'], 'position' => ['required', 'integer', 'min:1', 'max:200'], 'question_type' => ['required', Rule::in(ExamPaperQuestion::TYPES)], 'prompt' => ['required', 'string', 'max:8000'], 'marks' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:1000'], 'diagram_reference' => ['sometimes', 'nullable', 'string', 'max:255'], 'options' => ['sometimes', 'nullable', 'array'], 'options.*' => ['string', 'max:255'], 'answer_key' => ['sometimes', 'nullable', 'string', 'max:8000'], 'marking_guidance' => ['sometimes', 'nullable', 'string', 'max:8000'], 'ai_generated' => ['sometimes', 'boolean'], 'ai_source' => ['sometimes', 'nullable', 'string', 'max:80']]; }
     private function paperValues(ClassSubjectTeacher $assignment, array $values): array { if (! empty($values['exam_date'])) { $date = Carbon::parse($values['exam_date'])->toDateString(); $term = Term::whereKey($assignment->term_id)->lockForUpdate()->firstOrFail(); if ($date < $term->start_date->toDateString() || $date > $term->end_date->toDateString()) throw ValidationException::withMessages(['exam_date' => 'The examination date must fall within the assigned academic term.']); $values['exam_date'] = $date; } return $values; }
-    private function storedPaperValues(ExamPaper $paper): array { return ['examination_type' => $paper->examination_type, 'title' => $paper->title, 'instructions' => $paper->instructions, 'duration_minutes' => $paper->duration_minutes, 'exam_date' => $paper->exam_date?->toDateString()]; }
+    private function storedPaperValues(ExamPaper $paper): array
+    {
+        $values = ['examination_type' => $paper->examination_type, 'title' => $paper->title, 'instructions' => $paper->instructions, 'duration_minutes' => $paper->duration_minutes, 'exam_date' => $paper->exam_date?->toDateString()];
+        if (ExamPaper::studioSchemaReady()) $values['header_template'] = $paper->header_template ?: 'classic';
+
+        return $values;
+    }
     private function questionValues(ExamPaper $paper, array $values): array { if (($values['exam_paper_section_id'] ?? null) && ! $paper->sections()->whereKey($values['exam_paper_section_id'])->exists()) throw ValidationException::withMessages(['exam_paper_section_id' => 'The selected section does not belong to this paper.']); if (($values['exam_paper_attachment_id'] ?? null) && ! $paper->attachments()->whereKey($values['exam_paper_attachment_id'])->exists()) throw ValidationException::withMessages(['exam_paper_attachment_id' => 'The selected attachment does not belong to this paper.']); $options = array_values(array_filter(array_map(fn ($option) => trim((string) $option), $values['options'] ?? []))); if ($values['question_type'] === 'multiple_choice') { if (count($options) < 2) throw ValidationException::withMessages(['options' => 'Multiple-choice questions need at least two options.']); if (! in_array(trim((string) ($values['answer_key'] ?? '')), $options, true)) throw ValidationException::withMessages(['answer_key' => 'The answer key must match one listed option.']); $values['options'] = json_encode($options); } else { if ($options) throw ValidationException::withMessages(['options' => 'Only multiple-choice questions can list options.']); $values['options'] = null; } return $values; }
     private function relations(): array { return ['assignment.schoolClass:id,name,level', 'assignment.subject:id,name,code,learning_area,status', 'assignment.staff:id,first_name,last_name', 'assignment.term:id,academic_year_id,name,start_date,end_date,is_current', 'assignment.term.academicYear:id,name', 'sections', 'questions.attachment']; }
-    private function summary(ExamPaper $paper): array { return ['id' => $paper->id, 'class_subject_teacher_id' => $paper->class_subject_teacher_id, 'examination_type' => $paper->examination_type, 'title' => $paper->title, 'status' => $paper->status, 'exam_date' => $paper->exam_date?->toDateString(), 'duration_minutes' => $paper->duration_minutes, 'revision_number' => $paper->revision_number, 'question_count' => $paper->questions->count(), 'total_marks' => (int) $paper->questions->sum(fn ($question) => (int) $question->marks), 'assignment' => $paper->assignment ? $this->data->assignment($paper->assignment) : null]; }
-    private function workspace(ExamPaper $paper): array { return $this->summary($paper) + ['instructions' => $paper->instructions, 'review_notes' => $paper->review_notes, 'submitted_at' => $paper->submitted_at?->toISOString(), 'reviewed_at' => $paper->reviewed_at?->toISOString(), 'published_at' => $paper->published_at?->toISOString(), 'sections' => $paper->sections->map(fn ($section) => $section->only(['id', 'position', 'title', 'instructions']))->values(), 'questions' => $paper->questions->map(fn ($question) => ['id' => $question->id, 'exam_paper_section_id' => $question->exam_paper_section_id, 'exam_paper_attachment_id' => $question->exam_paper_attachment_id, 'position' => $question->position, 'question_type' => $question->question_type, 'prompt' => $question->prompt, 'marks' => $question->marks, 'diagram_reference' => $question->diagram_reference, 'options' => $question->optionList(), 'answer_key' => $question->answer_key, 'marking_guidance' => $question->marking_guidance, 'ai_generated' => $question->ai_generated, 'ai_source' => $question->ai_source, 'attachment' => $question->attachment ? $this->attachment($question->attachment) : null])->values(), 'attachments' => $paper->attachments->map(fn ($attachment) => $this->attachment($attachment))->values()]; }
+    private function summary(ExamPaper $paper): array
+    {
+        $summary = ['id' => $paper->id, 'class_subject_teacher_id' => $paper->class_subject_teacher_id, 'examination_type' => $paper->examination_type, 'title' => $paper->title, 'status' => $paper->status, 'exam_date' => $paper->exam_date?->toDateString(), 'duration_minutes' => $paper->duration_minutes, 'revision_number' => $paper->revision_number, 'question_count' => $paper->questions->count(), 'total_marks' => (int) $paper->questions->sum(fn ($question) => (int) $question->marks), 'assignment' => $paper->assignment ? $this->data->assignment($paper->assignment) : null];
+        if (ExamPaper::studioSchemaReady()) { $summary['header_template'] = $paper->header_template ?: 'classic'; $summary['version_number'] = (int) ($paper->version_number ?: 1); }
+
+        return $summary;
+    }
+
+    private function workspace(ExamPaper $paper): array
+    {
+        $data = $this->summary($paper) + ['instructions' => $paper->instructions, 'review_notes' => $paper->review_notes, 'submitted_at' => $paper->submitted_at?->toISOString(), 'reviewed_at' => $paper->reviewed_at?->toISOString(), 'published_at' => $paper->published_at?->toISOString(), 'sections' => $paper->sections->map(fn ($section) => $section->only(['id', 'position', 'title', 'instructions']))->values(), 'questions' => $paper->questions->map(fn ($question) => ['id' => $question->id, 'exam_paper_section_id' => $question->exam_paper_section_id, 'exam_paper_attachment_id' => $question->exam_paper_attachment_id, 'position' => $question->position, 'question_type' => $question->question_type, 'prompt' => $question->prompt, 'marks' => $question->marks, 'diagram_reference' => $question->diagram_reference, 'options' => $question->optionList(), 'answer_key' => $question->answer_key, 'marking_guidance' => $question->marking_guidance, 'ai_generated' => $question->ai_generated, 'ai_source' => $question->ai_source, 'attachment' => $question->attachment ? $this->attachment($question->attachment) : null])->values(), 'attachments' => $paper->attachments->map(fn ($attachment) => $this->attachment($attachment))->values()];
+        if (ExamPaper::studioSchemaReady()) {
+            $source = $paper->source_exam_paper_id ? ExamPaper::whereKey($paper->source_exam_paper_id)->first() : null;
+            $data['source'] = $source ? ['id' => $source->id, 'title' => $source->title, 'version_number' => (int) ($source->version_number ?: 1), 'status' => $source->status] : null;
+            $data['derived_versions'] = ExamPaper::where('source_exam_paper_id', $paper->id)->orderBy('version_number')->get()->map(fn ($version) => ['id' => $version->id, 'title' => $version->title, 'version_number' => (int) ($version->version_number ?: 1), 'status' => $version->status, 'exam_date' => $version->exam_date?->toDateString()])->values();
+        }
+
+        return $data;
+    }
     private function attachment(ExamPaperAttachment $attachment): array { return $attachment->only(['id', 'original_name', 'mime_type', 'byte_size', 'sha256', 'created_at']); }
     private function conflict(string $code, string $message) { return response()->json(['error' => compact('code', 'message')], 409); }
 }

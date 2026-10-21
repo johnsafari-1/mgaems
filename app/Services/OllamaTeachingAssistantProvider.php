@@ -43,6 +43,9 @@ class OllamaTeachingAssistantProvider implements TeachingAssistantProvider
         if (! $built['available']) {
             throw new RuntimeException('Verified curriculum context is unavailable. Manual authoring remains available.');
         }
+        $prompt = json_decode($built['messages'][1]['content'], true, 512, JSON_THROW_ON_ERROR);
+        $prompt['constraints'] = $constraints;
+        $built['messages'][1]['content'] = json_encode($prompt, JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
         $draft = $this->contract->validate($operation, $this->ollama->chat($built['messages']), $data['selection'], $constraints);
 
         return ['label' => 'AI-generated curriculum-grounded draft (Ollama)',

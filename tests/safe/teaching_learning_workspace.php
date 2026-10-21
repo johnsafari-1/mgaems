@@ -34,10 +34,12 @@ use App\Models\ClassSubjectTeacher;
 use App\Models\Homework;
 use App\Models\HomeworkCompletion;
 use App\Models\ExamPaper;
+use App\Models\ExamPaperAttachment;
 use App\Models\LessonPlan;
 use App\Models\RecordOfWork;
 use App\Models\Role;
 use App\Models\SchoolClass;
+use App\Models\SchoolSetting;
 use App\Models\Staff;
 use App\Models\Subject;
 use App\Models\Term;
@@ -49,6 +51,7 @@ use App\Services\TeachingDocumentData;
 use App\Services\TeachingDocumentExport;
 use App\Services\HomeworkExport;
 use App\Services\ExamPaperExport;
+use App\Contracts\TeachingAssistantProvider;
 use App\Services\MockTeachingAssistantProvider;
 use App\Services\TeachingAssistant;
 use App\Services\TeachingDocumentVersions;
@@ -90,6 +93,7 @@ Schema::create('audit_logs', function (Blueprint $table) {
 Schema::create('assessments', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained('students'); $table->foreignId('subject_id')->constrained('subjects'); $table->foreignId('term_id')->constrained('terms'); $table->foreignId('class_id')->nullable()->constrained('classes'); });
 Schema::create('report_cards', function (Blueprint $table) { $table->id(); $table->foreignId('term_id')->constrained('terms'); });
 Schema::create('promotions_transfers', function (Blueprint $table) { $table->id(); $table->foreignId('student_id')->constrained('students'); $table->foreignId('term_id')->constrained('terms'); $table->foreignId('from_class_id')->nullable()->constrained('classes'); $table->foreignId('to_class_id')->nullable()->constrained('classes'); });
+Schema::create('school_settings', function (Blueprint $table) { $table->id(); $table->string('school_name'); $table->string('motto')->nullable(); $table->string('logo_path')->nullable(); $table->timestamps(); });
 // Assignment removal inspects the existing recurring timetable and legacy learner placements.
 Schema::create('students', function (Blueprint $table) {
     $table->id(); $table->string('admission_no')->unique(); $table->string('first_name'); $table->string('last_name');
@@ -100,6 +104,7 @@ Schema::create('timetable_entries', function (Blueprint $table) { $table->id(); 
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000039_create_lesson_plans_and_records_of_work_tables.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000040_create_homework_and_assignments_tables.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000041_create_exam_paper_studio_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_18_000044_add_exam_paper_versions_and_header_templates.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000042_create_teaching_review_and_ai_tables.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
@@ -126,6 +131,8 @@ $class = SchoolClass::create(['name' => 'Test class', 'level' => 'primary', 'seq
 DB::table('class_subjects')->insert(['class_id' => $class->id, 'subject_id' => $subject->id]);
 $assignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $teacherStaff->id, 'term_id' => $term->id]);
 $otherAssignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $otherStaff->id, 'term_id' => $term->id]);
+$logoPath = 'school/test-logo.png'; Illuminate\Support\Facades\Storage::fake('public'); Illuminate\Support\Facades\Storage::disk('public')->put($logoPath, base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9OwAAAABJRU5ErkJggg=='));
+SchoolSetting::create(['school_name' => 'Test School', 'motto' => 'Learning together', 'logo_path' => $logoPath]);
 $secondTerm = Term::create(['academic_year_id' => $year->id, 'name' => 'Second term', 'start_date' => '2026-05-01', 'end_date' => '2026-08-31']);
 $secondAssignment = ClassSubjectTeacher::create(['class_id' => $class->id, 'subject_id' => $subject->id, 'staff_id' => $teacherStaff->id, 'term_id' => $secondTerm->id]);
 $integrity = new AcademicIntegrity(); $events = new AcademicEventController($integrity); $schemes = new SchemeOfWorkController(new TeachingDocumentAccess(), new TeachingDocumentData()); $calendar = new AcademicCalendarController($integrity); $passed = 0;
@@ -287,7 +294,7 @@ check('homework is allocation-scoped, teacher-published, and records only explic
     ensure($homeworks->completions(requestFor($teacher), $homework)->getData(true)['data']['learners'][0]['status'] === null, 'Removing a record restores not yet recorded');
     ensure(DB::table('audit_logs')->where('action', 'PUBLISH_HOMEWORK')->exists() && DB::table('audit_logs')->where('action', 'RECORD_HOMEWORK_COMPLETION')->exists(), 'Homework audit trail');
 });
-check('teaching documents block assignment deletion and are exportable as PDFs', function () use ($lessonPlans, $records, $schemes, $teacher, $otherTeacher, $admin, $assignment) {
+check('teaching documents block assignment deletion and are exportable as PDFs', function () use ($lessonPlans, $records, $homeworks, $schemes, $teacher, $otherTeacher, $admin, $assignment) {
     $plan = LessonPlan::firstOrFail();
     $assignments = new TeacherAssignmentController(new AcademicIntegrity());
     $request = requestFor($admin);
@@ -301,17 +308,31 @@ check('teaching documents block assignment deletion and are exportable as PDFs',
     ensure($pdf->getStatusCode() === 200 && str_contains($pdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Lesson plan PDF');
     $recordPdf = $records->pdf(requestFor($teacher), RecordOfWork::firstOrFail());
     ensure($recordPdf->getStatusCode() === 200 && str_contains($recordPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Record PDF');
+    $worksheetPdf = $homeworks->pdf(requestFor($teacher), Homework::firstOrFail());
+    $answerKeyPdf = $homeworks->answerKeyPdf(requestFor($teacher), Homework::firstOrFail());
+    ensure($worksheetPdf->getStatusCode() === 200 && str_contains($worksheetPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Homework worksheet PDF');
+    ensure($answerKeyPdf->getStatusCode() === 200 && str_contains($answerKeyPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Restricted homework answer-key PDF');
+    $logo = 'data:image/png;base64,';
+    ensure(str_starts_with((new TeachingDocumentExport())->lessonPlan($plan)['school']['logo_data_uri'], $logo), 'Lesson export embeds configured school logo');
+    ensure(str_starts_with((new TeachingDocumentExport())->recordOfWork(RecordOfWork::firstOrFail())['school']['logo_data_uri'], $logo), 'Record export embeds configured school logo');
+    ensure(str_starts_with((new HomeworkExport())->worksheet(Homework::firstOrFail())['school']['logo_data_uri'], $logo), 'Homework export embeds configured school logo');
+    $settings = SchoolSetting::firstOrFail(); $savedLogo = $settings->logo_path; $settings->update(['logo_path' => 'outside/invalid.svg']);
+    ensure((new TeachingDocumentExport())->lessonPlan($plan)['school']['logo_data_uri'] === null, 'Invalid logo path safely falls back to the school name and motto');
+    $settings->update(['logo_path' => $savedLogo]);
     try { $lessonPlans->show(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign read denial'); }
     catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot read another allocation plan'); }
     try { $lessonPlans->pdf(requestFor($otherTeacher), $plan); throw new RuntimeException('Expected foreign export denial'); }
     catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), LessonPlan::class), 'Foreign teacher cannot export'); }
 });
-check('exam papers enforce allocation, preserve staff-only keys, and retain reviewed revisions', function () use ($examPapers, $reviewQueue, $teacher, $otherTeacher, $admin, $assignment) {
+ check('exam papers enforce allocation, persist drag-ordering, preserve staff-only keys, and retain reviewed revisions', function () use ($examPapers, $teacher, $otherTeacher, $admin, $assignment) {
     $create = requestFor($teacher, ['class_subject_teacher_id' => $assignment->id, 'examination_type' => 'end_term', 'title' => 'Staff entered assessment', 'instructions' => 'Answer all questions.', 'duration_minutes' => 45, 'exam_date' => '2026-02-20']);
     $created = $examPapers->store($create, new AuditLogger($create)); ensure($created->getStatusCode() === 201, 'Exam draft created');
     $paper = ExamPaper::findOrFail($created->getData(true)['data']['id']);
     try { $examPapers->store(requestFor($otherTeacher, ['class_subject_teacher_id' => $assignment->id, 'examination_type' => 'practice', 'title' => 'Foreign']), new AuditLogger(requestFor($otherTeacher))); throw new RuntimeException('Expected foreign paper denial'); }
     catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign teacher denied exam allocation'); }
+    $templateUpdate = requestFor($teacher, ['header_template' => 'branded']);
+    ensure($examPapers->update($templateUpdate, $paper, new AuditLogger($templateUpdate))->getStatusCode() === 200, 'Header template saved on an editable draft');
+    ensure($paper->fresh()->header_template === 'branded', 'Header template persisted per paper');
     $question = requestFor($teacher, ['position' => 1, 'question_type' => 'multiple_choice', 'prompt' => 'Staff entered assessment item', 'marks' => 5, 'options' => ['Correct option', 'Other option'], 'answer_key' => 'Correct option', 'marking_guidance' => 'Award five marks for the correct option.']);
     ensure($examPapers->storeQuestion($question, $paper, new AuditLogger($question))->getStatusCode() === 201, 'Exam question created');
     $sectionRequest = requestFor($teacher, ['position' => 1, 'title' => 'Structured response', 'instructions' => 'Answer every item.']);
@@ -319,11 +340,49 @@ check('exam papers enforce allocation, preserve staff-only keys, and retain revi
     $essay = requestFor($teacher, ['position' => 2, 'question_type' => 'essay', 'prompt' => 'Explain the staff-entered reasoning.', 'marks' => 10, 'exam_paper_section_id' => $section['id'], 'options' => [], 'answer_key' => 'Staff reviewed response.', 'marking_guidance' => 'Use the approved marking points.']);
     ensure($examPapers->storeQuestion($essay, $paper, new AuditLogger($essay))->getStatusCode() === 201, 'Essay question and section supported');
     $paperView = $examPapers->show(requestFor($teacher), $paper)->getData(true)['data']; ensure($paperView['questions'][0]['answer_key'] === 'Correct option', 'Staff workspace retains answer key');
+    $ids = collect($paperView['questions'])->keyBy('prompt');
+    $reorder = requestFor($teacher, ['question_ids' => [$ids['Explain the staff-entered reasoning.']['id'], $ids['Staff entered assessment item']['id']]]);
+    ensure($examPapers->reorderQuestions($reorder, $paper, new AuditLogger($reorder))->getStatusCode() === 200, 'Question reordering persists atomically');
+    ensure($paper->fresh()->questions()->orderBy('position')->pluck('prompt')->all() === ['Explain the staff-entered reasoning.', 'Staff entered assessment item'], 'Reordered positions are retained');
+    Illuminate\Support\Facades\Storage::fake('private');
+    $diagramBytes = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL9OwAAAABJRU5ErkJggg==');
+    $diagramPath = 'exam-papers/'.$paper->id.'/attachments/diagram.png';
+    Illuminate\Support\Facades\Storage::disk('private')->put($diagramPath, $diagramBytes);
+    $diagram = ExamPaperAttachment::create(['exam_paper_id' => $paper->id, 'storage_path' => $diagramPath, 'original_name' => 'diagram.png', 'mime_type' => 'image/png', 'byte_size' => strlen($diagramBytes), 'sha256' => hash('sha256', $diagramBytes), 'uploaded_by' => $teacher->id]);
+    $diagramQuestion = requestFor($teacher, ['position' => 3, 'question_type' => 'structured', 'prompt' => 'Use the labelled diagram to answer.', 'marks' => 4, 'exam_paper_attachment_id' => $diagram->id, 'options' => [], 'answer_key' => 'Diagram response', 'marking_guidance' => 'Look for correctly labelled parts.']);
+    ensure($examPapers->storeQuestion($diagramQuestion, $paper, new AuditLogger($diagramQuestion))->getStatusCode() === 201, 'Diagram question accepted');
+    try { $foreignReorder = requestFor($otherTeacher, ['question_ids' => [$ids['Explain the staff-entered reasoning.']['id'], $ids['Staff entered assessment item']['id']]]); $examPapers->reorderQuestions($foreignReorder, $paper, new AuditLogger($foreignReorder)); throw new RuntimeException('Expected foreign reorder denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'Foreign teacher cannot reorder another allocation paper'); }
     $submit = requestFor($teacher); ensure($examPapers->submit($submit, $paper, new AuditLogger($submit))->getData(true)['data']['status'] === 'submitted', 'Teacher submitted examination paper');
-    $review = requestFor($admin, ['action' => 'approved']); ensure($reviewQueue->review($review, 'exam_paper', $paper->id, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Central review approved examination paper');
-    ensure(DB::table('teaching_document_revisions')->where('document_type', 'exam_paper')->where('document_id', $paper->id)->where('status', 'approved')->exists(), 'Approved exam revision retained');
-    $export = (new ExamPaperExport())->paper($paper->fresh(['assignment.schoolClass', 'assignment.subject', 'assignment.term.academicYear', 'questions', 'sections']), false);
+    $review = requestFor($admin, ['action' => 'approved']); ensure($examPapers->review($review, $paper, new AuditLogger($review))->getData(true)['data']['status'] === 'approved', 'Leadership approved examination paper');
+    $revisions = $examPapers->revisions(requestFor($teacher), $paper)->getData(true)['data'];
+    ensure(count($revisions) === 2 && $revisions[0]['status'] === 'approved' && $revisions[0]['has_workspace_snapshot'] && count($revisions[0]['snapshot']['questions']) === 3, 'Authorized revision navigation returns complete paper snapshots');
+    try { $examPapers->revisions(requestFor($otherTeacher), $paper); throw new RuntimeException('Expected foreign revision denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'Foreign teacher cannot read revisions'); }
+    $export = (new ExamPaperExport())->paper($paper->fresh(['assignment.schoolClass', 'assignment.subject', 'assignment.term.academicYear', 'questions.attachment', 'sections']), false);
     ensure($export['unsectioned_questions'][0]['answer_key'] === null, 'Learner paper export omits answer key');
+    ensure(str_starts_with($export['school']['logo_data_uri'], 'data:image/png;base64,'), 'Exam export embeds configured school logo');
+    $exportedDiagram = collect($export['unsectioned_questions'])->firstWhere('position', 3);
+    ensure(str_starts_with($exportedDiagram['image_data_uri'] ?? '', 'data:image/png;base64,'), 'Exam export embeds the question diagram');
+    ensure($exportedDiagram['attachment_name'] === 'diagram.png', 'Exam export retains the diagram name');
+    $examPdf = $examPapers->pdf(requestFor($teacher), $paper);
+    $markingPdf = $examPapers->markingSchemePdf(requestFor($teacher), $paper);
+    ensure($examPdf->getStatusCode() === 200 && str_contains($examPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Learner exam PDF');
+    ensure($markingPdf->getStatusCode() === 200 && str_contains($markingPdf->headers->get('Content-Type') ?? '', 'application/pdf'), 'Restricted exam marking-scheme PDF');
+    ensure($export['header_template'] === 'branded', 'Exam export carries the saved header template');
+    $versionRequest = requestFor($teacher);
+    $versionResponse = $examPapers->createVersion($versionRequest, $paper, new AuditLogger($versionRequest));
+    ensure($versionResponse->getStatusCode() === 201, 'A locked paper can be branched into an editable version');
+    $newVersion = ExamPaper::findOrFail($versionResponse->getData(true)['data']['id']);
+    ensure($newVersion->status === 'draft' && (int) $newVersion->version_number === 2 && (int) $newVersion->source_exam_paper_id === $paper->id && (int) $newVersion->source_revision_number === (int) $paper->fresh()->revision_number, 'Version lineage and source revision recorded');
+    ensure($newVersion->header_template === 'branded', 'Header template inherited by the new version');
+    ensure($newVersion->questions()->count() === 3 && $newVersion->sections()->count() === 1, 'Version clones the full paper structure');
+    ensure($newVersion->attachments()->count() === 1 && $newVersion->questions()->whereNotNull('exam_paper_attachment_id')->count() === 1, 'Version clones the diagram attachment');
+    $versionExport = (new ExamPaperExport())->paper($newVersion->fresh(['assignment.schoolClass', 'assignment.subject', 'assignment.term.academicYear', 'questions.attachment', 'sections']), false);
+    ensure(collect($versionExport['unsectioned_questions'])->contains(fn ($row) => str_starts_with($row['image_data_uri'] ?? '', 'data:image/png;base64,')), 'Version export retains the embedded diagram');
+    ensure(DB::table('audit_logs')->where('action', 'CREATE_EXAM_PAPER_VERSION')->where('entity_id', $newVersion->id)->exists(), 'Version branching is audited');
+    try { $foreignVersion = requestFor($otherTeacher); $examPapers->createVersion($foreignVersion, $paper, new AuditLogger($foreignVersion)); throw new RuntimeException('Expected foreign version denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'Foreign teacher cannot branch another allocation paper'); }
 });
 check('AI teaching drafts are labelled, structured, and never auto-save a paper', function () use ($teachingAi, $teacher) {
     $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Teacher-entered fractions topic']]);
@@ -332,6 +391,79 @@ check('AI teaching drafts are labelled, structured, and never auto-save a paper'
     ensure(DB::table('ai_generation_runs')->where('id', $data['run_id'])->where('state', 'generated')->exists(), 'AI generation run audited without document mutation');
     try { $teachingAi->draft(requestFor($teacher, ['operation' => 'exam_question', 'input' => ['student_name' => 'Must not leave MGAEMS']]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected sensitive AI input denial'); }
     catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 422, 'Sensitive AI input denied'); }
+});
+check('AI status lists grounded operations and gates them behind the curriculum library', function () use ($teachingAi, $teacher) {
+    $data = $teachingAi->status(requestFor($teacher))->getData(true)['data'];
+    ensure($data['available'] === true && $data['provider'] === 'mock', 'Configured provider reported as available');
+    ensure($data['grounded_operations'] === ['scheme_of_work', 'lesson_plan', 'homework', 'exam_paper'], 'Grounded operations advertised');
+    ensure($data['capabilities']['curriculum_library'] === false && $data['capabilities']['grounded'] === false, 'Grounded drafting stays gated until verified curriculum is installed');
+});
+check('AI input keeps nested selection and constraints and records refused or unavailable runs', function () use ($access, $teacher) {
+    $recording = new class implements TeachingAssistantProvider {
+        public array $seen = [];
+        public function name(): string { return 'recording'; }
+        public function available(): bool { return true; }
+        public function draft(string $operation, array $input): array { $this->seen = $input; return ['label' => 'AI-generated draft', 'disclosure' => 'Review required.', 'draft' => ['ok' => true]]; }
+    };
+    $controller = new AiTeachingAssistantController($access, new TeachingAssistant($recording));
+    $request = requestFor($teacher, ['operation' => 'scheme_of_work', 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics', 'strand' => 'Numbers'], 'constraints' => ['total_duration_minutes' => 80]]]);
+    $controller->draft($request, new AuditLogger($request));
+    ensure($recording->seen === ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics', 'strand' => 'Numbers'], 'constraints' => ['total_duration_minutes' => 80]], 'Nested AI input keys and scalar types are preserved');
+
+    $down = new class implements TeachingAssistantProvider {
+        public function name(): string { return 'down'; }
+        public function available(): bool { return false; }
+        public function draft(string $operation, array $input): array { throw new RuntimeException('AI drafting is not configured.'); }
+    };
+    $offline = new AiTeachingAssistantController($access, new TeachingAssistant($down));
+    $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Fractions']]);
+    $response = $offline->draft($request, new AuditLogger($request));
+    ensure($response->getStatusCode() === 503 && $response->getData(true)['error']['code'] === 'AI_UNAVAILABLE', 'Unavailable provider reports a labelled 503');
+    ensure(DB::table('ai_generation_runs')->where('state', 'unavailable')->where('provider', 'down')->exists(), 'Unavailable run recorded without a document mutation');
+
+    $refusing = new class implements TeachingAssistantProvider {
+        public function name(): string { return 'refusing'; }
+        public function available(): bool { return true; }
+        public function draft(string $operation, array $input): array { throw ValidationException::withMessages(['draft' => 'Generated content failed the grounded contract.']); }
+    };
+    $strict = new AiTeachingAssistantController($access, new TeachingAssistant($refusing));
+    $request = requestFor($teacher, ['operation' => 'lesson_plan', 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics']]]);
+    try { $strict->draft($request, new AuditLogger($request)); throw new RuntimeException('Expected a rejected draft'); }
+    catch (ValidationException $exception) { ensure(array_key_exists('draft', $exception->errors()), 'Rejected draft surfaces validation errors'); }
+    ensure(DB::table('ai_generation_runs')->where('state', 'rejected')->where('provider', 'refusing')->exists(), 'Rejected run recorded for audit');
+});
+check('AI input refuses sponsorship and financial fields and honours document linkage', function () use ($access, $teacher) {
+    $controller = new AiTeachingAssistantController($access, new TeachingAssistant(new MockTeachingAssistantProvider()));
+    foreach (['sponsor_name', 'bank_account', 'medical_notes', 'guardian_phone', 'salary'] as $field) {
+        try { $controller->draft(requestFor($teacher, ['operation' => 'exam_question', 'input' => [$field => 'Must never be sent']]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected sensitive AI input denial for '.$field); }
+        catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 422, 'Sensitive field denied: '.$field); }
+    }
+    try { $controller->draft(requestFor($teacher, ['operation' => 'exam_paper', 'document_type' => 'exam_paper', 'document_id' => 999999, 'input' => ['selection' => ['grade' => 7, 'learning_area' => 'Mathematics']]]), new AuditLogger(requestFor($teacher))); throw new RuntimeException('Expected document linkage denial'); }
+    catch (ModelNotFoundException $exception) { ensure(str_contains($exception->getModel(), ExamPaper::class), 'AI drafts cannot target a paper outside the caller allocation'); }
+});
+
+check('AI acceptance is owner-authorized, atomic, audited once and safe to retry', function () use ($teachingAi, $teacher, $otherTeacher) {
+    $request = requestFor($teacher, ['operation' => 'exam_question', 'input' => ['topic' => 'Synthetic acceptance test']]);
+    $generated = $teachingAi->draft($request, new AuditLogger($request))->getData(true)['data'];
+    $run = App\Models\AiGenerationRun::findOrFail($generated['run_id']);
+    try { $foreign = requestFor($otherTeacher); $teachingAi->accept($foreign, $run, new AuditLogger($foreign)); throw new RuntimeException('Expected foreign acceptance denial'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 403, 'Foreign acceptance denied'); }
+    $request = requestFor($teacher);
+    $brokenAudit = new class($request) extends AuditLogger {
+        public function log(string $action, ?string $entityType = null, ?int $entityId = null, array $details = []): App\Models\AuditLog { throw new RuntimeException('Synthetic audit failure'); }
+    };
+    try { $teachingAi->accept($request, $run, $brokenAudit); throw new LogicException('Expected audit failure'); }
+    catch (RuntimeException $exception) { ensure($exception->getMessage() === 'Synthetic audit failure', 'Audit failure surfaces'); }
+    ensure($run->fresh()->state === 'generated' && $run->fresh()->accepted_at === null, 'Acceptance rolls back when its audit cannot be saved');
+    $first = $teachingAi->accept($request, $run, new AuditLogger($request))->getData(true)['data'];
+    $again = $teachingAi->accept($request, $run, new AuditLogger($request))->getData(true)['data'];
+    ensure($first === $again && $first['state'] === 'accepted', 'Retry returns original acceptance');
+    ensure((int) $run->fresh()->accepted_by === $teacher->id, 'Actual accepting teacher retained');
+    ensure(DB::table('audit_logs')->where('action', 'ACCEPT_AI_TEACHING_DRAFT')->where('entity_id', $run->id)->count() === 1, 'Exactly one acceptance audit event');
+
+    $run->update(['state' => 'failed', 'accepted_by' => null, 'accepted_at' => null]);
+    try { $teachingAi->accept($request, $run, new AuditLogger($request)); throw new RuntimeException('Expected failed-run rejection'); }
+    catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) { ensure($exception->getStatusCode() === 409, 'Failed run cannot be accepted'); }
 });
 
 echo $passed.' Teaching & Learning Workspace checks passed on in-memory SQLite only.'.PHP_EOL;

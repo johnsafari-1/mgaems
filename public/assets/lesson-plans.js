@@ -55,6 +55,7 @@
     const plan = state.plans.find(item => String(item.id) === control.dataset.id); if (!plan) return;
     if (control.dataset.planAction === 'view') loadDetail(plan.id);
     if (control.dataset.planAction === 'edit') openPlanForm(plan, control);
+    if (control.dataset.planAction === 'ai') openGroundedPlan(plan, control);
     if (control.dataset.planAction === 'duplicate') duplicatePlan(plan, control);
     if (control.dataset.planAction === 'submit') submitPlan(plan, control);
     if (control.dataset.planAction === 'approve' || control.dataset.planAction === 'return') reviewPlan(plan, control.dataset.planAction, control);
@@ -106,7 +107,7 @@
     const plan = result.data, canEdit = editable(plan);
     show(target, `<div class="plan-detail-heading"><div><span class="eyebrow">${esc(assignmentLabel(plan.assignment))}</span><h2>${esc(plan.title)}</h2></div>${badge(plan.status)}</div><dl class="plan-meta"><div><dt>Lesson date</dt><dd>${date(plan.lesson_date)}</dd></div><div><dt>Duration</dt><dd>${esc(plan.duration_minutes)} minutes</dd></div><div><dt>Strand</dt><dd>${esc(plan.strand)}</dd></div><div><dt>Sub-strand</dt><dd>${esc(plan.sub_strand)}</dd></div><div><dt>Scheme week</dt><dd>${plan.scheme_week ? `Week ${esc(plan.scheme_week.week_number)} · ${esc(plan.scheme_week.strand)}` : 'Not linked'}</dd></div><div><dt>Delivery</dt><dd>${plan.has_record_of_work ? 'Record of work recorded for ' + date(plan.record_of_work?.taught_on) : 'No record of work has been recorded'}</dd></div></dl>
       ${plan.review_notes ? `<p class="plan-review"><strong>Review note</strong><br>${esc(plan.review_notes)}</p>` : ''}
-      <div class="plan-actions">${canEdit ? `<button type="button" class="btn btn-secondary btn-sm" data-plan-action="edit" data-id="${esc(plan.id)}">Edit plan</button><button type="button" class="btn btn-secondary btn-sm" data-plan-action="duplicate" data-id="${esc(plan.id)}">Duplicate into a new draft</button>` : ''}${!leader && own(plan) && canEdit ? `<button type="button" class="btn btn-primary btn-sm" data-plan-action="submit" data-id="${esc(plan.id)}">Submit for review</button>` : ''}${leader && plan.status === 'submitted' ? `<button type="button" class="btn btn-primary btn-sm" data-plan-action="approve" data-id="${esc(plan.id)}">Approve</button><button type="button" class="btn btn-secondary btn-sm" data-plan-action="return" data-id="${esc(plan.id)}">Return for changes</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" data-plan-action="pdf" data-id="${esc(plan.id)}">Download PDF</button><button type="button" class="btn btn-secondary btn-sm" id="closePlanDetail">Close plan</button></div>
+      <div class="plan-actions">${canEdit ? `<button type="button" class="btn btn-secondary btn-sm" data-plan-action="edit" data-id="${esc(plan.id)}">Edit plan</button><button type="button" class="btn btn-secondary btn-sm" data-plan-action="duplicate" data-id="${esc(plan.id)}">Duplicate into a new draft</button><button type="button" class="btn btn-secondary btn-sm" data-plan-action="ai" data-id="${esc(plan.id)}">Curriculum AI draft</button>` : ''}${!leader && own(plan) && canEdit ? `<button type="button" class="btn btn-primary btn-sm" data-plan-action="submit" data-id="${esc(plan.id)}">Submit for review</button>` : ''}${leader && plan.status === 'submitted' ? `<button type="button" class="btn btn-primary btn-sm" data-plan-action="approve" data-id="${esc(plan.id)}">Approve</button><button type="button" class="btn btn-secondary btn-sm" data-plan-action="return" data-id="${esc(plan.id)}">Return for changes</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" data-plan-action="pdf" data-id="${esc(plan.id)}">Download PDF</button><button type="button" class="btn btn-secondary btn-sm" id="closePlanDetail">Close plan</button></div>
       <div class="plan-sections">${planFields(plan).map(([label, value]) => `<section class="plan-section"><h3>${esc(label)}</h3><p>${esc(value || 'Not recorded')}</p></section>`).join('')}<section class="plan-section"><h3>Teacher reflection</h3><p>${esc(plan.teacher_reflection || 'Not recorded')}</p></section></div>`);
     byId('closePlanDetail').addEventListener('click', () => { target.hidden = true; target.innerHTML = ''; });
   }
@@ -133,6 +134,29 @@
       if (!result.ok) { MGAEMS.showFormErrors(form, result); return; }
       modal.close(); MGAEMS.toast(plan ? 'Lesson plan updated.' : 'Draft lesson plan created.', 'success');
       await loadPlans(); if (result.data?.id) loadDetail(result.data.id);
+    });
+  }
+  function openGroundedPlan(plan, trigger) {
+    return MGAEMS.groundedDraft({
+      operation: 'lesson_plan', title: 'Curriculum-grounded lesson plan', trigger, importLabel: 'Apply to this draft',
+      documentType: 'lesson_plan', documentId: plan.id, classSubjectTeacherId: plan.class_subject_teacher_id,
+      selection: { learning_area: plan.assignment?.subject?.name || '', strand: plan.strand || '', sub_strand: plan.sub_strand || '' },
+      constraints: { duration_minutes: plan.duration_minutes || 40 },
+      onImport: async draft => {
+        const stages = Array.isArray(draft.stages) ? draft.stages : [];
+        const activities = phase => stages.filter(stage => stage.phase === phase).flatMap(stage => stage.activities || []);
+        const result = await MGAEMS.patch('/api/v1/lesson-plans/' + plan.id, {
+          specific_learning_outcomes: (draft.specific_learning_outcomes || []).map(outcome => outcome.text).join('\n'),
+          key_inquiry_questions: (draft.key_inquiry_questions || []).join('\n'),
+          teaching_learning_resources: (draft.resources || []).join('\n'),
+          introduction: activities('introduction').join('\n'), lesson_development: activities('development').join('\n'),
+          conclusion: activities('conclusion').join('\n'), learning_activities: stages.flatMap(stage => stage.activities || []).join('\n'),
+          assessment_approach: draft.assessment_approach || '', duration_minutes: draft.duration_minutes || plan.duration_minutes,
+        });
+        if (!result.ok) return { ok: false, error: result.error, fields: result.fields };
+        await loadPlans(); loadDetail(plan.id);
+        return { ok: true, message: 'Reviewed AI content applied to this draft. Check every field before submitting.' };
+      },
     });
   }
   async function duplicatePlan(plan, control) {

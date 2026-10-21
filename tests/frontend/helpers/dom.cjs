@@ -15,7 +15,11 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
     setAttribute(name, value) { this.attrs[name] = value; }
     getAttribute(name) { return this.attrs[name]; }
     removeAttribute(name) { delete this.attrs[name]; }
-    addEventListener(name, handler) { this.listeners[name] = handler; }
+    addEventListener(name, handler) {
+      const handlers = (this.handlers ||= {});
+      handlers[name] = [...(handlers[name] || []), handler];
+      this.listeners[name] = event => { let result; for (const listener of handlers[name]) result = listener(event); return result; };
+    }
     focus() { document.activeElement = this; }
     appendChild(child) { this.children.push(child); child.parentElement = this; }
     descendants() { return this.children.flatMap(child => [child, ...child.descendants()]); }
@@ -54,6 +58,7 @@ module.exports = function createDOM(role = 'teacher', pathname = '/assessment.ht
       for (const control of this.descendants().filter(node => node.tag === 'input')) control.value = decode(control.value);
     }
   }
+  document.createElement = tag => new Element(tag);
   document.documentElement = new Element('html');
   const events = {};
   const window = { location: { pathname, href: pathname }, crypto: require('node:crypto').webcrypto, addEventListener(name, callback) { (events[name] ||= []).push(callback); }, matchMedia: () => ({ matches: false, addEventListener() {} }) };

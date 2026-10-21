@@ -86,9 +86,46 @@
     if (!result.ok || !validSchemes([result.data]) || !Array.isArray(result.data.weeks)) { failure(target, result.ok ? { error: 'The weekly plan is incomplete.' } : result, () => loadDetail(id)); return; }
     state.selected = result.data;
     const scheme = result.data, canEdit = editable(scheme);
-    show(target, `<div class="scheme-detail-card"><div class="scheme-detail-heading"><div><span class="eyebrow">${esc(assignmentLabel(scheme.assignment))}</span><h2>${esc(scheme.title)}</h2></div>${badge(scheme.status)}</div><p class="scheme-reference">${scheme.curriculum_reference ? 'Curriculum reference entered by staff: ' + esc(scheme.curriculum_reference) : 'No curriculum reference entered. MGAEMS does not verify curriculum-source authority.'}</p>${scheme.review_notes ? `<p class="scheme-review"><strong>Review note</strong><br>${esc(scheme.review_notes)}</p>` : ''}<div class="scheme-actions">${canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="addWeek">Add weekly plan</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" id="closeSchemeDetail">Close plan</button></div><div class="scheme-weeks">${scheme.weeks.length ? scheme.weeks.map(week => `<article class="scheme-week"><div class="scheme-week-heading"><h3>Week ${esc(week.week_number)}</h3><span class="badge badge-gray">${week.starts_on ? date(week.starts_on) + ' to ' + date(week.ends_on) : 'Dates not set'}</span></div><dl><div><dt>Strand</dt><dd>${esc(week.strand)}</dd></div><div><dt>Sub-strand</dt><dd>${esc(week.sub_strand)}</dd></div><div><dt>Learning outcomes</dt><dd>${esc(week.learning_outcomes)}</dd></div><div><dt>Learning activities</dt><dd>${esc(week.learning_activities)}</dd></div><div><dt>Resources</dt><dd>${esc(week.resources)}</dd></div></dl>${canEdit ? `<div class="scheme-actions"><button type="button" class="btn btn-secondary btn-sm" data-week-action="edit" data-week-id="${esc(week.id)}">Edit week</button><button type="button" class="btn btn-danger btn-sm" data-week-action="delete" data-week-id="${esc(week.id)}">Delete week</button></div>` : ''}</article>`).join('') : MGAEMS.emptyStateHTML('No weekly plans', canEdit ? 'Add a complete weekly plan before submitting this scheme.' : 'This scheme has no recorded weekly plans.', 'calendar-days')}</div></div>`);
+    show(target, `<div class="scheme-detail-card"><div class="scheme-detail-heading"><div><span class="eyebrow">${esc(assignmentLabel(scheme.assignment))}</span><h2>${esc(scheme.title)}</h2></div>${badge(scheme.status)}</div><p class="scheme-reference">${scheme.curriculum_reference ? 'Curriculum reference entered by staff: ' + esc(scheme.curriculum_reference) : 'No curriculum reference entered. MGAEMS does not verify curriculum-source authority.'}</p>${scheme.review_notes ? `<p class="scheme-review"><strong>Review note</strong><br>${esc(scheme.review_notes)}</p>` : ''}<div class="scheme-actions">${canEdit ? `<button type="button" class="btn btn-primary btn-sm" id="addWeek">Add weekly plan</button><button type="button" class="btn btn-secondary btn-sm" id="aiSchemeWeeks">Generate weekly plans (AI)</button>` : ''}<button type="button" class="btn btn-secondary btn-sm" id="closeSchemeDetail">Close plan</button></div><div class="scheme-weeks">${scheme.weeks.length ? scheme.weeks.map(week => `<article class="scheme-week"><div class="scheme-week-heading"><h3>Week ${esc(week.week_number)}</h3><span class="badge badge-gray">${week.starts_on ? date(week.starts_on) + ' to ' + date(week.ends_on) : 'Dates not set'}</span></div><dl><div><dt>Strand</dt><dd>${esc(week.strand)}</dd></div><div><dt>Sub-strand</dt><dd>${esc(week.sub_strand)}</dd></div><div><dt>Learning outcomes</dt><dd>${esc(week.learning_outcomes)}</dd></div><div><dt>Learning activities</dt><dd>${esc(week.learning_activities)}</dd></div><div><dt>Resources</dt><dd>${esc(week.resources)}</dd></div></dl>${canEdit ? `<div class="scheme-actions"><button type="button" class="btn btn-secondary btn-sm" data-week-action="edit" data-week-id="${esc(week.id)}">Edit week</button><button type="button" class="btn btn-danger btn-sm" data-week-action="delete" data-week-id="${esc(week.id)}">Delete week</button></div>` : ''}</article>`).join('') : MGAEMS.emptyStateHTML('No weekly plans', canEdit ? 'Add a complete weekly plan before submitting this scheme.' : 'This scheme has no recorded weekly plans.', 'calendar-days')}</div></div>`);
     byId('closeSchemeDetail').addEventListener('click', () => { target.hidden = true; target.innerHTML = ''; });
     if (canEdit) byId('addWeek').addEventListener('click', event => openWeekForm(scheme, event.currentTarget));
+    if (canEdit) byId('aiSchemeWeeks').addEventListener('click', event => openGroundedWeeks(scheme, event.currentTarget));
+  }
+  function openGroundedWeeks(scheme, trigger) {
+    return MGAEMS.groundedDraft({
+      operation: 'scheme_of_work', title: 'Curriculum-grounded weekly plans', trigger, importLabel: 'Import weekly plans',
+      documentType: 'scheme_of_work', documentId: scheme.id, classSubjectTeacherId: scheme.class_subject_teacher_id,
+      selection: { learning_area: scheme.assignment?.subject?.name || '' },
+      constraints: { total_duration_minutes: 80 },
+      onImport: async (draft, { importState }) => {
+        const weeks = Array.isArray(draft.weeks) ? draft.weeks : [];
+        if (!weeks.length) return { ok: false, error: 'The draft has no weekly plans to import.' };
+        const outcomes = Object.fromEntries((draft.specific_learning_outcomes || []).map(outcome => [outcome.id, outcome.text]));
+        const allOutcomes = (draft.specific_learning_outcomes || []).map(outcome => outcome.text).join('\n');
+        const fresh = await MGAEMS.get('/api/v1/schemes-of-work/' + scheme.id);
+        if (!fresh.ok || !Array.isArray(fresh.data?.weeks)) return { ok: false, error: 'Could not verify current weekly plans. No weeks were added. Retry when the document can be read.' };
+        const current = [...fresh.data.weeks];
+        if (!importState.weeks) importState.weeks = weeks.filter(week => !current.some(row => Number(row.week_number) === Number(week.week_number))).map(week => ({
+          week_number: Number(week.week_number), strand: week.strand || scheme.assignment?.subject?.name || 'Strand', sub_strand: week.sub_strand || 'Sub-strand',
+          learning_outcomes: (week.learning_outcome_ids || []).map(id => outcomes[id]).filter(Boolean).join('\n') || allOutcomes,
+          learning_activities: (week.learning_activities || []).join('\n'), resources: (week.resources || []).join('\n'),
+        }));
+        if (!importState.weeks.length) return { ok: false, error: 'Every week in the draft already exists on this scheme. Nothing new was imported.' };
+        let added = 0, skipped = 0;
+        for (const values of importState.weeks) {
+          const existing = current.find(row => Number(row.week_number) === values.week_number);
+          if (existing) {
+            if (!MGAEMS.draftRowMatches(existing, values)) return { ok: false, error: `Week ${values.week_number} changed during import. Review the saved scheme before continuing.` };
+            skipped += 1; continue;
+          }
+          const result = await MGAEMS.post('/api/v1/schemes-of-work/' + scheme.id + '/weeks', values);
+          if (!result.ok) return { ok: false, error: result.error, fields: result.fields, message: `Saved or verified ${added + skipped} of ${importState.weeks.length} weekly plans before stopping. Retry the same draft to continue.` };
+          current.push(values); added += 1;
+        }
+        await loadSchemes(); loadDetail(scheme.id);
+        return { ok: true, message: `${added} weekly plan${added === 1 ? '' : 's'} imported as draft weeks${skipped ? ` (${skipped} already present and skipped)` : ''}. Review and edit before submitting.` };
+      },
+    });
   }
   function openSchemeForm(scheme, trigger) {
     const assignments = state.context?.assignments || [];

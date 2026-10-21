@@ -21,6 +21,7 @@ $app->bootstrapWith([
 $app['config']->set('database.connections', []);
 $app['config']->set('session.driver', 'array');
 $app['config']->set('cache.default', 'array');
+$app['config']->set('cache.stores.array', ['driver' => 'array', 'serialize' => false]);
 $app->bootstrapWith([
     RegisterFacades::class,
     RegisterProviders::class,
@@ -68,7 +69,15 @@ if (in_array('--live', $argv, true)) {
         ensure(in_array(config('services.ollama.model'), array_column($service->models(), 'name'), true), 'Configured model is not installed.');
     });
     check('PHP container POST /api/chat returns parsed JSON object', function () use ($service, $messages) {
+        $started = hrtime(true);
         ensure($service->chat($messages) === ['status' => 'ok'], 'Unexpected synthetic probe output.');
+        echo 'MEASURE tiny JSON wall_seconds='.round((hrtime(true) - $started) / 1e9, 3).PHP_EOL;
+    });
+    check('live synthetic educational JSON preserves readings and arithmetic', function () use ($service) {
+        $started = hrtime(true);
+        $answer = $service->chat([['role' => 'user', 'content' => 'Original software-test exercise, not official curriculum: compare 20 and 30 degrees Celsius, then calculate the rise from 22 to 27 degrees Celsius. Return only {"warmer_celsius":30,"rise_celsius":5}. /no_think']]);
+        echo 'MEASURE synthetic educational JSON wall_seconds='.round((hrtime(true) - $started) / 1e9, 3).' output='.json_encode($answer, JSON_THROW_ON_ERROR).PHP_EOL;
+        ensure($answer === ['warmer_celsius' => 30, 'rise_celsius' => 5], 'Unexpected synthetic educational answer.');
     });
     check('live missing model produces sanitized model-unavailable error', function () use ($service, $messages) {
         $original = config('services.ollama.model');

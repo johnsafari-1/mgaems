@@ -3,7 +3,7 @@
 <head><meta charset="utf-8">
 <style>
 body { font-family: DejaVu Sans, sans-serif; font-size: 10px; color: #222; }
-h1 { font-size: 16px; margin-bottom: 3px; } .muted { color: #555; }
+h1 { font-size: 16px; margin-bottom: 3px; } .muted { color: #555; } .school-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; } .school-logo { max-width: 70px; max-height: 55px; }
 table { width: 100%; border-collapse: collapse; margin-top: 12px; }
 th, td { border: 1px solid #ccc; padding: 6px; text-align: left; vertical-align: top; }
 th { background: #1F3864; color: white; width: 24%; }
@@ -16,8 +16,7 @@ th { background: #1F3864; color: white; width: 24%; }
 .answer-space { margin-top: 6px; border-bottom: 1px dotted #999; height: 16px; }
 </style></head>
 <body>
-<h1>{{ $document['school']['name'] }}</h1>
-@if ($document['school']['motto'])<div class="muted">{{ $document['school']['motto'] }}</div>@endif
+@include('teaching.partials.school-header')
 <p><strong>{{ $document['document_type'] }}</strong> — {{ $document['title'] }}</p>
 <table class="details">
 <tr><th>Class / Grade</th><td>{{ $document['class_name'] ?? 'Not available' }}</td></tr>

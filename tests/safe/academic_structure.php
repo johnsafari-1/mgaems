@@ -108,6 +108,8 @@ Schema::create('audit_logs', function (Blueprint $table) {
 // The teaching-workspace migrations are exercised only against this explicit memory schema.
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000038_create_teaching_learning_workspace.php')->up();
 (require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000039_create_lesson_plans_and_records_of_work_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000040_create_homework_and_assignments_tables.php')->up();
+(require dirname(__DIR__, 2).'/database/migrations/2026_10_15_000041_create_exam_paper_studio_tables.php')->up();
 
 function ensure(bool $condition, string $message): void { if (! $condition) throw new RuntimeException($message); }
 function invalid(callable $operation, string $field): void {

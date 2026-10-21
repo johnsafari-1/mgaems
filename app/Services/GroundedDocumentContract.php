@@ -21,17 +21,17 @@ class GroundedDocumentContract
             'specific_learning_outcomes' => $list($object(['id' => $integer(PHP_INT_MAX), 'text' => $text()]), 1000),
             'curriculum_claims' => ['type' => 'array', 'maxItems' => 0, 'items' => $text()]];
         $links = ['curriculum_record_ids' => $ids, 'learning_outcome_ids' => $ids];
-        $question = $object($links + ['position' => $integer(200), 'question_type' => ['type' => 'string', 'enum' => ['short_answer', 'structured', 'multiple_choice']],
+        $question = $object($links + ['position' => $integer($operation === 'homework' ? 100 : 200), 'question_type' => ['type' => 'string', 'enum' => ['short_answer', 'structured', 'multiple_choice']],
             'prompt' => $text(4000), 'marks' => $integer(1000),
-            'options' => ['type' => 'array', 'maxItems' => 8, 'items' => $text(500)], 'answer_key' => $text(4000), 'marking_guidance' => $text(4000)]);
+            'options' => ['type' => 'array', 'maxItems' => 8, 'items' => $text(255)], 'answer_key' => $text(4000), 'marking_guidance' => $text(4000)]);
         $specific = match ($operation) {
             'scheme_of_work' => ['total_duration_minutes' => $integer(100000), 'weeks' => $list($object($links + [
-                'week_number' => $integer(53), 'lessons_per_week' => $integer(40), 'lesson_duration_minutes' => $integer(240),
-                'total_duration_minutes' => $integer(10000), 'learning_activities' => $list($text()), 'assessment_approach' => $text()]), 53)],
-            'lesson_plan' => ['duration_minutes' => $integer(240), 'resources' => $list($text(500)), 'assessment_approach' => $text(),
+                'week_number' => $integer(53), 'strand' => $text(200), 'sub_strand' => $text(200), 'lessons_per_week' => $integer(40), 'lesson_duration_minutes' => $integer(240),
+                'total_duration_minutes' => $integer(10000), 'learning_activities' => $list($text()), 'resources' => $list($text(500)), 'assessment_approach' => $text()]), 53)],
+            'lesson_plan' => ['duration_minutes' => $integer(240), 'key_inquiry_questions' => $list($text()), 'resources' => $list($text(500)), 'assessment_approach' => $text(),
                 'stages' => $list($object($links + ['phase' => ['type' => 'string', 'enum' => ['introduction', 'development', 'conclusion']],
                     'duration_minutes' => $integer(240), 'activities' => $list($text())]), 30)],
-            'homework' => ['instructions' => $text(4000), 'total_marks' => $integer(), 'questions' => $list($question, 200)],
+            'homework' => ['instructions' => $text(4000), 'total_marks' => $integer(), 'questions' => $list($question, 100)],
             'exam_paper' => ['instructions' => $text(4000), 'duration_minutes' => $integer(600), 'total_marks' => $integer(),
                 'sections' => $list($object(['position' => $integer(50), 'title' => $text(160), 'total_marks' => $integer(), 'questions' => $list($question, 200)]), 50)],
             default => throw ValidationException::withMessages(['operation' => 'Unsupported grounded document operation.']),
